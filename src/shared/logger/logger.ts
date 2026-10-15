@@ -31,6 +31,9 @@ export const REDACT_PATHS = [
   '*.newPassword',
   'sessionToken',
   '*.sessionToken',
+  // Учётные данные SMTP (nodemailer: auth.pass).
+  'pass',
+  '*.pass',
 ];
 
 export interface RootLoggerOptions {

@@ -1,33 +1,29 @@
+import Link from 'next/link';
 import { Suspense } from 'react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { isAdmin, requireUserOrRedirect } from '@/shared/access';
+import { Button } from '@/components/ui/button';
+import { WorkspaceList } from '@/components/workspaces/workspace-list';
+import { listMyWorkspaces } from '@/modules/workspaces';
+import { requireUserOrRedirect } from '@/shared/access';
 
 export default function HomePage() {
   return (
-    <main className="flex flex-1 items-center justify-center p-8">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Tasker</CardTitle>
-          <CardDescription>Простой таск-трекер для команд</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Suspense fallback={<div className="h-10 animate-pulse rounded-md bg-muted" />}>
-            <Greeting />
-          </Suspense>
-        </CardContent>
-      </Card>
+    <main className="mx-auto grid w-full max-w-4xl gap-6 p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Мои пространства</h1>
+        <Button asChild>
+          <Link href="/workspaces/new">Создать пространство</Link>
+        </Button>
+      </div>
+      <Suspense fallback={<div className="h-24 animate-pulse rounded-xl bg-muted" />}>
+        <WorkspacesSection />
+      </Suspense>
     </main>
   );
 }
 
-async function Greeting() {
-  const { user } = await requireUserOrRedirect('/');
-  return (
-    <p className="text-sm text-muted-foreground">
-      Здравствуйте, <span className="font-medium text-foreground">{user.name}</span>! Ваша роль:{' '}
-      {isAdmin(user) ? 'администратор' : 'пользователь'}. Рабочие пространства, проекты и задачи
-      появятся на следующих этапах.
-    </p>
-  );
+async function WorkspacesSection() {
+  const session = await requireUserOrRedirect('/');
+  const workspaces = await listMyWorkspaces(session);
+  return <WorkspaceList items={workspaces} />;
 }

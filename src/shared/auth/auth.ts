@@ -4,6 +4,8 @@ import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { nextCookies } from 'better-auth/next-js';
 import { admin } from 'better-auth/plugins/admin';
+import { organization } from 'better-auth/plugins/organization';
+import { memberAc, ownerAc } from 'better-auth/plugins/organization/access';
 
 import { prisma } from '@/shared/db';
 import { getEnv } from '@/shared/env';
@@ -20,6 +22,58 @@ const SESSION_COOKIE_CACHE_SECONDS = 60 * 5;
 // (схема используется и в клиентских формах, поэтому не импортирует server-only код).
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 128;
+
+/** Срок действия приглашения в пространство. */
+export const INVITATION_TTL_SECONDS = 60 * 60 * 24 * 7;
+const WORKSPACES_PER_USER_LIMIT = 50;
+const PENDING_INVITATIONS_LIMIT = 100;
+
+/**
+ * Плагин organization под доменными именами (см. prisma/schema.prisma):
+ * organization → Workspace, member → WorkspaceMember, invitation → WorkspaceInvitation,
+ * organizationId → workspaceId. Роли пространства — только owner и member.
+ */
+function workspacesPlugin() {
+  return organization({
+    // Роль admin плагина не регистрируем: пригласить с ней нельзя. ac — встроенный defaultAc.
+    roles: { owner: ownerAc, member: memberAc },
+    creatorRole: 'owner',
+    allowUserToCreateOrganization: (user) => !user.banned,
+    organizationLimit: WORKSPACES_PER_USER_LIMIT,
+    invitationExpiresIn: INVITATION_TTL_SECONDS,
+    invitationLimit: PENDING_INVITATIONS_LIMIT,
+    cancelPendingInvitationsOnReInvite: true,
+    schema: {
+      organization: { modelName: 'workspace' },
+      member: { modelName: 'workspaceMember', fields: { organizationId: 'workspaceId' } },
+      invitation: { modelName: 'workspaceInvitation', fields: { organizationId: 'workspaceId' } },
+      session: { fields: { activeOrganizationId: 'activeWorkspaceId' } },
+    },
+    organizationHooks: {
+      afterCreateOrganization: ({ organization: workspace, user }) => {
+        log.info(
+          { workspaceId: workspace.id, userId: user.id },
+          '[auth.organization] workspace created',
+        );
+        return Promise.resolve();
+      },
+      afterAcceptInvitation: ({ organization: workspace, user }) => {
+        log.info(
+          { workspaceId: workspace.id, userId: user.id },
+          '[auth.organization] invitation accepted',
+        );
+        return Promise.resolve();
+      },
+      afterRemoveMember: ({ organization: workspace, user }) => {
+        log.info(
+          { workspaceId: workspace.id, userId: user.id },
+          '[auth.organization] member removed',
+        );
+        return Promise.resolve();
+      },
+    },
+  });
+}
 
 function createAuth() {
   const env = getEnv();
@@ -70,11 +124,15 @@ function createAuth() {
       },
     },
     // nextCookies() — последним: выставляет cookie из Server Actions.
-    plugins: [admin({ defaultRole: 'user', adminRoles: ['admin'] }), nextCookies()],
+    plugins: [
+      admin({ defaultRole: 'user', adminRoles: ['admin'] }),
+      workspacesPlugin(),
+      nextCookies(),
+    ],
   });
 
   log.info(
-    { plugins: ['admin', 'next-cookies'], sessionTtlSeconds: SESSION_TTL_SECONDS },
+    { plugins: ['admin', 'organization', 'next-cookies'], sessionTtlSeconds: SESSION_TTL_SECONDS },
     '[auth] better-auth initialized',
   );
   return auth;

@@ -37,7 +37,8 @@ Tasker — веб-приложение для управления задача�
 - **UI (предлагается):** Tailwind CSS + shadcn/ui, dnd-kit для канбана, Tiptap для rich-text (описания задач, документация)
 - **Валидация:** Zod (общие схемы для форм и серверных обработчиков)
 - **Хранение файлов:** S3-совместимое хранилище через `@aws-sdk/client-s3`. Локально — MinIO (образ `pgsty/minio`, официальные образы больше не публикуются). Загрузка по presigned URL
-- **Инфраструктура разработки:** pnpm, docker-compose (Postgres 17 на порту 5433, MinIO), Prisma 7 с `@prisma/adapter-pg`, pino, Vitest, ESLint + Prettier, husky + lint-staged
+- **Почта:** SMTP через nodemailer (`src/shared/mail`); локально — Mailpit (SMTP 1025, UI 8025) в docker-compose. Используется для приглашений в пространство
+- **Инфраструктура разработки:** pnpm, docker-compose (Postgres 17 на порту 5433, MinIO, Mailpit), Prisma 7 с `@prisma/adapter-pg`, pino, Vitest, ESLint + Prettier, husky + lint-staged
 - **Интеграции:** GitHub (Octokit, GitHub App, webhooks) — в будущем
 
 ## Архитектурные заметки

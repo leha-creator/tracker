@@ -8,7 +8,7 @@
 |------------|--------|------------|
 | Node.js | 22+ (рекомендуется 24, см. `.nvmrc`) | |
 | pnpm | 12 | Ставится через corepack, версия зафиксирована в `package.json` → `packageManager` |
-| Docker + Compose | Docker Desktop / Engine с Compose v2+ | Для Postgres и MinIO |
+| Docker + Compose | Docker Desktop / Engine с Compose v2+ | Для Postgres, MinIO и Mailpit |
 
 ```bash
 corepack enable   # один раз; включает pnpm нужной версии
@@ -31,7 +31,7 @@ pnpm infra:up
 
 Команда:
 
-1. Поднимает `postgres` и `minio` и ждёт, пока их healthcheck станет зелёным.
+1. Поднимает `postgres`, `minio` и `mailpit` и ждёт, пока их healthcheck станет зелёным.
 2. Запускает одноразовый контейнер `minio-init`, который создаёт приватный бакет `S3_BUCKET`.
 
 | Сервис | Адрес | Логин / пароль (dev) |
@@ -39,6 +39,10 @@ pnpm infra:up
 | PostgreSQL | `localhost:5433`, БД `tasker` | `tasker` / `tasker` |
 | MinIO S3 API | `http://localhost:9000` | `tasker` / `tasker-secret` |
 | MinIO Console | `http://localhost:9001` | `tasker` / `tasker-secret` |
+| Mailpit SMTP | `127.0.0.1:1025` | без авторизации |
+| Mailpit UI (входящие письма) | `http://localhost:8025` | — |
+
+Mailpit — SMTP-ловушка: наружу письма не уходят, все они видны в веб-интерфейсе.
 
 Остановка: `pnpm infra:down`. Данные сохраняются в Docker volumes `postgres-data` и `minio-data`.
 
@@ -72,6 +76,20 @@ pnpm dev
 pnpm db:studio   # таблица User → поле role = admin
 ```
 
+## Первое пространство и приглашения
+
+1. На главной (`/`) нажмите «Создать пространство». Адрес (`/w/<slug>`) составится из названия, кириллица транслитерируется; его можно задать вручную.
+2. Вы станете владельцем. В разделе «Участники» (`/w/<slug>/settings/members`) пригласите коллегу по email и выберите роль: участник или владелец.
+3. Письмо придёт в Mailpit: http://localhost:8025. Ссылку можно скопировать и на странице участников, даже если письмо не ушло.
+4. Приглашённый открывает ссылку `/invite/<id>`. Если аккаунта нет, он регистрируется и возвращается на приглашение. Принять приглашение может только пользователь с тем же email. Ссылка действует 7 дней.
+
+| Роль | Что может |
+|------|-----------|
+| Владелец (`owner`) | Всё, что участник, плюс приглашения, смена ролей, исключение участников, переименование и удаление пространства |
+| Участник (`member`) | Видит пространство и список участников, может покинуть пространство |
+
+В пространстве всегда остаётся хотя бы один владелец: последний владелец не может понизить себя или уйти, пока не назначит другого.
+
 ## Проверка
 
 ```bash
@@ -100,8 +118,11 @@ pnpm check
 | `/api/health` → 503, `storage.ok: false` | MinIO не запущен или бакет не создан. Выполните `pnpm infra:up` |
 | `pnpm: command not found` | Выполните `corepack enable` |
 | `Cannot find module '@/generated/prisma/client'` | Выполните `pnpm db:generate` |
-| При регистрации «Внутренняя ошибка сервера», в логах — что таблица `public.User` не существует | Не применены миграции. Выполните `pnpm db:deploy` |
+| При регистрации или создании пространства «Внутренняя ошибка сервера», в логах — что таблица (`public.User`, `public.Workspace`) не существует | Не применены миграции. Выполните `pnpm db:deploy` |
 | `EnvValidationError: ... BETTER_AUTH_SECRET` | Секрет не задан или короче 32 символов. См. [Конфигурация](configuration.md) |
+| Приглашение создано, но письма нет в Mailpit (на странице «Письмо отправить не удалось») | Mailpit не запущен (`pnpm infra:up`) или `SMTP_HOST`/`SMTP_PORT` указывают не туда. В логах — `[mail.send] failed`. Ссылку можно передать вручную |
+| Отправка письма падает с `DNS lookup for localhost timed out` | В `SMTP_HOST` указан `localhost`. Используйте `127.0.0.1` (так в `.env.example`) |
+| `Bind for 0.0.0.0:1025 failed` или письма уходят не в Mailpit | Порт 1025 занят (например, процессом WSL). Поменяйте `MAILPIT_SMTP_PORT` и `SMTP_PORT` в `.env` |
 | Зарегистрировались, но роли администратора нет | Email не был в `ADMIN_EMAILS` на момент регистрации. Поменяйте роль через `pnpm db:studio` |
 
 ## See Also

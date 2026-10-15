@@ -5,7 +5,7 @@ import { ZodError } from 'zod';
 import { createLogger } from '@/shared/logger';
 import type { ActionError } from '@/shared/types';
 
-import { AppError, ValidationError, type FieldErrors } from './app-error';
+import { AppError, type FieldErrors } from './app-error';
 
 const log = createLogger('errors');
 
@@ -44,7 +44,7 @@ export function normalizeError(
   }
 
   if (error instanceof AppError && error.expose) {
-    const fieldErrors = error instanceof ValidationError ? error.fieldErrors : undefined;
+    const { fieldErrors } = error;
     log.warn(
       { ...context, code: error.code, message: error.message },
       '[normalizeError] domain error',

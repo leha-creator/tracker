@@ -45,7 +45,7 @@
 import { prisma, type TransactionClient } from '@/shared/db';
 ```
 
-- Новая модель: правка `schema.prisma` → `pnpm db:migrate --name <change>` → миграция появляется в `prisma/migrations/`.
+- Новая модель: правка `schema.prisma` → `pnpm db:migrate --name <change>` → миграция появляется в `prisma/migrations/`. Затем `pnpm db:generate`: Prisma 7 после миграции не генерирует клиент сам, и без этого `tsc` не увидит новые модели.
 
 ## Зависимости
 

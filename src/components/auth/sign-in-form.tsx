@@ -6,7 +6,7 @@ import { useActionState } from 'react';
 import { Button } from '@/components/ui/button';
 import { signInAction, type AuthFormState } from '@/modules/auth';
 
-import { FormError, FormField } from './form-field';
+import { FormError, FormField } from '@/components/forms/form-field';
 
 export function SignInForm({ returnTo }: { returnTo: string }) {
   const [state, formAction, pending] = useActionState<AuthFormState, FormData>(signInAction, null);

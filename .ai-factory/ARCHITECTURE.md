@@ -45,8 +45,10 @@ tasker/
 │   │   │   │   ├── workspace/        # workspace.actions.ts, workspace.service.ts, workspace.repository.ts
 │   │   │   │   ├── member/           # выдача/отзыв доступа, роли
 │   │   │   │   └── invitation/       # приглашения
-│   │   │   ├── models/               # Workspace, Membership (правила ролей)
-│   │   │   └── index.ts              # Публичный API модуля
+│   │   │   ├── models/               # Membership (последний владелец), Invitation, slug
+│   │   │   ├── organization-api.ts   # Вызов API плагина organization + маппинг ошибок
+│   │   │   ├── client.ts             # Публичный API для клиентских компонентов (без server-only)
+│   │   │   └── index.ts              # Публичный API модуля (сервер)
 │   │   │
 │   │   ├── projects/
 │   │   │   ├── slices/
@@ -90,6 +92,7 @@ tasker/
 │       ├── access/                   # requireWorkspaceAccess(), requireAdmin()
 │       ├── errors/                   # AppError, NotFoundError, ForbiddenError, toActionError()
 │       ├── storage/                  # S3-клиент, presigned URL
+│       ├── mail/                     # SMTP (nodemailer): sendMail(), escapeHtml()
 │       ├── logger/                   # pino, LOG_LEVEL
 │       ├── env/                      # Zod-валидация переменных окружения (ленивая)
 │       ├── health/                   # checkHealth(): агрегирует checkDatabase/checkStorage для /api/health
@@ -109,6 +112,7 @@ tasker/
 - ✅ Сервисы проверяют доступ через `shared/access`, вызывают методы моделей, сохраняют через репозиторий
 - ✅ Модели — чистый TypeScript без Prisma, Next.js и React
 - ✅ Модуль импортирует другой модуль только через его `index.ts`
+- ✅ Если модулю нужны клиентские компоненты, он дополнительно экспортирует `client.ts`: actions, Zod-схемы, чистые функции и типы без server-only кода. Клиентские компоненты импортируют `@/modules/<module>/client`, серверный код — `@/modules/<module>`
 - ✅ `integrations/github` зависит от `tasks`, но `tasks` не зависит от `integrations/github`
 - ❌ Компоненты и страницы не импортируют `prisma` и репозитории
 - ❌ Actions не вызывают репозитории в обход сервиса
@@ -122,7 +126,8 @@ tasker/
 - **Изменения:** клиентские компоненты вызывают Server Actions. Action возвращает `ActionResult<T>` (`{ ok: true, data } | { ok: false, error: { code, message } }`) и делает `revalidatePath`/`revalidateTag`.
 - **Межмодульные вызовы:** через публичный API (`index.ts`) модуля-поставщика. Если нужно избежать обратной зависимости, используются колбэки или простые доменные события в памяти: например, `tasks` не знает о GitHub, а GitHub-модуль сам подписывается на нужное.
 - **Транзакции:** если операция затрагивает несколько агрегатов (перемещение карточки с пересчётом позиций), репозиторий принимает `Prisma.TransactionClient`, а сервис открывает `prisma.$transaction`.
-- **Авторизация:** централизована в `shared/access`. Каждый сервисный метод, работающий с данными пространства, первым делом вызывает `requireWorkspaceAccess(session, workspaceId, minRole)`.
+- **Авторизация:** централизована в `shared/access`. Каждый сервисный метод, работающий с данными пространства, первым делом вызывает `requireWorkspaceAccess(session, workspaceId, minRole)` (неучастнику — `NOT_FOUND`, низкой роли — `FORBIDDEN`). Страницы `/w/[workspaceSlug]/*` используют `requireWorkspaceAccessBySlug(slug, minRole)` → `notFound()`.
+- **Пространства — плагин Better Auth `organization`** под доменными именами (`Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `workspaceId`). Мутации идут через `auth.api.*` плагина (`callOrganizationApi`), чтение — через репозитории модуля. Текущее пространство берётся из URL, а не из `session.activeWorkspaceId`.
 
 ## Ключевые принципы
 

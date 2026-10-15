@@ -17,6 +17,8 @@ export interface AppErrorOptions {
   /** Можно ли показывать сообщение клиенту. По умолчанию: true для 4xx, false для 5xx. */
   expose?: boolean;
   details?: Record<string, unknown>;
+  /** Ошибки по полям формы (показываются клиенту для 4xx). */
+  fieldErrors?: FieldErrors;
   cause?: unknown;
 }
 
@@ -26,6 +28,7 @@ export class AppError extends Error {
   readonly httpStatus: number;
   readonly expose: boolean;
   readonly details?: Record<string, unknown>;
+  readonly fieldErrors?: FieldErrors;
 
   constructor(message: string, options: AppErrorOptions) {
     super(message, { cause: options.cause });
@@ -34,20 +37,15 @@ export class AppError extends Error {
     this.httpStatus = options.httpStatus;
     this.expose = options.expose ?? options.httpStatus < 500;
     this.details = options.details;
+    this.fieldErrors = options.fieldErrors;
   }
 }
 
-type DomainErrorOptions = Pick<AppErrorOptions, 'details' | 'cause'>;
+type DomainErrorOptions = Pick<AppErrorOptions, 'details' | 'cause' | 'fieldErrors'>;
 
 export class ValidationError extends AppError {
-  readonly fieldErrors?: FieldErrors;
-
-  constructor(
-    message = 'Некорректные данные',
-    options: DomainErrorOptions & { fieldErrors?: FieldErrors } = {},
-  ) {
+  constructor(message = 'Некорректные данные', options: DomainErrorOptions = {}) {
     super(message, { ...options, code: 'VALIDATION_ERROR', httpStatus: 400 });
-    this.fieldErrors = options.fieldErrors;
   }
 }
 

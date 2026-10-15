@@ -31,6 +31,17 @@ const envSchema = z
           .map((email) => email.trim().toLowerCase())
           .filter(Boolean),
       ),
+
+    /**
+     * SMTP для писем (приглашения). Локально — Mailpit из compose.yml. По умолчанию 127.0.0.1,
+     * а не localhost: nodemailer резолвит имя сам, и на Windows/WSL lookup localhost может зависать.
+     */
+    SMTP_HOST: z.string().min(1).default('127.0.0.1'),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(1025),
+    SMTP_SECURE: z.stringbool().default(false),
+    SMTP_USER: z.string().min(1).optional(),
+    SMTP_PASSWORD: z.string().min(1).optional(),
+    MAIL_FROM: z.string().min(3).default('Tasker <no-reply@tasker.local>'),
   })
   .transform((env) => ({
     ...env,

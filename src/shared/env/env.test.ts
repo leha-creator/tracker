@@ -76,4 +76,34 @@ describe('parseEnv', () => {
   it('defaults ADMIN_EMAILS to an empty list', () => {
     expect(parseEnv(VALID_ENV).ADMIN_EMAILS).toEqual([]);
   });
+
+  it('applies SMTP defaults for local Mailpit', () => {
+    const env = parseEnv(VALID_ENV);
+
+    expect(env.SMTP_HOST).toBe('127.0.0.1');
+    expect(env.SMTP_PORT).toBe(1025);
+    expect(env.SMTP_SECURE).toBe(false);
+    expect(env.SMTP_USER).toBeUndefined();
+    expect(env.MAIL_FROM).toBe('Tasker <no-reply@tasker.local>');
+  });
+
+  it('parses SMTP_PORT and SMTP_SECURE from strings', () => {
+    const env = parseEnv({ ...VALID_ENV, SMTP_PORT: '465', SMTP_SECURE: 'true' });
+
+    expect(env.SMTP_PORT).toBe(465);
+    expect(env.SMTP_SECURE).toBe(true);
+  });
+
+  it('rejects non-numeric SMTP_PORT without leaking its value', () => {
+    let caught: unknown;
+    try {
+      parseEnv({ ...VALID_ENV, SMTP_PORT: 'not-a-port' });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(EnvValidationError);
+    expect((caught as EnvValidationError).invalidKeys).toEqual(['SMTP_PORT']);
+    expect((caught as EnvValidationError).message).not.toContain('not-a-port');
+  });
 });

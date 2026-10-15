@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import {
+  ConflictError,
   ForbiddenError,
   INTERNAL_ERROR_MESSAGE,
   InternalError,
@@ -41,6 +42,17 @@ describe('toActionError', () => {
       code: 'VALIDATION_ERROR',
       message: 'Проверьте поля',
       fieldErrors: { email: ['Некорректный email'] },
+    });
+  });
+
+  it('passes field errors of other domain errors', () => {
+    const result = toActionError(
+      new ConflictError('Адрес занят', { fieldErrors: { slug: ['Этот адрес уже занят'] } }),
+    );
+    expect(result.error).toEqual({
+      code: 'CONFLICT',
+      message: 'Адрес занят',
+      fieldErrors: { slug: ['Этот адрес уже занят'] },
     });
   });
 

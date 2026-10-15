@@ -60,12 +60,13 @@ log.error({ err: error, taskId }, '[movePlacement] failed');
 | `UnauthorizedError` | `UNAUTHORIZED` | 401 | да |
 | `ForbiddenError` | `FORBIDDEN` | 403 | да |
 | `NotFoundError` | `NOT_FOUND` | 404 | да |
-| `ConflictError` | `CONFLICT` | 409 | да |
+| `ConflictError` | `CONFLICT` | 409 | да (+ `fieldErrors`) |
 | `InternalError` | `INTERNAL_ERROR` | 500 | нет |
 
 ```ts
 throw new NotFoundError('Проект не найден');
 throw new ValidationError('Проверьте поля', { fieldErrors: { email: ['Некорректный email'] } });
+throw new ConflictError('Адрес занят', { fieldErrors: { slug: ['Этот адрес уже занят'] } });
 throw new InternalError('S3 upload failed', { cause: error }); // клиент увидит общее сообщение
 ```
 
@@ -109,7 +110,7 @@ export async function GET() {
 | Исходная ошибка | Ответ клиенту | Лог |
 |-----------------|---------------|-----|
 | `ZodError` | `VALIDATION_ERROR`, `fieldErrors` по путям полей | `WARN` + `DEBUG` с полями |
-| `AppError` с `expose: true` (4xx) | `code` и `message` ошибки | `WARN` |
+| `AppError` с `expose: true` (4xx) | `code`, `message` и `fieldErrors`, если заданы | `WARN` (+ `DEBUG` с полями) |
 | `InternalError`, любая другая ошибка, не-`Error` | `INTERNAL_ERROR`, «Внутренняя ошибка сервера» | `ERROR` со стеком |
 
 Стектрейсы и внутренние сообщения (ошибки Prisma, сети, S3) клиенту не передаются.
