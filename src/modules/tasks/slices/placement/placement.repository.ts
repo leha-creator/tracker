@@ -38,6 +38,29 @@ export const placementRepository = {
     return row?.position ?? null;
   },
 
+  /** Карточки колонки (без сортировки: порядок задаёт comparePositions в модели). */
+  listColumn(tx: TransactionClient, workspaceId: string, projectId: string, statusId: string) {
+    return tx.taskPlacement.findMany({
+      where: { workspaceId, projectId, statusId },
+      select: { taskId: true, position: true },
+    });
+  },
+
+  /** Новые позиции карточек колонки (перенумерация при равных ключах). */
+  async updatePositions(
+    tx: TransactionClient,
+    workspaceId: string,
+    projectId: string,
+    rows: readonly { taskId: string; position: string }[],
+  ): Promise<void> {
+    for (const row of rows) {
+      await tx.taskPlacement.updateMany({
+        where: { workspaceId, projectId, taskId: row.taskId },
+        data: { position: row.position },
+      });
+    }
+  },
+
   find(tx: TransactionClient, workspaceId: string, taskId: string, projectId: string) {
     return tx.taskPlacement.findFirst({
       where: { workspaceId, taskId, projectId },

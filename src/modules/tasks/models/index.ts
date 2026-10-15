@@ -1,4 +1,6 @@
-export { comparePositions, positionAfter, positionBetween } from './position';
+export { findCardColumn, moveCard, prevTaskIdAt } from './board-move';
+export type { BoardColumns } from './board-move';
+export { comparePositions, positionAfter, positionBetween, rekeyColumn } from './position';
 export {
   assertAssigneeIsMember,
   assertCanDeleteTask,
@@ -16,6 +18,7 @@ export {
   toIsoDate,
 } from './task';
 export type { TaskCursor } from './task';
-export { assertCanPlace, TaskPlacement } from './task-placement';
+export { assertCanPlace, resolveMovePosition, TaskPlacement } from './task-placement';
+export type { ColumnCard, MovePosition } from './task-placement';
 export { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from './task-priority';
 export type { TaskPriority } from './task-priority';

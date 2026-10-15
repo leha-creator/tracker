@@ -3,11 +3,25 @@ import 'server-only';
 import { isEntityId } from '@/modules/projects';
 import { requireWorkspaceAccess } from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
-import { isUniqueViolation, prisma, type TransactionClient } from '@/shared/db';
+import {
+  isForeignKeyViolation,
+  isUniqueViolation,
+  prisma,
+  type TransactionClient,
+} from '@/shared/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
-import { assertCanPlace, positionAfter, TaskPlacement } from '../../models';
+import {
+  assertCanPlace,
+  comparePositions,
+  positionAfter,
+  rekeyColumn,
+  resolveMovePosition,
+  TaskPlacement,
+  type ColumnCard,
+  type MovePosition,
+} from '../../models';
 import { placementRepository } from './placement.repository';
 
 const log = createLogger('tasks.placement');
@@ -33,6 +47,8 @@ async function loadStatus(tx: TransactionClient, workspaceId: string, statusId: 
   }
   return status;
 }
+
+type MoveInput = PlacementRef & { statusId: string; prevTaskId: string | null };
 
 function alreadyPlaced(): ConflictError {
   return new ConflictError('Задача уже есть в этом проекте', {
@@ -162,4 +178,97 @@ export async function removeFromProject(session: AuthSession, input: PlacementRe
     throw new NotFoundError('Задачи нет в этом проекте');
   }
   log.info({ workspaceId, taskId, projectId }, '[placement] removed');
+}
+
+/**
+ * Перемещает карточку на доске: в колонку `statusId` сразу под `prevTaskId` (null — верх колонки).
+ * Меняется одна строка; при равных ключах соседей колонка перенумеровывается в той же транзакции.
+ */
+export async function movePlacement(session: AuthSession, input: MoveInput): Promise<void> {
+  const { workspaceId, taskId, projectId, statusId, prevTaskId } = input;
+  await requireWorkspaceAccess(session, workspaceId);
+  assertIds(input, statusId);
+  if (prevTaskId !== null && !isEntityId(prevTaskId)) throw new NotFoundError('Задача не найдена');
+
+  let result: { from: string; moved: boolean };
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const row = await placementRepository.find(tx, workspaceId, taskId, projectId);
+      if (!row) {
+        log.warn({ workspaceId, taskId, projectId }, '[placement.movePlacement] not placed');
+        throw new NotFoundError('Задачи нет в этом проекте');
+      }
+      const statusProjectId =
+        row.statusId === statusId
+          ? row.projectId
+          : (await loadStatus(tx, workspaceId, statusId)).projectId;
+
+      const column = await placementRepository.listColumn(tx, workspaceId, projectId, statusId);
+      column.sort(comparePositions);
+      let move = resolveMove(input, column);
+      if (move.kind === 'rekey') {
+        const rest = column.filter((card) => card.taskId !== taskId);
+        const keys = rekeyColumn(rest.length);
+        const rekeyed = rest.map((card, index) => ({
+          taskId: card.taskId,
+          position: keys[index]!,
+        }));
+        await placementRepository.updatePositions(tx, workspaceId, projectId, rekeyed);
+        log.warn(
+          { workspaceId, projectId, statusId, cards: rekeyed.length },
+          '[placement] column rekeyed',
+        );
+        move = resolveMove(input, rekeyed);
+      }
+      if (move.kind !== 'position') return { from: row.statusId, moved: false };
+
+      const placement = new TaskPlacement(row.taskId, row.projectId, row.statusId, row.position);
+      try {
+        placement.moveTo({ statusId, statusProjectId, position: move.position });
+      } catch (error) {
+        log.warn(
+          { workspaceId, taskId, projectId, statusId },
+          '[placement.movePlacement] rejected',
+        );
+        throw error;
+      }
+      await placementRepository.updateStatus(
+        tx,
+        workspaceId,
+        { taskId, projectId },
+        { statusId: placement.statusId, position: placement.position },
+      );
+      return { from: row.statusId, moved: true };
+    });
+  } catch (error) {
+    // Статус удалили параллельно с броском: составной FK размещения на статус.
+    if (isForeignKeyViolation(error)) {
+      log.warn(
+        { workspaceId, taskId, projectId, statusId },
+        '[placement.movePlacement] status gone',
+      );
+      throw new NotFoundError('Статус не найден');
+    }
+    throw error;
+  }
+
+  if (!result.moved) return;
+  log.info(
+    { workspaceId, taskId, projectId, from: result.from, to: statusId, userId: session.user.id },
+    '[placement] moved',
+  );
+}
+
+/** resolveMovePosition с логированием отклонённого якоря (устаревший или сама карточка). */
+function resolveMove(input: MoveInput, column: readonly ColumnCard[]): MovePosition {
+  try {
+    return resolveMovePosition({ column, taskId: input.taskId, prevTaskId: input.prevTaskId });
+  } catch (error) {
+    const { workspaceId, taskId, projectId, statusId, prevTaskId } = input;
+    log.warn(
+      { workspaceId, taskId, projectId, statusId, prevTaskId },
+      '[placement.movePlacement] anchor rejected',
+    );
+    throw error;
+  }
 }

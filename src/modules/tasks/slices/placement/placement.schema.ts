@@ -16,3 +16,8 @@ export const addToProjectSchema = z.object({
 export const changeStatusSchema = addToProjectSchema;
 
 export const removeFromProjectSchema = z.object(placementRef);
+
+/** Перенос карточки на доске: `prevTaskId` — карточка прямо над местом броска, null — верх колонки. */
+export const movePlacementSchema = addToProjectSchema.extend({
+  prevTaskId: z.uuid().nullable(),
+});

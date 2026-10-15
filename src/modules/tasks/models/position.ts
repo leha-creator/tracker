@@ -1,4 +1,4 @@
-import { generateKeyBetween } from 'fractional-indexing';
+import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 
 /**
  * Позиции карточек — дробные ключи (fractional-indexing): перемещение карточки меняет одну строку.
@@ -10,9 +10,17 @@ export function positionAfter(last: string | null): string {
   return generateKeyBetween(last, null);
 }
 
-/** Ключ строго между соседями; null — край колонки. */
+/**
+ * Ключ строго между соседями; null — край колонки. Равные ключи соседей (гонка вставок) недопустимы:
+ * между ними нет ключа, вызывающий сначала перенумеровывает колонку (`rekeyColumn`).
+ */
 export function positionBetween(before: string | null, after: string | null): string {
   return generateKeyBetween(before, after);
+}
+
+/** Новые возрастающие ключи для колонки из `count` карточек (порядок карточек сохраняется). */
+export function rekeyColumn(count: number): string[] {
+  return generateNKeysBetween(null, null, count);
 }
 
 function compareBytes(a: string, b: string): number {

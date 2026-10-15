@@ -4,14 +4,15 @@ import { revalidatePath } from 'next/cache';
 
 import { requireUser } from '@/shared/access';
 import { toActionError } from '@/shared/errors';
-import { formValues, type FormState } from '@/shared/types';
+import { formValues, type ActionResult, type FormState } from '@/shared/types';
 
 import {
   addToProjectSchema,
   changeStatusSchema,
+  movePlacementSchema,
   removeFromProjectSchema,
 } from './placement.schema';
-import { addToProject, changeStatus, removeFromProject } from './placement.service';
+import { addToProject, changeStatus, movePlacement, removeFromProject } from './placement.service';
 
 /** Доски проектов и страница задачи — под layout пространства. */
 function revalidateWorkspace() {
@@ -57,5 +58,24 @@ export async function removeFromProjectAction(
     return { ok: true, data: null };
   } catch (error) {
     return { ...toActionError(error, { action: 'removeFromProject' }), values: {} };
+  }
+}
+
+/** Перенос карточки на доске (drag-and-drop); вызывается из клиентского компонента без формы. */
+export async function movePlacementAction(raw: {
+  workspaceId: string;
+  taskId: string;
+  projectId: string;
+  statusId: string;
+  prevTaskId: string | null;
+}): Promise<ActionResult<null>> {
+  try {
+    const input = movePlacementSchema.parse(raw);
+    const session = await requireUser();
+    await movePlacement(session, input);
+    revalidateWorkspace();
+    return { ok: true, data: null };
+  } catch (error) {
+    return toActionError(error, { action: 'movePlacement' });
   }
 }

@@ -18,6 +18,8 @@ const createPlacement = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const findPlacement = vi.fn<() => Promise<PlacementRow | null>>();
 const updateStatus = vi.fn<(...args: unknown[]) => Promise<number>>();
 const deletePlacement = vi.fn<(...args: unknown[]) => Promise<number>>();
+const listColumn = vi.fn<() => Promise<{ taskId: string; position: string }[]>>();
+const updatePositions = vi.fn<(...args: unknown[]) => Promise<void>>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
@@ -28,6 +30,8 @@ vi.mock('@/modules/projects', () => ({
 }));
 vi.mock('@/shared/db', () => ({
   prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn({}) },
+  isForeignKeyViolation: (error: unknown) =>
+    typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2003',
   isUniqueViolation: (error: unknown) =>
     typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002',
 }));
@@ -41,10 +45,13 @@ vi.mock('./placement.repository', () => ({
     find: () => findPlacement(),
     updateStatus: (...args: unknown[]) => updateStatus(...args),
     delete: (...args: unknown[]) => deletePlacement(...args),
+    listColumn: () => listColumn(),
+    updatePositions: (...args: unknown[]) => updatePositions(...args),
   },
 }));
 
-const { addToProject, changeStatus, removeFromProject } = await import('./placement.service');
+const { addToProject, changeStatus, movePlacement, removeFromProject } =
+  await import('./placement.service');
 
 const session: AuthSession = {
   user: {
@@ -86,6 +93,7 @@ beforeEach(() => {
   });
   updateStatus.mockResolvedValue(1);
   deletePlacement.mockResolvedValue(1);
+  listColumn.mockResolvedValue([]);
 });
 
 describe('addToProject', () => {
@@ -196,5 +204,116 @@ describe('removeFromProject', () => {
       removeFromProject(session, { workspaceId: 'ws-1', taskId: 'x', projectId: PROJECT_ID }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(deletePlacement).not.toHaveBeenCalled();
+  });
+});
+
+describe('movePlacement', () => {
+  const A = '0192f3a0-0000-7000-8000-0000000000b1';
+  const B = '0192f3a0-0000-7000-8000-0000000000b2';
+  const moveInput = { ...input, prevTaskId: null as string | null };
+
+  function written(): { statusId: string; position: string } {
+    const call = updateStatus.mock.calls[0] as [unknown, string, unknown, never];
+    return call[3];
+  }
+
+  it('moves the card into another column between neighbours', async () => {
+    listColumn.mockResolvedValue([
+      { taskId: B, position: 'a1' },
+      { taskId: A, position: 'a0' },
+    ]);
+    await movePlacement(session, { ...moveInput, prevTaskId: A });
+    expect(written().statusId).toBe(S2);
+    expect('a0' < written().position && written().position < 'a1').toBe(true);
+  });
+
+  it('moves the card to the top of the column', async () => {
+    listColumn.mockResolvedValue([{ taskId: A, position: 'a0' }]);
+    await movePlacement(session, moveInput);
+    expect(written().position < 'a0').toBe(true);
+  });
+
+  it('moves the card to the bottom of the column', async () => {
+    listColumn.mockResolvedValue([{ taskId: A, position: 'a0' }]);
+    await movePlacement(session, { ...moveInput, prevTaskId: A });
+    expect(written().position > 'a0').toBe(true);
+  });
+
+  it('reorders within the same column without loading the status', async () => {
+    listColumn.mockResolvedValue([
+      { taskId: TASK_ID, position: 'a0' },
+      { taskId: A, position: 'a1' },
+    ]);
+    await movePlacement(session, { ...moveInput, statusId: S1, prevTaskId: A });
+    expect(findStatus).not.toHaveBeenCalled();
+    expect(written()).toMatchObject({ statusId: S1 });
+    expect(written().position > 'a1').toBe(true);
+  });
+
+  it('does nothing when the card already stands under the anchor', async () => {
+    listColumn.mockResolvedValue([
+      { taskId: A, position: 'a0' },
+      { taskId: TASK_ID, position: 'a1' },
+    ]);
+    await movePlacement(session, { ...moveInput, statusId: S1, prevTaskId: A });
+    expect(updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('rekeys the column when neighbours share a key', async () => {
+    listColumn.mockResolvedValue([
+      { taskId: A, position: 'a0' },
+      { taskId: B, position: 'a0' },
+    ]);
+    await movePlacement(session, { ...moveInput, prevTaskId: A });
+    const [, , , rows] = updatePositions.mock.calls[0] as [
+      unknown,
+      string,
+      string,
+      { taskId: string; position: string }[],
+    ];
+    expect(rows.map((row) => row.taskId)).toEqual([A, B]);
+    const [first, second] = rows.map((row) => row.position) as [string, string];
+    expect(first < written().position && written().position < second).toBe(true);
+  });
+
+  it('rejects a stale anchor with CONFLICT', async () => {
+    listColumn.mockResolvedValue([{ taskId: B, position: 'a0' }]);
+    await expect(movePlacement(session, { ...moveInput, prevTaskId: A })).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    expect(updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('rejects a status of another project', async () => {
+    findStatus.mockResolvedValue({ id: S2, projectId: OTHER_PROJECT, category: 'todo' });
+    await expect(movePlacement(session, moveInput)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    expect(updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('returns NOT_FOUND when the task is not in the project', async () => {
+    findPlacement.mockResolvedValue(null);
+    await expect(movePlacement(session, moveInput)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('rejects a malformed anchor without a query', async () => {
+    await expect(
+      movePlacement(session, { ...moveInput, prevTaskId: 'nope' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(findPlacement).not.toHaveBeenCalled();
+  });
+
+  it('maps a deleted status (FK violation) to NOT_FOUND', async () => {
+    updateStatus.mockRejectedValue({ code: 'P2003' });
+    await expect(movePlacement(session, moveInput)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('returns NOT_FOUND for a non-member', async () => {
+    requireWorkspaceAccess.mockRejectedValue(
+      Object.assign(new Error('not found'), { code: 'NOT_FOUND' }),
+    );
+    await expect(movePlacement(session, moveInput)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(findPlacement).not.toHaveBeenCalled();
   });
 });

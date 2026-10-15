@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { comparePositions, positionAfter, positionBetween } from './position';
+import { comparePositions, positionAfter, positionBetween, rekeyColumn } from './position';
+
+describe('rekeyColumn', () => {
+  it('returns no keys for an empty column', () => {
+    expect(rekeyColumn(0)).toEqual([]);
+  });
+
+  it('returns strictly increasing keys (byte order)', () => {
+    const keys = rekeyColumn(50);
+    expect(keys).toHaveLength(50);
+    for (let i = 1; i < keys.length; i++) {
+      expect(keys[i - 1]! < keys[i]!).toBe(true);
+    }
+  });
+});
 
 describe('positionAfter', () => {
   it('starts an empty column', () => {
