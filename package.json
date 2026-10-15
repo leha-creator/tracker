@@ -15,6 +15,8 @@
     "infra:up": "docker compose up -d --wait postgres minio mailpit && docker compose run --rm minio-init",
     "infra:down": "docker compose down",
     "infra:logs": "docker compose logs -f",
+    "app:up": "docker compose -f compose.yml -f compose.app.yml up -d --build --wait app",
+    "app:down": "docker compose -f compose.yml -f compose.app.yml down",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",

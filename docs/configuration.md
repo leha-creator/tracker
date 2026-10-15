@@ -54,6 +54,8 @@ env.S3_BUCKET; // типизировано
 
 При смене `POSTGRES_PORT` поменяйте порт и в `DATABASE_URL`.
 
+Переменные оверлея `compose.app.yml` (`APP_PORT`, `APP_URL`, `APP_LOG_LEVEL`, теги образов) описаны в разделе [Docker-образ и CI](deployment.md#переменные-composeappyml).
+
 ## Сервисы `compose.yml`
 
 | Сервис | Образ | Назначение |
@@ -69,7 +71,7 @@ env.S3_BUCKET; // типизировано
 
 | Файл | Назначение |
 |------|------------|
-| `next.config.ts` | Cache Components, `serverExternalPackages` для pino, редирект `/w/:slug/projects/:projectId` → `/board` |
+| `next.config.ts` | `output: 'standalone'` для Docker-образа, Cache Components, `serverExternalPackages` для pino, редирект `/w/:slug/projects/:projectId` → `/board` |
 | `prisma.config.ts` | Путь к схеме, миграции, `DATABASE_URL` для Prisma CLI |
 | `prisma/schema.prisma` | Схема БД (генератор `prisma-client` → `src/generated/prisma`). Модели Better Auth (`User`, `Session`, `Account`, `Verification`) пространств (`Workspace`, `WorkspaceMember`, `WorkspaceInvitation`), проектов (`Project`, `ProjectStatus`, enum `StatusCategory`) |
 | `src/shared/auth/auth.ts` | Настройки Better Auth: срок сессии (7 дней), длина пароля (8–128), плагины `admin` и `organization` (роли `owner`/`member`, приглашение действует 7 дней, до 50 пространств на пользователя, до 100 ожидающих приглашений на пространство, переименование моделей, поле участника `canManageProjects`) |
@@ -77,9 +79,13 @@ env.S3_BUCKET; // типизировано
 | `eslint.config.mjs` / `.prettierrc` | Линтер и форматирование |
 | `vitest.config.ts` | Тесты и тестовые переменные окружения |
 | `pnpm-workspace.yaml` | Разрешённые build-скрипты зависимостей, `saveExact` |
+| `Dockerfile` / `.dockerignore` | Образы `runner` (приложение) и `migrate` (миграции), см. [Docker-образ и CI](deployment.md) |
+| `compose.app.yml` | Оверлей поверх `compose.yml`: сервисы `migrate` и `app` |
+| `.github/workflows/ci.yml` | GitHub Actions: проверки, миграции, сборка образа и smoke-тест |
 
 ## See Also
 
 - [Начало работы](getting-started.md): первый запуск
 - [Логирование и ошибки](logging-and-errors.md): как работает `LOG_LEVEL`
 - [Разработка](development.md): команды `infra:*` и `db:*`
+- [Docker-образ и CI](deployment.md): запуск в контейнерах и GitHub Actions

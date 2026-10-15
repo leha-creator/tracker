@@ -38,6 +38,7 @@ curl http://localhost:3000/api/health
 - **Структурированные логи**: pino, уровень через `LOG_LEVEL`, секреты скрываются автоматически
 - **Единый формат ошибок**: `{ code, message, fieldErrors? }` для Server Actions и API
 - **Контроль качества**: ESLint с правилами архитектурных границ, Prettier, Vitest, pre-commit хук
+- **Docker и CI**: standalone-образ с отдельным контейнером миграций, GitHub Actions (проверки, миграции на чистой БД, smoke-тест образа)
 
 ## Пример: Server Action в едином формате
 
@@ -72,6 +73,7 @@ export async function archiveTaskAction(taskId: string): Promise<ActionResult<nu
 | `pnpm build` | Production-сборка |
 | `pnpm infra:up` / `pnpm infra:down` | Поднять / остановить Postgres, MinIO и Mailpit |
 | `pnpm db:migrate` | Создать и применить миграцию Prisma |
+| `pnpm app:up` / `pnpm app:down` | Запустить приложение с миграциями и инфраструктурой в Docker (http://localhost:3001) / остановить |
 
 Полный список команд описан в [docs/development.md](docs/development.md).
 
@@ -86,5 +88,6 @@ export async function archiveTaskAction(taskId: string): Promise<ActionResult<nu
 | [Архитектура](docs/architecture.md) | Модули, слои, аутентификация, пространства, проекты и доступ, `/api/health` |
 | [Логирование и ошибки](docs/logging-and-errors.md) | `createLogger`, `LOG_LEVEL`, `AppError`, `ActionResult` |
 | [Разработка](docs/development.md) | Команды, линтеры, тесты, Prisma, коммиты |
+| [Docker-образ и CI](docs/deployment.md) | Сборка образа, `compose.app.yml`, миграции, GitHub Actions |
 
 Контекст для AI-агентов лежит в [AGENTS.md](AGENTS.md) и [`.ai-factory/`](.ai-factory/DESCRIPTION.md).

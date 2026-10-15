@@ -1,0 +1,81 @@
+# Оверлей поверх compose.yml: приложение и миграции в контейнерах из Dockerfile.
+#
+#   docker compose -f compose.yml -f compose.app.yml up -d --build --wait app   # pnpm app:up
+#   docker compose -f compose.yml -f compose.app.yml down                       # pnpm app:down
+#
+# Внутри сети compose сервисы обращаются друг к другу по именам (postgres, minio, mailpit),
+# поэтому DATABASE_URL, S3_ENDPOINT и SMTP_HOST из .env (они указывают на localhost)
+# здесь НЕ используются — адреса собираются из отдельных переменных с локальными дефолтами.
+# Значения по умолчанию — только для локального запуска; в окружении с реальными данными
+# задайте BETTER_AUTH_SECRET, пароли и ключи явно.
+#
+# Отдельное имя проекта: контейнеры и тома не пересекаются с dev-инфраструктурой
+# (`pnpm infra:up`, проект `tasker`) — app:up не мигрирует dev-БД, app:down её не останавливает.
+# Порты инфраструктуры наружу не публикуются (кроме UI Mailpit), чтобы оба стека
+# могли работать одновременно.
+name: tasker-app
+
+services:
+  postgres:
+    ports: !reset []
+
+  minio:
+    ports: !reset []
+
+  # UI Mailpit нужен, чтобы читать письма приглашений из контейнерного стека.
+  mailpit:
+    ports: !override
+      - '${APP_MAILPIT_UI_PORT:-8026}:8025'
+
+  # Разово применяет миграции Prisma и завершается; app стартует только после успеха.
+  migrate:
+    build:
+      context: .
+      target: migrate
+    image: ${MIGRATE_IMAGE:-tasker-migrate:local}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tasker}:${POSTGRES_PASSWORD:-tasker}@postgres:5432/${POSTGRES_DB:-tasker}?schema=public
+    restart: 'no'
+
+  app:
+    build:
+      context: .
+      target: runner
+    image: ${APP_IMAGE:-tasker:local}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - '${APP_PORT:-3001}:3000'
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${APP_LOG_LEVEL:-info}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tasker}:${POSTGRES_PASSWORD:-tasker}@postgres:5432/${POSTGRES_DB:-tasker}?schema=public
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-tasker}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-tasker-secret}
+      S3_BUCKET: ${S3_BUCKET:-tasker-attachments}
+      S3_FORCE_PATH_STYLE: 'true'
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-local-dev-secret-change-me-0123456789abcdef}
+      # Публичный адрес приложения (как его видит браузер).
+      BETTER_AUTH_URL: ${APP_URL:-http://localhost:${APP_PORT:-3001}}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@example.com}
+      SMTP_HOST: mailpit
+      SMTP_PORT: '1025'
+      SMTP_SECURE: 'false'
+      MAIL_FROM: ${MAIL_FROM:-Tasker <no-reply@tasker.local>}
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/health > /dev/null || exit 1']
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

@@ -1,0 +1,33 @@
+# Контекст сборки Docker: только то, что нужно для `pnpm install` и `next build`.
+
+# Зависимости и артефакты сборки — пересобираются внутри образа
+node_modules
+.next
+out
+build
+coverage
+src/generated
+*.tsbuildinfo
+next-env.d.ts
+*.log
+
+# Git и CI
+.git
+.github
+
+# Секреты: .env никогда не попадает в образ, переменные передаются при запуске
+.env*
+!.env.example
+
+# Документация, контекст агентов и IDE
+.ai-factory
+.claude
+docs
+.idea
+.playwright-mcp
+.vscode
+
+# Файлы Docker не нужны внутри образа
+Dockerfile
+.dockerignore
+compose*.yml
