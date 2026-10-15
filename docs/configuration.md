@@ -69,10 +69,10 @@ env.S3_BUCKET; // типизировано
 
 | Файл | Назначение |
 |------|------------|
-| `next.config.ts` | Cache Components, `serverExternalPackages` для pino |
+| `next.config.ts` | Cache Components, `serverExternalPackages` для pino, редирект `/w/:slug/projects/:projectId` → `/board` |
 | `prisma.config.ts` | Путь к схеме, миграции, `DATABASE_URL` для Prisma CLI |
-| `prisma/schema.prisma` | Схема БД (генератор `prisma-client` → `src/generated/prisma`). Модели Better Auth (`User`, `Session`, `Account`, `Verification`) и пространств (`Workspace`, `WorkspaceMember`, `WorkspaceInvitation`) |
-| `src/shared/auth/auth.ts` | Настройки Better Auth: срок сессии (7 дней), длина пароля (8–128), плагины `admin` и `organization` (роли `owner`/`member`, приглашение действует 7 дней, до 50 пространств на пользователя, до 100 ожидающих приглашений на пространство, переименование моделей) |
+| `prisma/schema.prisma` | Схема БД (генератор `prisma-client` → `src/generated/prisma`). Модели Better Auth (`User`, `Session`, `Account`, `Verification`) пространств (`Workspace`, `WorkspaceMember`, `WorkspaceInvitation`), проектов (`Project`, `ProjectStatus`, enum `StatusCategory`) |
+| `src/shared/auth/auth.ts` | Настройки Better Auth: срок сессии (7 дней), длина пароля (8–128), плагины `admin` и `organization` (роли `owner`/`member`, приглашение действует 7 дней, до 50 пространств на пользователя, до 100 ожидающих приглашений на пространство, переименование моделей, поле участника `canManageProjects`) |
 | `components.json` | Настройки shadcn/ui CLI |
 | `eslint.config.mjs` / `.prettierrc` | Линтер и форматирование |
 | `vitest.config.ts` | Тесты и тестовые переменные окружения |

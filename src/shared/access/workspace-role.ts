@@ -16,3 +16,22 @@ export function parseWorkspaceRole(value: string | null | undefined): WorkspaceR
 export function hasWorkspaceRole(actual: WorkspaceRole, min: WorkspaceRole): boolean {
   return RANK[actual] >= RANK[min];
 }
+
+/** Права в пространстве сверх роли. Владелец имеет все права всегда. */
+export const WORKSPACE_PERMISSIONS = ['manageProjects'] as const;
+export type WorkspacePermission = (typeof WORKSPACE_PERMISSIONS)[number];
+export type WorkspacePermissions = Record<WorkspacePermission, boolean>;
+
+/** Флаги участника из БД (WorkspaceMember). */
+export interface WorkspacePermissionFlags {
+  canManageProjects: boolean;
+}
+
+/** Итоговые права участника: владельцу — всё, участнику — по выданным флагам. */
+export function resolveWorkspacePermissions(
+  role: WorkspaceRole,
+  flags: WorkspacePermissionFlags,
+): WorkspacePermissions {
+  if (role === 'owner') return { manageProjects: true };
+  return { manageProjects: flags.canManageProjects };
+}

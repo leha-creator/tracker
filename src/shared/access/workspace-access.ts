@@ -9,7 +9,14 @@ import { ForbiddenError, NotFoundError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
 import { requireUserOrRedirect } from './guards';
-import { hasWorkspaceRole, parseWorkspaceRole, type WorkspaceRole } from './workspace-role';
+import {
+  hasWorkspaceRole,
+  parseWorkspaceRole,
+  resolveWorkspacePermissions,
+  type WorkspacePermission,
+  type WorkspacePermissions,
+  type WorkspaceRole,
+} from './workspace-role';
 
 const log = createLogger('access');
 
@@ -19,6 +26,7 @@ export interface WorkspaceAccess {
   workspaceId: string;
   memberId: string;
   role: WorkspaceRole;
+  permissions: WorkspacePermissions;
 }
 
 export interface WorkspaceContext {
@@ -31,7 +39,7 @@ export interface WorkspaceContext {
 const findMembership = cache((workspaceId: string, userId: string) =>
   prisma.workspaceMember.findUnique({
     where: { workspaceId_userId: { workspaceId, userId } },
-    select: { id: true, role: true },
+    select: { id: true, role: true, canManageProjects: true },
   }),
 );
 
@@ -42,7 +50,7 @@ const findWorkspaceBySlug = cache((slug: string, userId: string) =>
       id: true,
       slug: true,
       name: true,
-      members: { where: { userId }, select: { id: true, role: true } },
+      members: { where: { userId }, select: { id: true, role: true, canManageProjects: true } },
     },
   }),
 );
@@ -78,7 +86,41 @@ export async function requireWorkspaceAccess(
   }
 
   log.debug({ userId, workspaceId, role }, '[access.requireWorkspaceAccess]');
-  return { userId, workspaceId, memberId: membership.id, role };
+  return {
+    userId,
+    workspaceId,
+    memberId: membership.id,
+    role,
+    permissions: resolveWorkspacePermissions(role, membership),
+  };
+}
+
+const PERMISSION_DENIED_MESSAGES: Record<WorkspacePermission, string> = {
+  manageProjects: 'Недостаточно прав для управления проектами',
+};
+
+/**
+ * Проверяет членство и право `permission` (владелец имеет все права).
+ * Неучастнику — NOT_FOUND, без права — FORBIDDEN.
+ */
+export async function requireWorkspacePermission(
+  session: AuthSession,
+  workspaceId: string,
+  permission: WorkspacePermission,
+): Promise<WorkspaceAccess> {
+  const access = await requireWorkspaceAccess(session, workspaceId);
+  if (!access.permissions[permission]) {
+    log.warn(
+      { userId: access.userId, workspaceId, role: access.role, permission },
+      '[access.requireWorkspacePermission] permission denied',
+    );
+    throw new ForbiddenError(PERMISSION_DENIED_MESSAGES[permission]);
+  }
+  log.debug(
+    { userId: access.userId, workspaceId, permission },
+    '[access.requireWorkspacePermission]',
+  );
+  return access;
 }
 
 /**
@@ -112,6 +154,12 @@ export async function requireWorkspaceAccessBySlug(
   return {
     session,
     workspace: { id: workspace.id, slug: workspace.slug, name: workspace.name },
-    access: { userId, workspaceId: workspace.id, memberId: membership.id, role },
+    access: {
+      userId,
+      workspaceId: workspace.id,
+      memberId: membership.id,
+      role,
+      permissions: resolveWorkspacePermissions(role, membership),
+    },
   };
 }

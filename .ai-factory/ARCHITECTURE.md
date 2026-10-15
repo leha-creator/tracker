@@ -52,9 +52,10 @@ tasker/
 │   │   │
 │   │   ├── projects/
 │   │   │   ├── slices/
-│   │   │   │   ├── project/
-│   │   │   │   └── status/           # настраиваемые статусы (колонки)
-│   │   │   ├── models/
+│   │   │   │   ├── project/          # CRUD проекта, набор статусов по умолчанию
+│   │   │   │   └── status/           # настраиваемые статусы (колонки), блокировка проекта на время изменения набора
+│   │   │   ├── models/               # StatusSet (инварианты набора), категории и палитра статусов, правила проекта
+│   │   │   ├── client.ts
 │   │   │   └── index.ts
 │   │   │
 │   │   ├── tasks/
@@ -89,14 +90,14 @@ tasker/
 │   └── shared/                       # ── СКВОЗНОЕ (минимально) ──
 │       ├── db/                       # Prisma client (singleton)
 │       ├── auth/                     # Better Auth config, getSession()
-│       ├── access/                   # requireWorkspaceAccess(), requireAdmin()
+│       ├── access/                   # requireWorkspaceAccess(), requireWorkspacePermission(), requireAdmin()
 │       ├── errors/                   # AppError, NotFoundError, ForbiddenError, toActionError()
 │       ├── storage/                  # S3-клиент, presigned URL
 │       ├── mail/                     # SMTP (nodemailer): sendMail(), escapeHtml()
 │       ├── logger/                   # pino, LOG_LEVEL
 │       ├── env/                      # Zod-валидация переменных окружения (ленивая)
 │       ├── health/                   # checkHealth(): агрегирует checkDatabase/checkStorage для /api/health
-│       └── types/                    # ActionResult<T> и пр.
+│       └── types/                    # ActionResult<T>, FormState<T> и пр.
 │   └── generated/prisma/             # Сгенерированный Prisma Client (не коммитится)
 └── ...
 ```
@@ -127,6 +128,7 @@ tasker/
 - **Межмодульные вызовы:** через публичный API (`index.ts`) модуля-поставщика. Если нужно избежать обратной зависимости, используются колбэки или простые доменные события в памяти: например, `tasks` не знает о GitHub, а GitHub-модуль сам подписывается на нужное.
 - **Транзакции:** если операция затрагивает несколько агрегатов (перемещение карточки с пересчётом позиций), репозиторий принимает `Prisma.TransactionClient`, а сервис открывает `prisma.$transaction`.
 - **Авторизация:** централизована в `shared/access`. Каждый сервисный метод, работающий с данными пространства, первым делом вызывает `requireWorkspaceAccess(session, workspaceId, minRole)` (неучастнику — `NOT_FOUND`, низкой роли — `FORBIDDEN`). Страницы `/w/[workspaceSlug]/*` используют `requireWorkspaceAccessBySlug(slug, minRole)` → `notFound()`.
+- **Права в пространстве сверх роли.** Владелец имеет все права; участнику владелец выдаёт отдельные права (сейчас — `manageProjects`, флаг `WorkspaceMember.canManageProjects`, объявлен в плагине с `input: false`). Сервисы проверяют их через `requireWorkspacePermission(session, workspaceId, permission)`, страницы — через `access.permissions`. Флаг меняет сервис участников через репозиторий: у плагина нет API для дополнительных полей.
 - **Пространства — плагин Better Auth `organization`** под доменными именами (`Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `workspaceId`). Мутации идут через `auth.api.*` плагина (`callOrganizationApi`), чтение — через репозитории модуля. Текущее пространство берётся из URL, а не из `session.activeWorkspaceId`.
 
 ## Ключевые принципы

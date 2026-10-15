@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasWorkspaceRole, parseWorkspaceRole } from './workspace-role';
+import {
+  hasWorkspaceRole,
+  parseWorkspaceRole,
+  resolveWorkspacePermissions,
+} from './workspace-role';
 
 describe('parseWorkspaceRole', () => {
   it.each(['owner', 'member'] as const)('accepts %s', (role) => {
@@ -24,5 +28,25 @@ describe('hasWorkspaceRole', () => {
   it('member satisfies only member', () => {
     expect(hasWorkspaceRole('member', 'member')).toBe(true);
     expect(hasWorkspaceRole('member', 'owner')).toBe(false);
+  });
+});
+
+describe('resolveWorkspacePermissions', () => {
+  it('owner manages projects even without the flag', () => {
+    expect(resolveWorkspacePermissions('owner', { canManageProjects: false })).toEqual({
+      manageProjects: true,
+    });
+  });
+
+  it('member without the flag cannot manage projects', () => {
+    expect(resolveWorkspacePermissions('member', { canManageProjects: false })).toEqual({
+      manageProjects: false,
+    });
+  });
+
+  it('member with the flag manages projects', () => {
+    expect(resolveWorkspacePermissions('member', { canManageProjects: true })).toEqual({
+      manageProjects: true,
+    });
   });
 });

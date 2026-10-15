@@ -1,6 +1,11 @@
 import 'server-only';
 
-import { parseWorkspaceRole, requireWorkspaceAccess, type WorkspaceRole } from '@/shared/access';
+import {
+  parseWorkspaceRole,
+  requireWorkspaceAccess,
+  type WorkspacePermission,
+  type WorkspaceRole,
+} from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
 import { NotFoundError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
@@ -41,6 +46,7 @@ export async function listMembers(session: AuthSession, workspaceId: string): Pr
         email: row.user.email,
         image: row.user.image,
         role,
+        canManageProjects: row.canManageProjects,
         joinedAt: row.createdAt,
         isCurrentUser: row.user.id === session.user.id,
       },
@@ -121,4 +127,32 @@ export async function leaveWorkspace(
     api.leaveOrganization({ body: { organizationId: workspaceId }, headers }),
   );
   log.info({ workspaceId, userId: session.user.id }, '[member] left');
+}
+
+/** Выдаёт или отзывает право участника (только владелец, только участнику с ролью member). */
+export async function setMemberPermission(
+  session: AuthSession,
+  input: { workspaceId: string; memberId: string; permission: WorkspacePermission; value: boolean },
+): Promise<void> {
+  const { workspaceId, memberId, permission, value } = input;
+  await requireWorkspaceAccess(session, workspaceId, 'owner');
+  log.debug(
+    { userId: session.user.id, workspaceId, memberId, permission, value },
+    '[member.setPermission] start',
+  );
+
+  const target = await loadMembership(workspaceId, memberId);
+  try {
+    target.assertPermissionsConfigurable();
+  } catch (error) {
+    log.warn({ workspaceId, memberId, permission }, '[member.setPermission] rejected: owner');
+    throw error;
+  }
+
+  const count = await memberRepository.setCanManageProjects(workspaceId, memberId, value);
+  if (count === 0) throw new NotFoundError('Участник не найден');
+  log.info(
+    { workspaceId, memberId, permission, value, byUserId: session.user.id },
+    '[member] permission changed',
+  );
 }

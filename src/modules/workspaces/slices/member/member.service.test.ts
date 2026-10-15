@@ -11,6 +11,8 @@ const requireWorkspaceAccess =
   >();
 const findInWorkspace = vi.fn<() => Promise<{ id: string; userId: string; role: string } | null>>();
 const countOwners = vi.fn<() => Promise<number>>();
+const setCanManageProjects =
+  vi.fn<(ws: string, memberId: string, value: boolean) => Promise<number>>();
 const updateMemberRole = vi.fn();
 const removeMember = vi.fn();
 const leaveOrganization = vi.fn();
@@ -24,6 +26,8 @@ vi.mock('./member.repository', () => ({
   memberRepository: {
     findInWorkspace: () => findInWorkspace(),
     countOwners: () => countOwners(),
+    setCanManageProjects: (...args: Parameters<typeof setCanManageProjects>) =>
+      setCanManageProjects(...args),
     listByWorkspace: vi.fn(),
   },
 }));
@@ -36,6 +40,7 @@ const {
   changeMemberRole,
   leaveWorkspace,
   removeMember: removeMemberService,
+  setMemberPermission,
 } = await import('./member.service');
 
 const session: AuthSession = {
@@ -53,7 +58,13 @@ const session: AuthSession = {
 function accessAs(role: WorkspaceRole) {
   requireWorkspaceAccess.mockImplementation((_session, workspaceId, minRole = 'member') => {
     if (minRole === 'owner' && role !== 'owner') return Promise.reject(new ForbiddenError());
-    return Promise.resolve({ userId: session.user.id, workspaceId, memberId: 'm-self', role });
+    return Promise.resolve({
+      userId: session.user.id,
+      workspaceId,
+      memberId: 'm-self',
+      role,
+      permissions: { manageProjects: role === 'owner' },
+    });
   });
 }
 
@@ -138,5 +149,44 @@ describe('leaveWorkspace', () => {
     expect(leaveOrganization).toHaveBeenCalledWith(
       expect.objectContaining({ body: { organizationId: 'ws-1' } }),
     );
+  });
+});
+
+describe('setMemberPermission', () => {
+  const input = {
+    workspaceId: 'ws-1',
+    memberId: 'm-2',
+    permission: 'manageProjects' as const,
+    value: true,
+  };
+
+  it('forbids non-owner', async () => {
+    accessAs('member');
+    await expect(setMemberPermission(session, input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(setCanManageProjects).not.toHaveBeenCalled();
+  });
+
+  it('returns NOT_FOUND for member of another workspace', async () => {
+    accessAs('owner');
+    findInWorkspace.mockResolvedValue(null);
+    await expect(setMemberPermission(session, input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(setCanManageProjects).not.toHaveBeenCalled();
+  });
+
+  it('rejects configuring an owner', async () => {
+    accessAs('owner');
+    findInWorkspace.mockResolvedValue({ id: 'm-2', userId: 'user-2', role: 'owner' });
+    await expect(setMemberPermission(session, input)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    expect(setCanManageProjects).not.toHaveBeenCalled();
+  });
+
+  it('grants the permission to a member', async () => {
+    accessAs('owner');
+    findInWorkspace.mockResolvedValue({ id: 'm-2', userId: 'user-2', role: 'member' });
+    setCanManageProjects.mockResolvedValue(1);
+    await setMemberPermission(session, input);
+    expect(setCanManageProjects).toHaveBeenCalledWith('ws-1', 'm-2', true);
   });
 });

@@ -18,6 +18,7 @@ export {
   changeMemberRoleAction,
   leaveWorkspaceAction,
   removeMemberAction,
+  setMemberPermissionAction,
 } from './slices/member/member.actions';
 export type { MemberDto } from './slices/member/member.dto';
 export {
@@ -33,4 +34,4 @@ export {
 } from './slices/workspace/workspace.schema';
 export { SLUG_MAX_LENGTH, slugify } from './models/workspace-slug';
 export type { InvitationState } from './models/invitation';
-export type { FormState } from './workspaces.form-state';
+export type { FormState } from '@/shared/types';

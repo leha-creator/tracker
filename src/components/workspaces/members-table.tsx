@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -23,6 +24,7 @@ import {
   changeMemberRoleAction,
   leaveWorkspaceAction,
   removeMemberAction,
+  setMemberPermissionAction,
   type FormState,
   type MemberDto,
 } from '@/modules/workspaces/client';
@@ -51,6 +53,7 @@ export function MembersTable({
         <TableRow>
           <TableHead>Участник</TableHead>
           <TableHead className="w-40">Роль</TableHead>
+          <TableHead className="w-32">Проекты</TableHead>
           <TableHead className="w-44 text-right">
             <span className="sr-only">Действия</span>
           </TableHead>
@@ -133,6 +136,9 @@ function MemberRow({
           </Badge>
         )}
       </TableCell>
+      <TableCell>
+        <ProjectsPermissionCell workspaceId={workspaceId} member={member} canManage={canManage} />
+      </TableCell>
       <TableCell className="text-right">
         {member.isCurrentUser ? (
           <ConfirmActionDialog
@@ -165,5 +171,63 @@ function MemberRow({
         )}
       </TableCell>
     </TableRow>
+  );
+}
+
+/**
+ * Право «Управление проектами». У владельца оно есть всегда; участнику его выдаёт владелец.
+ * Пока запрос идёт — показываем запрошенное значение, после ответа — значение сервера.
+ */
+function ProjectsPermissionCell({
+  workspaceId,
+  member,
+  canManage,
+}: {
+  workspaceId: string;
+  member: MemberDto;
+  canManage: boolean;
+}) {
+  const [state, action, pending] = useActionState<FormState, FormData>(
+    setMemberPermissionAction,
+    null,
+  );
+  const [requested, setRequested] = useState(member.canManageProjects);
+  const error = state && !state.ok ? state.error.message : undefined;
+
+  if (member.role === 'owner') {
+    return <span className="text-sm text-muted-foreground">Всегда</span>;
+  }
+  if (!canManage) {
+    return (
+      <span className="text-sm text-muted-foreground">
+        {member.canManageProjects ? 'Управляет' : 'Нет'}
+      </span>
+    );
+  }
+
+  function toggle(value: boolean) {
+    const formData = new FormData();
+    formData.set('workspaceId', workspaceId);
+    formData.set('memberId', member.id);
+    formData.set('permission', 'manageProjects');
+    formData.set('value', String(value));
+    setRequested(value);
+    startTransition(() => action(formData));
+  }
+
+  return (
+    <div className="grid gap-1">
+      <Switch
+        checked={pending ? requested : member.canManageProjects}
+        disabled={pending}
+        onCheckedChange={toggle}
+        aria-label={`Управление проектами: ${member.name}`}
+      />
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

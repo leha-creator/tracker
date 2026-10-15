@@ -92,6 +92,8 @@ export async function createProjectAction(raw: unknown): Promise<ActionResult<{ 
 
 На клиенте: `if (!result.ok) toast.error(result.error.message)`. Для форм используйте `result.error.fieldErrors`.
 
+Формы с `useActionState` используют `FormState<T>` из `@/shared/types`: это `ActionResult<T>`, где при ошибке есть ещё `values` — введённые значения. React сбрасывает поля формы после action, и `values` возвращают их в поля (`formValues(formData, ['name'])`).
+
 ### Route Handlers → `toErrorResponse`
 
 ```ts
