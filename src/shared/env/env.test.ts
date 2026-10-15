@@ -9,6 +9,8 @@ const VALID_ENV = {
   S3_ACCESS_KEY_ID: 'tasker',
   S3_SECRET_ACCESS_KEY: 'super-secret-value',
   S3_BUCKET: 'tasker-attachments',
+  BETTER_AUTH_SECRET: 'a-very-long-local-development-secret-value',
+  BETTER_AUTH_URL: 'http://localhost:3000',
 };
 
 describe('parseEnv', () => {
@@ -51,5 +53,27 @@ describe('parseEnv', () => {
     expect(error.invalidKeys.sort()).toEqual(['DATABASE_URL', 'LOG_LEVEL', 'S3_BUCKET']);
     expect(error.message).not.toContain('leaked-password');
     expect(error.message).not.toContain('super-secret-value');
+  });
+
+  it('rejects short BETTER_AUTH_SECRET without leaking its value', () => {
+    expect(() => parseEnv({ ...VALID_ENV, BETTER_AUTH_SECRET: 'short-secret' })).toThrow(
+      EnvValidationError,
+    );
+    try {
+      parseEnv({ ...VALID_ENV, BETTER_AUTH_SECRET: 'short-secret' });
+    } catch (e) {
+      const error = e as EnvValidationError;
+      expect(error.invalidKeys).toEqual(['BETTER_AUTH_SECRET']);
+      expect(error.message).not.toContain('short-secret');
+    }
+  });
+
+  it('parses ADMIN_EMAILS into a normalized list', () => {
+    const env = parseEnv({ ...VALID_ENV, ADMIN_EMAILS: ' A@x.io, b@y.io ,' });
+    expect(env.ADMIN_EMAILS).toEqual(['a@x.io', 'b@y.io']);
+  });
+
+  it('defaults ADMIN_EMAILS to an empty list', () => {
+    expect(parseEnv(VALID_ENV).ADMIN_EMAILS).toEqual([]);
   });
 });

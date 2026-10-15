@@ -18,6 +18,19 @@ const envSchema = z
     S3_SECRET_ACCESS_KEY: z.string().min(1),
     S3_BUCKET: z.string().min(3),
     S3_FORCE_PATH_STYLE: z.stringbool().default(true),
+
+    BETTER_AUTH_SECRET: z.string().min(32),
+    BETTER_AUTH_URL: z.url(),
+    /** Email-адреса через запятую: такие пользователи при регистрации получают роль admin. */
+    ADMIN_EMAILS: z
+      .string()
+      .default('')
+      .transform((value) =>
+        value
+          .split(',')
+          .map((email) => email.trim().toLowerCase())
+          .filter(Boolean),
+      ),
   })
   .transform((env) => ({
     ...env,

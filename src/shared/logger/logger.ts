@@ -27,6 +27,10 @@ export const REDACT_PATHS = [
   '*.accessKeyId',
   'secretAccessKey',
   '*.secretAccessKey',
+  'newPassword',
+  '*.newPassword',
+  'sessionToken',
+  '*.sessionToken',
 ];
 
 export interface RootLoggerOptions {

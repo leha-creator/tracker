@@ -23,6 +23,8 @@ export default defineConfig({
       S3_ACCESS_KEY_ID: 'test-access-key',
       S3_SECRET_ACCESS_KEY: 'test-secret-key',
       S3_BUCKET: 'test-bucket',
+      BETTER_AUTH_SECRET: 'test-secret-that-is-at-least-32-characters',
+      BETTER_AUTH_URL: 'http://localhost:3000',
     },
   },
 });
