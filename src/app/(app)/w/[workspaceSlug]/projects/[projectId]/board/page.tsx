@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
-import { BoardColumns } from '@/components/projects/board-columns';
+import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { listStatuses } from '@/modules/projects';
 import { getBoardCards } from '@/modules/tasks';
 
@@ -28,7 +28,7 @@ async function BoardSection({ params }: Pick<Props, 'params'>) {
     getBoardCards(session, workspace.id, project.id),
   ]);
   return (
-    <BoardColumns
+    <KanbanBoard
       workspaceId={workspace.id}
       workspaceSlug={workspace.slug}
       projectId={project.id}

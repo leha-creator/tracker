@@ -1,0 +1,55 @@
+'use client';
+
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import type { MouseEvent } from 'react';
+
+import { cn } from '@/lib/utils';
+import type { BoardCardDto } from '@/modules/tasks/client';
+
+import { TaskCard } from './task-card';
+
+interface SortableTaskCardProps {
+  card: BoardCardDto;
+  statusId: string;
+  href: string;
+  /** true сразу после перетаскивания: клик, завершивший перенос, не должен открывать задачу. */
+  shouldSuppressClick: () => boolean;
+  reduceMotion: boolean;
+}
+
+/**
+ * Карточка доски, которую можно перетаскивать: указателем (после сдвига), касанием (после
+ * удержания) или с клавиатуры (Space). Обычный клик и Enter открывают задачу.
+ */
+export function SortableTaskCard({
+  card,
+  statusId,
+  href,
+  shouldSuppressClick,
+  reduceMotion,
+}: SortableTaskCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: card.taskId,
+    data: { statusId },
+    transition: reduceMotion ? null : undefined,
+  });
+  // Ссылка остаётся ссылкой: без role="button", tabIndex и aria-pressed от dnd-kit.
+  const { 'aria-describedby': describedBy } = attributes;
+
+  return (
+    <TaskCard
+      ref={setNodeRef}
+      card={card}
+      href={href}
+      {...listeners}
+      aria-describedby={describedBy}
+      aria-roledescription="перетаскиваемая карточка"
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={cn('touch-manipulation', isDragging && 'opacity-40')}
+      onClickCapture={(event: MouseEvent) => {
+        if (shouldSuppressClick()) event.preventDefault();
+      }}
+    />
+  );
+}

@@ -51,8 +51,8 @@ tasker/
 │   │   ├── auth/             # Формы входа/регистрации, меню пользователя
 │   │   ├── forms/            # FormField, FormError
 │   │   ├── workspaces/       # Список, переключатель, участники, приглашения
-│   │   ├── projects/         # Список проектов, колонки доски, настройки проекта и статусов
-│   │   ├── tasks/            # Карточка, быстрое создание, страница задачи, размещения, список задач
+│   │   ├── projects/         # Список проектов, навигация проекта, настройки проекта и статусов
+│   │   ├── tasks/            # Канбан-доска (dnd-kit), карточка, быстрое создание, страница задачи, размещения, список задач
 │   │   └── ui/               # shadcn/ui (генерируется CLI, вручную не править)
 │   ├── lib/utils.ts          # cn() для shadcn
 │   ├── generated/prisma/     # Сгенерированный Prisma Client (в .gitignore)
@@ -94,7 +94,7 @@ tasker/
 | `src/shared/mail/index.ts` | `sendMail()` — отправка писем через SMTP |
 | `src/modules/workspaces/index.ts` | Пространства, участники, приглашения: actions и read-функции (`client.ts` — для клиентских компонентов) |
 | `src/modules/projects/index.ts` | Проекты и статусы: actions и read-функции (`listProjects`, `getProject`, `listStatuses`, `listWorkspaceStatuses`; `client.ts` — для клиентских компонентов) |
-| `src/modules/tasks/index.ts` | Задачи и размещения: actions и read-функции (`getTaskByNumber`, `listTasks`, `getBoardCards`; `client.ts` — для клиентских компонентов) |
+| `src/modules/tasks/index.ts` | Задачи и размещения: actions и read-функции (`getTaskByNumber`, `listTasks`, `getBoardCards`; `client.ts` — для клиентских компонентов, в т.ч. `movePlacementAction` и чистые функции переноса карточек) |
 | `src/modules/auth/index.ts` | `signInAction`, `signUpAction`, `signOutAction`, Zod-схемы форм |
 | `src/proxy.ts` | Оптимистичный редирект неавторизованных на `/login` |
 | `src/app/api/health/route.ts` | Health check инфраструктуры |
