@@ -33,7 +33,7 @@ Tasker — веб-приложение для управления задача�
 - **Фреймворк:** Next.js (App Router) — full-stack монолит: React UI, Server Components, Server Actions / Route Handlers
 - **База данных:** PostgreSQL
 - **ORM:** Prisma
-- **Аутентификация:** Better Auth с Prisma-адаптером; плагин `organization` — пространства, участники, роли и приглашения; плагин `admin` — глобальная роль администратора; GitHub OAuth
+- **Аутентификация:** Better Auth (1.7) с Prisma-адаптером; вход по email + паролю, сессии в БД (cookie); плагин `admin` — глобальная роль (`user` / `admin` в поле `User.role`), первый администратор назначается через `ADMIN_EMAILS`; плагин `organization` — пространства, участники, роли и приглашения (этап «Рабочие пространства»); GitHub OAuth — вместе с интеграцией GitHub
 - **UI (предлагается):** Tailwind CSS + shadcn/ui, dnd-kit для канбана, Tiptap для rich-text (описания задач, документация)
 - **Валидация:** Zod (общие схемы для форм и серверных обработчиков)
 - **Хранение файлов:** S3-совместимое хранилище через `@aws-sdk/client-s3`. Локально — MinIO (образ `pgsty/minio`, официальные образы больше не публикуются). Загрузка по presigned URL

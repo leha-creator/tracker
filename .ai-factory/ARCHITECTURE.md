@@ -34,7 +34,12 @@ tasker/
 │   │       ├── auth/[...all]/route.ts         # Better Auth handler
 │   │       └── webhooks/github/route.ts       # GitHub webhooks
 │   │
+│   ├── proxy.ts                      # Оптимистичный редирект на /login по cookie (не авторизация)
 │   ├── modules/                      # ── ДОМЕННЫЕ МОДУЛИ ──
+│   │   ├── auth/
+│   │   │   ├── slices/credentials/   # вход, регистрация, выход (Server Actions поверх Better Auth)
+│   │   │   └── index.ts
+│   │   │
 │   │   ├── workspaces/
 │   │   │   ├── slices/
 │   │   │   │   ├── workspace/        # workspace.actions.ts, workspace.service.ts, workspace.repository.ts

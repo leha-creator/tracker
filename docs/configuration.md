@@ -19,6 +19,11 @@
 | `S3_SECRET_ACCESS_KEY` | да | — | Секретный ключ |
 | `S3_BUCKET` | да | — | Бакет для вложений (мин. 3 символа) |
 | `S3_FORCE_PATH_STYLE` | нет | `true` | Path-style адресация, нужна для MinIO |
+| `BETTER_AUTH_SECRET` | да | — | Секрет Better Auth для подписи cookie и токенов, минимум 32 символа. Сгенерировать: `openssl rand -base64 32` |
+| `BETTER_AUTH_URL` | да | — | Публичный URL приложения, локально `http://localhost:3000` |
+| `ADMIN_EMAILS` | нет | пусто | Email через запятую. Пользователь с таким email при регистрации получает глобальную роль `admin`. Регистр и пробелы не важны |
+
+`ADMIN_EMAILS` действует только в момент регистрации: роль уже существующего пользователя не меняется. В production задайте свой `BETTER_AUTH_SECRET` — значение из `.env.example` годится только для локальной разработки.
 
 Невалидное окружение даёт `EnvValidationError` со списком ключей. Значения в сообщение не попадают.
 
@@ -57,7 +62,8 @@ env.S3_BUCKET; // типизировано
 |------|------------|
 | `next.config.ts` | Cache Components, `serverExternalPackages` для pino |
 | `prisma.config.ts` | Путь к схеме, миграции, `DATABASE_URL` для Prisma CLI |
-| `prisma/schema.prisma` | Схема БД (генератор `prisma-client` → `src/generated/prisma`) |
+| `prisma/schema.prisma` | Схема БД (генератор `prisma-client` → `src/generated/prisma`). Сейчас — модели Better Auth: `User`, `Session`, `Account`, `Verification` |
+| `src/shared/auth/auth.ts` | Настройки Better Auth: срок сессии (7 дней), длина пароля (8–128), плагины |
 | `components.json` | Настройки shadcn/ui CLI |
 | `eslint.config.mjs` / `.prettierrc` | Линтер и форматирование |
 | `vitest.config.ts` | Тесты и тестовые переменные окружения |

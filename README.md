@@ -2,7 +2,7 @@
 
 > Простой таск-трекер для команд: рабочие пространства, канбан-доска и список задач.
 
-Tasker помогает командам вести задачи в изолированных рабочих пространствах. Одна задача может одновременно находиться в нескольких проектах, и в каждом у неё свой статус. Сейчас готов каркас приложения, а доменные возможности появляются по этапам [дорожной карты](.ai-factory/ROADMAP.md).
+Tasker помогает командам вести задачи в изолированных рабочих пространствах. Одна задача может одновременно находиться в нескольких проектах, и в каждом у неё свой статус. Сейчас готовы каркас приложения и вход с глобальными ролями, а остальные возможности появляются по этапам [дорожной карты](.ai-factory/ROADMAP.md).
 
 ## Быстрый старт
 
@@ -13,8 +13,11 @@ corepack enable
 pnpm install
 cp .env.example .env
 pnpm infra:up      # Postgres (порт 5433) + MinIO (9000/9001)
-pnpm dev           # http://localhost:3000
+pnpm db:deploy     # миграции БД
+pnpm dev           # http://localhost:3000 → /register
 ```
+
+Пользователь с email из `ADMIN_EMAILS` (по умолчанию `admin@example.com`) при регистрации становится администратором.
 
 Проверка инфраструктуры:
 
@@ -26,6 +29,7 @@ curl http://localhost:3000/api/health
 ## Что уже есть
 
 - **Next.js 16 + TypeScript (strict)**: App Router, Server Components, Cache Components
+- **Вход и регистрация**: Better Auth (email + пароль), глобальные роли `user` / `admin`, защищённые страницы и `/admin`
 - **Tailwind CSS v4 + shadcn/ui**: готовые компоненты в `src/components/ui`
 - **PostgreSQL + Prisma 7**: driver adapter `@prisma/adapter-pg`, логирование SQL-запросов
 - **S3-хранилище**: MinIO локально, клиент `@aws-sdk/client-s3`
@@ -77,7 +81,7 @@ export async function archiveTaskAction(taskId: string): Promise<ActionResult<nu
 |--------|----------|
 | [Начало работы](docs/getting-started.md) | Установка, запуск, проверка, частые проблемы |
 | [Конфигурация](docs/configuration.md) | Переменные окружения, docker-compose, порты |
-| [Архитектура](docs/architecture.md) | Модули, слои, правила зависимостей, `/api/health` |
+| [Архитектура](docs/architecture.md) | Модули, слои, аутентификация и доступ, `/api/health` |
 | [Логирование и ошибки](docs/logging-and-errors.md) | `createLogger`, `LOG_LEVEL`, `AppError`, `ActionResult` |
 | [Разработка](docs/development.md) | Команды, линтеры, тесты, Prisma, коммиты |
 

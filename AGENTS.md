@@ -12,7 +12,7 @@ Tasker — простой таск-трекер с рабочими простр
 - **Фреймворк:** Next.js 16 (App Router, Cache Components)
 - **База данных:** PostgreSQL 17
 - **ORM:** Prisma 7 (генератор `prisma-client`, driver adapter `@prisma/adapter-pg`)
-- **Аутентификация:** Better Auth (плагины `organization`, `admin`) — следующий этап
+- **Аутентификация:** Better Auth 1.7 — email + пароль, плагин `admin` (глобальная роль `user` / `admin`); плагин `organization` — этап «Рабочие пространства»
 - **UI:** Tailwind CSS v4 + shadcn/ui (radix)
 - **Хранилище файлов:** S3 API, локально MinIO (`pgsty/minio`)
 - **Инфраструктура кода:** pino (логи), Zod (валидация), Vitest, ESLint + Prettier, husky + lint-staged
@@ -25,19 +25,29 @@ tasker/
 ├── .ai-factory/              # Контекст AI Factory (описание, архитектура, правила, планы)
 ├── .claude/                  # Скиллы и субагенты
 ├── prisma/
-│   └── schema.prisma         # Схема БД (доменные модели — на следующих этапах)
+│   ├── schema.prisma         # Схема БД (сейчас — модели Better Auth: User, Session, Account, Verification)
+│   └── migrations/
 ├── prisma.config.ts          # Подключение Prisma CLI (DATABASE_URL, миграции)
 ├── src/
+│   ├── proxy.ts              # Оптимистичный редирект на /login по session-cookie (не авторизация)
 │   ├── app/                  # Представление (Next.js): страницы, layout, route handlers
-│   │   └── api/health/       # GET /api/health — состояние БД и хранилища
-│   ├── modules/              # Доменные модули (workspaces, projects, tasks, ...) — пока пусто
+│   │   ├── (auth)/           # /login, /register
+│   │   ├── (app)/            # Защищённая зона: layout с меню пользователя, /, /admin
+│   │   └── api/
+│   │       ├── auth/[...all]/ # Better Auth handler
+│   │       └── health/       # GET /api/health — состояние БД и хранилища
+│   ├── modules/              # Доменные модули
+│   │   └── auth/             # Вход, регистрация, выход: Zod-схемы, сервис, Server Actions
 │   ├── components/
+│   │   ├── auth/             # Формы входа/регистрации, меню пользователя
 │   │   └── ui/               # shadcn/ui (генерируется CLI, вручную не править)
 │   ├── lib/utils.ts          # cn() для shadcn
 │   ├── generated/prisma/     # Сгенерированный Prisma Client (в .gitignore)
 │   ├── shared/               # Сквозная инфраструктура
+│   │   ├── auth/             # Конфиг Better Auth (getAuth), getSession() → DTO
+│   │   ├── access/           # Глобальные роли, requireUser/requireAdmin, safeRedirectPath
 │   │   ├── env/              # Валидация переменных окружения (Zod, ленивая)
-│   │   ├── logger/           # pino: createLogger(scope), redact секретов
+│   │   ├── logger/           # pino: createLogger(scope), redact секретов, maskEmail()
 │   │   ├── errors/           # AppError, доменные ошибки, toActionError, toErrorResponse
 │   │   ├── types/            # ActionResult<T>
 │   │   ├── db/               # Prisma singleton, checkDatabase()
@@ -61,6 +71,10 @@ tasker/
 | `src/shared/errors/index.ts` | Классы ошибок, `toActionError()` для Server Actions, `toErrorResponse()` для Route Handlers |
 | `src/shared/env/index.ts` | `env` / `getEnv()` — типизированные переменные окружения |
 | `src/shared/db/index.ts` | `prisma` (только для сервисов и репозиториев модулей) |
+| `src/shared/auth/index.ts` | `getAuth()` (Better Auth), `getSession()` — текущая сессия как DTO |
+| `src/shared/access/index.ts` | `requireUser()` / `requireAdmin()` для сервисов, `requireUserOrRedirect()` / `requireAdminOrNotFound()` для страниц |
+| `src/modules/auth/index.ts` | `signInAction`, `signUpAction`, `signOutAction`, Zod-схемы форм |
+| `src/proxy.ts` | Оптимистичный редирект неавторизованных на `/login` |
 | `src/app/api/health/route.ts` | Health check инфраструктуры |
 | `compose.yml` | Локальная инфраструктура |
 | `.mcp.json` | Конфигурация MCP-серверов |
@@ -80,9 +94,9 @@ tasker/
 | Документ | Путь | Описание |
 |----------|------|----------|
 | README | `README.md` | Лендинг: быстрый старт, возможности |
-| Начало работы | `docs/getting-started.md` | Установка, запуск, проверка, частые проблемы |
+| Начало работы | `docs/getting-started.md` | Установка, миграции, первый вход и администратор |
 | Конфигурация | `docs/configuration.md` | Переменные окружения, docker-compose, порты |
-| Архитектура | `docs/architecture.md` | Слои, границы ESLint, `/api/health` |
+| Архитектура | `docs/architecture.md` | Слои, границы ESLint, аутентификация и доступ, `/api/health` |
 | Логирование и ошибки | `docs/logging-and-errors.md` | `createLogger`, `AppError`, `ActionResult` |
 | Разработка | `docs/development.md` | Команды, линтеры, тесты, Prisma |
 

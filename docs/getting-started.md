@@ -42,13 +42,35 @@ pnpm infra:up
 
 Остановка: `pnpm infra:down`. Данные сохраняются в Docker volumes `postgres-data` и `minio-data`.
 
+## Миграции БД
+
+```bash
+pnpm db:deploy   # применяет миграции из prisma/migrations
+```
+
+Нужно один раз после первого `infra:up` и после каждого `git pull`, в котором появились новые миграции.
+
 ## Запуск приложения
 
 ```bash
 pnpm dev
 ```
 
-Откройте http://localhost:3000. Должна появиться стартовая карточка «Tasker».
+Откройте http://localhost:3000. Без входа приложение перенаправит на `/login`.
+
+## Первый вход и администратор
+
+1. Убедитесь, что в `.env` в `ADMIN_EMAILS` указан ваш email (в `.env.example` — `admin@example.com`).
+2. Откройте http://localhost:3000/register и зарегистрируйтесь с этим email. Пароль — от 8 до 128 символов.
+3. После регистрации вход выполняется автоматически. В шапке появятся бейдж «Администратор» и ссылка «Админка» (`/admin`).
+
+Пользователи с другими email получают роль `user`, а для них `/admin` отвечает 404.
+
+`ADMIN_EMAILS` срабатывает только при регистрации. Чтобы сделать администратором уже существующего пользователя, поменяйте его роль в БД:
+
+```bash
+pnpm db:studio   # таблица User → поле role = admin
+```
 
 ## Проверка
 
@@ -78,6 +100,9 @@ pnpm check
 | `/api/health` → 503, `storage.ok: false` | MinIO не запущен или бакет не создан. Выполните `pnpm infra:up` |
 | `pnpm: command not found` | Выполните `corepack enable` |
 | `Cannot find module '@/generated/prisma/client'` | Выполните `pnpm db:generate` |
+| При регистрации «Внутренняя ошибка сервера», в логах — что таблица `public.User` не существует | Не применены миграции. Выполните `pnpm db:deploy` |
+| `EnvValidationError: ... BETTER_AUTH_SECRET` | Секрет не задан или короче 32 символов. См. [Конфигурация](configuration.md) |
+| Зарегистрировались, но роли администратора нет | Email не был в `ADMIN_EMAILS` на момент регистрации. Поменяйте роль через `pnpm db:studio` |
 
 ## See Also
 

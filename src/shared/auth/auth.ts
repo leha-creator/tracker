@@ -41,7 +41,7 @@ function createAuth() {
       cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_SECONDS },
     },
     // Встроенный лимит действует только на HTTP-эндпоинты /api/auth/*.
-    // Вызовы auth.api.* из Server Actions его обходят (см. docs/authentication.md).
+    // Вызовы auth.api.* из Server Actions его обходят (см. docs/architecture.md).
     rateLimit: { enabled: true, storage: 'memory' },
     advanced: { useSecureCookies: env.NODE_ENV === 'production' },
     databaseHooks: {
