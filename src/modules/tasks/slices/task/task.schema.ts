@@ -90,10 +90,5 @@ export const updateTaskSchema = z.object({
 
 export const deleteTaskSchema = z.object({ workspaceId: workspaceIdField, taskId: entityIdField });
 
-export const listTasksSchema = z.object({
-  workspaceId: workspaceIdField,
-  cursor: z.string().max(100).optional(),
-});
-
 export type CreateTaskFormInput = z.input<typeof createTaskSchema>;
 export type UpdateTaskFormInput = z.input<typeof updateTaskSchema>;

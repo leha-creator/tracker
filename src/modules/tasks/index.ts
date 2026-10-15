@@ -3,5 +3,5 @@
 // Зависимости: tasks → projects, workspaces (через их index.ts); обратных зависимостей нет.
 export * from './client';
 
-export { getTaskByNumber, listTasks } from './slices/task/task.service';
-export { getBoardCards } from './slices/views/views.queries';
+export { getTaskByNumber } from './slices/task/task.service';
+export { getBoardCards, listProjectTasks, listTasks } from './slices/views/views.queries';

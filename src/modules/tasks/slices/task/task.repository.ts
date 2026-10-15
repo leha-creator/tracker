@@ -3,17 +3,8 @@ import 'server-only';
 import type { Prisma } from '@/generated/prisma/client';
 import { prisma, type TransactionClient } from '@/shared/db';
 
-import { TASK_PAGE_SIZE, type TaskCursor, type TaskPriority } from '../../models';
-
-const PLACEMENT_SELECT = {
-  orderBy: { project: { name: 'asc' } },
-  select: {
-    projectId: true,
-    statusId: true,
-    project: { select: { name: true } },
-    status: { select: { name: true, color: true, category: true } },
-  },
-} as const satisfies Prisma.Task$placementsArgs;
+import type { TaskPriority } from '../../models';
+import { PLACEMENT_SELECT } from './task.select';
 
 const TASK_SELECT = {
   id: true,
@@ -28,17 +19,6 @@ const TASK_SELECT = {
   workspace: { select: { slug: true } },
   assignee: { select: { id: true, name: true, image: true } },
   createdBy: { select: { id: true, name: true } },
-  placements: PLACEMENT_SELECT,
-} as const satisfies Prisma.TaskSelect;
-
-const TASK_LIST_SELECT = {
-  id: true,
-  number: true,
-  title: true,
-  priority: true,
-  dueDate: true,
-  createdAt: true,
-  assignee: { select: { id: true, name: true, image: true } },
   placements: PLACEMENT_SELECT,
 } as const satisfies Prisma.TaskSelect;
 
@@ -94,27 +74,6 @@ export const taskRepository = {
     const { count } = await prisma.task.deleteMany({ where: { id: taskId, workspaceId } });
     return count;
   },
-
-  /** Страница списка: новые сверху; на одну строку больше, чтобы узнать, есть ли следующая. */
-  listPage(workspaceId: string, cursor: TaskCursor | null) {
-    return prisma.task.findMany({
-      where: {
-        workspaceId,
-        ...(cursor
-          ? {
-              OR: [
-                { createdAt: { lt: cursor.createdAt } },
-                { createdAt: cursor.createdAt, id: { lt: cursor.id } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: TASK_PAGE_SIZE + 1,
-      select: TASK_LIST_SELECT,
-    });
-  },
 };
 
 export type TaskRow = NonNullable<Awaited<ReturnType<typeof taskRepository.findById>>>;
-export type TaskListRow = Awaited<ReturnType<typeof taskRepository.listPage>>[number];

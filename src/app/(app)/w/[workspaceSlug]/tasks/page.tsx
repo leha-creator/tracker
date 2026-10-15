@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 
 import { TaskTable } from '@/components/tasks/task-table';
 import { Button } from '@/components/ui/button';
-import { listTasks } from '@/modules/tasks';
+import { listTasks, parseTaskListParams } from '@/modules/tasks';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
 
 export const metadata: Metadata = { title: 'Задачи — Tasker' };
@@ -22,7 +22,7 @@ export default function TasksPage({ params }: Props) {
 async function TasksSection({ params }: Pick<Props, 'params'>) {
   const { workspaceSlug } = await params;
   const { session, workspace } = await requireWorkspaceAccessBySlug(workspaceSlug);
-  const page = await listTasks(session, workspace.id);
+  const page = await listTasks(session, workspace.id, parseTaskListParams({}, 'workspace'));
 
   return (
     <section className="grid gap-4" aria-labelledby="tasks-heading">
@@ -39,12 +39,7 @@ async function TasksSection({ params }: Pick<Props, 'params'>) {
           Задач пока нет. Создайте первую — или добавьте её прямо в колонке доски проекта.
         </p>
       ) : (
-        <TaskTable
-          workspaceId={workspace.id}
-          workspaceSlug={workspace.slug}
-          items={page.items}
-          nextCursor={page.nextCursor}
-        />
+        <TaskTable workspaceSlug={workspace.slug} items={page.items} />
       )}
     </section>
   );

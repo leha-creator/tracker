@@ -6,16 +6,10 @@ import { redirect } from 'next/navigation';
 import { requireUser } from '@/shared/access';
 import { toActionError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
-import { formValues, type ActionResult, type FormState } from '@/shared/types';
+import { formValues, type FormState } from '@/shared/types';
 
-import type { TaskPageDto } from './task.dto';
-import {
-  createTaskSchema,
-  deleteTaskSchema,
-  listTasksSchema,
-  updateTaskSchema,
-} from './task.schema';
-import { createTask, deleteTask, listTasks, updateTask } from './task.service';
+import { createTaskSchema, deleteTaskSchema, updateTaskSchema } from './task.schema';
+import { createTask, deleteTask, updateTask } from './task.service';
 
 const log = createLogger('tasks.actions');
 
@@ -101,18 +95,4 @@ export async function deleteTaskAction(_prev: FormState, formData: FormData): Pr
   revalidateWorkspace();
   log.debug({ to }, '[tasks.actions.delete] redirect');
   redirect(to);
-}
-
-/** Следующая страница списка задач («Показать ещё»). */
-export async function loadMoreTasksAction(raw: {
-  workspaceId: string;
-  cursor: string;
-}): Promise<ActionResult<TaskPageDto>> {
-  try {
-    const input = listTasksSchema.parse(raw);
-    const session = await requireUser();
-    return { ok: true, data: await listTasks(session, input.workspaceId, input.cursor) };
-  } catch (error) {
-    return toActionError(error, { action: 'loadMoreTasks' });
-  }
 }

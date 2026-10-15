@@ -48,11 +48,4 @@ export interface TaskListItemDto {
   isOverdue: boolean;
   assignee: TaskUserDto | null;
   placements: TaskPlacementDto[];
-  createdAt: Date;
-}
-
-export interface TaskPageDto {
-  items: TaskListItemDto[];
-  /** Курсор следующей страницы или null, если это последняя. */
-  nextCursor: string | null;
 }

@@ -5,8 +5,6 @@ import type * as AccessModule from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
 import { NotFoundError } from '@/shared/errors';
 
-import { TASK_PAGE_SIZE } from '../../models';
-
 const requireWorkspaceAccess =
   vi.fn<(session: AuthSession, ws: string) => Promise<WorkspaceAccess>>();
 const isWorkspaceMember = vi.fn<(ws: string, userId: string) => Promise<boolean>>();
@@ -19,7 +17,6 @@ const findById = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const findByNumber = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const updateRow = vi.fn<(...args: unknown[]) => Promise<number>>();
 const deleteRow = vi.fn<(...args: unknown[]) => Promise<number>>();
-const listPage = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
 const findStatus =
   vi.fn<
     (...args: unknown[]) => Promise<{ id: string; projectId: string; category: string } | null>
@@ -50,7 +47,6 @@ vi.mock('./task.repository', () => ({
     findByNumber: (...args: unknown[]) => findByNumber(...args),
     update: (...args: unknown[]) => updateRow(...args),
     delete: (...args: unknown[]) => deleteRow(...args),
-    listPage: (...args: unknown[]) => listPage(...args),
   },
 }));
 vi.mock('../placement/placement.repository', () => ({
@@ -61,8 +57,7 @@ vi.mock('../placement/placement.repository', () => ({
   },
 }));
 
-const { createTask, deleteTask, getTaskByNumber, listTasks, updateTask } =
-  await import('./task.service');
+const { createTask, deleteTask, getTaskByNumber, updateTask } = await import('./task.service');
 
 const session: AuthSession = {
   user: {
@@ -292,36 +287,5 @@ describe('deleteTask', () => {
       workspaceSlug: 'team',
     });
     expect(deleteRow).toHaveBeenCalledWith('ws-1', TASK_ID);
-  });
-});
-
-describe('listTasks', () => {
-  function rows(count: number) {
-    return Array.from({ length: count }, (_, i) =>
-      taskRow({
-        id: `0192f3a0-0000-7000-8000-${String(i).padStart(12, '0')}`,
-        number: i + 1,
-      }),
-    );
-  }
-
-  it('has no next cursor on the last page', async () => {
-    listPage.mockResolvedValue(rows(3));
-    const page = await listTasks(session, 'ws-1');
-    expect(page.items).toHaveLength(3);
-    expect(page.nextCursor).toBeNull();
-  });
-
-  it('returns a cursor when there is an extra row', async () => {
-    listPage.mockResolvedValue(rows(TASK_PAGE_SIZE + 1));
-    const page = await listTasks(session, 'ws-1');
-    expect(page.items).toHaveLength(TASK_PAGE_SIZE);
-    expect(page.nextCursor).toContain(page.items.at(-1)!.id);
-  });
-
-  it('ignores a malformed cursor', async () => {
-    listPage.mockResolvedValue([]);
-    await listTasks(session, 'ws-1', 'garbage');
-    expect(listPage).toHaveBeenCalledWith('ws-1', null);
   });
 });

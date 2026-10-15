@@ -3,7 +3,8 @@ import 'server-only';
 import { parseStatusColor } from '@/modules/projects';
 
 import { formatTaskKey, isTaskOverdue, toIsoDate } from '../../models';
-import type { TaskListRow, TaskRow } from './task.repository';
+import type { TaskRow } from './task.repository';
+import type { TaskListRow } from './task.select';
 import type { TaskPlacementDto, TaskUserDto } from './task.dto';
 
 type PlacementRow = TaskRow['placements'][number];

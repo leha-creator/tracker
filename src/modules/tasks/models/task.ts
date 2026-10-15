@@ -5,8 +5,6 @@ export const TASK_TITLE_MAX_LENGTH = 200;
 export const TASK_DESCRIPTION_MAX_LENGTH = 10_000;
 /** Максимум проектов, в которых одновременно размещена задача. */
 export const TASK_PLACEMENT_LIMIT = 20;
-/** Размер страницы списка задач пространства. */
-export const TASK_PAGE_SIZE = 50;
 
 const TASK_NUMBER_RE = /^[1-9]\d{0,8}$/;
 
@@ -69,24 +67,4 @@ export function isTaskOverdue(
 /** Дата `YYYY-MM-DD` в UTC: срок хранится как дата без времени. */
 export function toIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
-}
-
-/** Курсор страницы списка задач: последняя показанная задача (порядок createdAt desc, id desc). */
-export interface TaskCursor {
-  createdAt: Date;
-  id: string;
-}
-
-const CURSOR_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)_([0-9a-f-]{36})$/i;
-
-export function encodeTaskCursor(cursor: TaskCursor): string {
-  return `${cursor.createdAt.toISOString()}_${cursor.id}`;
-}
-
-/** Курсор из запроса клиента; некорректный → null (страница с начала). */
-export function decodeTaskCursor(raw: string): TaskCursor | null {
-  const match = CURSOR_RE.exec(raw);
-  if (!match) return null;
-  const createdAt = new Date(match[1]!);
-  return Number.isNaN(createdAt.getTime()) ? null : { createdAt, id: match[2]! };
 }

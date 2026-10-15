@@ -1,5 +1,5 @@
 import type { TaskPriority } from '../../models';
-import type { TaskUserDto } from '../task/task.dto';
+import type { TaskListItemDto, TaskUserDto } from '../task/task.dto';
 
 /** Карточка задачи на доске проекта. */
 export interface BoardCardDto {
@@ -16,3 +16,14 @@ export interface BoardCardDto {
 
 /** Карточки доски по id статуса (колонки); порядок — по позиции. */
 export type BoardCardsDto = Record<string, BoardCardDto[]>;
+
+/** Страница списка задач (пространства или проекта). */
+export interface TaskListPageDto {
+  items: TaskListItemDto[];
+  /** Всего задач по фильтру. */
+  total: number;
+  /** Фактический номер страницы (запрошенный за пределами — последняя). */
+  page: number;
+  pageCount: number;
+  pageSize: number;
+}

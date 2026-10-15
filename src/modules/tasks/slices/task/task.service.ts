@@ -12,16 +12,13 @@ import {
   assertAssigneeIsMember,
   assertCanDeleteTask,
   canDeleteTask,
-  decodeTaskCursor,
-  encodeTaskCursor,
   normalizeTaskTitle,
   positionAfter,
-  TASK_PAGE_SIZE,
   toIsoDate,
   type TaskPriority,
 } from '../../models';
 import { placementRepository } from '../placement/placement.repository';
-import type { TaskDto, TaskPageDto } from './task.dto';
+import type { TaskDto } from './task.dto';
 import { toTaskSummary, toUserDto } from './task.mapper';
 import { taskRepository, type TaskRow, type TaskWriteData } from './task.repository';
 
@@ -229,37 +226,4 @@ export async function deleteTask(
   if (count === 0) throw new NotFoundError('Задача не найдена');
   log.info({ workspaceId, taskId, number: task.number, userId: access.userId }, '[task] deleted');
   return { workspaceSlug: task.workspace.slug };
-}
-
-/** Страница задач пространства: новые сверху. Некорректный курсор — с начала. */
-export async function listTasks(
-  session: AuthSession,
-  workspaceId: string,
-  cursor?: string,
-): Promise<TaskPageDto> {
-  await requireWorkspaceAccess(session, workspaceId);
-  const decoded = cursor ? decodeTaskCursor(cursor) : null;
-  if (cursor && !decoded) log.warn({ workspaceId }, '[task.listTasks] malformed cursor ignored');
-
-  const rows = await taskRepository.listPage(workspaceId, decoded);
-  const page = rows.slice(0, TASK_PAGE_SIZE);
-  const last = page.at(-1);
-  const nextCursor = rows.length > TASK_PAGE_SIZE && last ? encodeTaskCursor(last) : null;
-  log.debug(
-    { userId: session.user.id, workspaceId, count: page.length, hasMore: nextCursor !== null },
-    '[task.listTasks]',
-  );
-
-  const now = today();
-  return {
-    items: page.map((row) => ({
-      id: row.id,
-      number: row.number,
-      title: row.title,
-      priority: row.priority,
-      createdAt: row.createdAt,
-      ...toTaskSummary(row, now),
-    })),
-    nextCursor,
-  };
 }

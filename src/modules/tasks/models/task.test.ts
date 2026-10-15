@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   assertAssigneeIsMember,
   assertCanDeleteTask,
-  decodeTaskCursor,
-  encodeTaskCursor,
   formatTaskKey,
   isTaskOverdue,
   normalizeTaskTitle,
@@ -99,25 +97,5 @@ describe('isTaskOverdue', () => {
 describe('toIsoDate', () => {
   it('formats in UTC', () => {
     expect(toIsoDate(new Date('2026-02-03T00:00:00.000Z'))).toBe('2026-02-03');
-  });
-});
-
-describe('task cursor', () => {
-  const cursor = {
-    createdAt: new Date('2026-10-15T10:20:30.456Z'),
-    id: '0192f3a0-0000-7000-8000-000000000001',
-  };
-
-  it('round-trips', () => {
-    expect(decodeTaskCursor(encodeTaskCursor(cursor))).toEqual(cursor);
-  });
-
-  it.each([
-    '',
-    'abc',
-    '2026-10-15T10:20:30.456Z',
-    '2026-13-45T99:99:99.999Z_0192f3a0-0000-7000-8000-000000000001',
-  ])('rejects %j', (raw) => {
-    expect(decodeTaskCursor(raw)).toBeNull();
   });
 });

@@ -1,11 +1,6 @@
-'use client';
-
 import Link from 'next/link';
-import { useState, useTransition } from 'react';
 
-import { FormError } from '@/components/forms/form-field';
 import { StatusDot } from '@/components/projects/status-badge';
-import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -14,45 +9,20 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { loadMoreTasksAction, type TaskListItemDto } from '@/modules/tasks/client';
+import type { TaskListItemDto } from '@/modules/tasks/client';
 
 import { AssigneeAvatar } from './assignee-avatar';
 import { DueDate } from './due-date';
 import { PriorityBadge } from './priority-badge';
 
 interface TaskTableProps {
-  workspaceId: string;
   workspaceSlug: string;
   items: TaskListItemDto[];
-  nextCursor: string | null;
 }
 
-/** Задачи пространства: новые сверху, «Показать ещё» догружает следующую страницу. */
-export function TaskTable({ workspaceId, workspaceSlug, items, nextCursor }: TaskTableProps) {
-  const [more, setMore] = useState<{ items: TaskListItemDto[]; cursor: string | null }>({
-    items: [],
-    cursor: nextCursor,
-  });
-  const [error, setError] = useState<string>();
-  const [pending, startTransition] = useTransition();
-  const rows = [...items, ...more.items];
-
-  function loadMore() {
-    if (!more.cursor) return;
-    const cursor = more.cursor;
-    startTransition(async () => {
-      const result = await loadMoreTasksAction({ workspaceId, cursor });
-      if (!result.ok) {
-        setError(result.error.message);
-        return;
-      }
-      setError(undefined);
-      setMore((prev) => ({
-        items: [...prev.items, ...result.data.items],
-        cursor: result.data.nextCursor,
-      }));
-    });
-  }
+/** Задачи пространства. */
+export function TaskTable({ workspaceSlug, items }: TaskTableProps) {
+  const rows = items;
 
   return (
     <div className="grid gap-3">
@@ -115,12 +85,6 @@ export function TaskTable({ workspaceId, workspaceSlug, items, nextCursor }: Tas
           </TableBody>
         </Table>
       </div>
-      <FormError message={error} />
-      {more.cursor && (
-        <Button type="button" variant="outline" onClick={loadMore} disabled={pending}>
-          {pending ? 'Загружаем…' : 'Показать ещё'}
-        </Button>
-      )}
     </div>
   );
 }
