@@ -82,7 +82,7 @@ Rationale: План покрывает часть этапа — Docker-обра
 
 ### Phase 2: CI
 
-- [ ] Task 4: GitHub Actions workflow (depends on 3)
+- [x] Task 4: GitHub Actions workflow (depends on 3)
   - `.github/workflows/ci.yml`: триггеры `push` в `main` и `pull_request`; `concurrency` по ref с `cancel-in-progress: true`; `permissions: contents: read`; actions — на мажорных тегах (`actions/checkout@v5`, `actions/setup-node@v5`, `actions/cache@v4`, `docker/setup-buildx-action@v3`, `docker/build-push-action@v6` — сверить актуальные мажоры).
   - Джоб `check`: checkout → `corepack enable` → `setup-node` (`node-version-file` или `22`, `cache: pnpm`) → `pnpm install --frozen-lockfile` → кеш `.next/cache` → `pnpm check` → `pnpm build` (без `.env`; если сборке нужны переменные — это баг ленивого env, разбираться, а не подставлять значения).
   - Джоб `migrations`: `services.postgres` (`postgres:17-alpine`, healthcheck `pg_isready`), `DATABASE_URL` на `localhost:5432` → install → `pnpm db:deploy` → `prisma migrate diff … --exit-code` (флаги — см. «Ключевые решения»).
@@ -91,7 +91,7 @@ Rationale: План покрывает часть этапа — Docker-обра
   - Логирование: шаги с понятными `name`; при падении smoke — дамп логов `app` и `migrate`; секреты в логах не печатать.
   - Files: `.github/workflows/ci.yml`.
 
-- [ ] Task 5: Smoke-скрипт проверки health (depends on 4)
+- [x] Task 5: Smoke-скрипт проверки health (depends on 4)
   - `scripts/smoke-health.sh` (POSIX sh): ждёт `GET $APP_URL/api/health` до таймаута (по умолчанию 60 с, шаг 2 с), выходит 0 при 200 и `"status":"ok"`, иначе печатает последний ответ и выходит 1. Используется в джобе `docker` и для ручной проверки после `pnpm app:up`.
   - Подключить в `ci.yml` вместо голого `curl`.
   - Проверка: локально после `pnpm app:up` → exit 0; при остановленном MinIO (`docker compose stop minio`) → exit 1 с ответом `degraded`.

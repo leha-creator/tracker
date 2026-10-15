@@ -1,0 +1,179 @@
+# CI: проверки кода и сборка, миграции на чистом Postgres, сборка Docker-образа и smoke-тест.
+# Образ никуда не публикуется. Секреты репозитория не используются: всё, что нужно
+# для запуска, — локальные значения по умолчанию из compose.yml / compose.app.yml.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+  HUSKY: '0'
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
+jobs:
+  check:
+    name: Typecheck, lint, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          # pnpm-store кешируется отдельным шагом ниже.
+          package-manager-cache: false
+
+      - name: Enable pnpm (corepack)
+        run: corepack enable
+
+      - name: Resolve pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Next.js build
+        uses: actions/cache@v6
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**/*.ts', 'src/**/*.tsx', 'src/**/*.css', 'next.config.ts') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - name: Check (typecheck, lint, format, tests)
+        run: pnpm check
+
+      # Без .env: переменные окружения читаются лениво и на этапе сборки не нужны.
+      - name: Build
+        run: pnpm build
+
+  migrations:
+    name: Migrations on clean Postgres
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: tasker
+          POSTGRES_PASSWORD: tasker
+          POSTGRES_DB: tasker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tasker -d tasker"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://tasker:tasker@localhost:5432/tasker?schema=public
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Enable pnpm (corepack)
+        run: corepack enable
+
+      - name: Resolve pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations (prisma migrate deploy)
+        run: pnpm db:deploy
+
+      # Код 2 — схема в schema.prisma расходится с применёнными миграциями (забыта миграция).
+      - name: Check schema matches migrations (prisma migrate diff)
+        run: pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
+  docker:
+    name: Docker image and smoke test
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Теги совпадают с image в compose.app.yml — compose возьмёт собранные образы без пересборки.
+      - name: Build runner image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: runner
+          tags: tasker:local
+          load: true
+          push: false
+          cache-from: type=gha,scope=tasker-runner
+          cache-to: type=gha,scope=tasker-runner,mode=max
+
+      - name: Build migrate image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: migrate
+          tags: tasker-migrate:local
+          load: true
+          push: false
+          cache-from: |
+            type=gha,scope=tasker-runner
+            type=gha,scope=tasker-migrate
+          cache-to: type=gha,scope=tasker-migrate,mode=max
+
+      - name: Start infrastructure, migrations and app
+        run: docker compose -f compose.yml -f compose.app.yml up -d --wait --wait-timeout 180 app
+
+      - name: Smoke test /api/health
+        run: sh scripts/smoke-health.sh
+        env:
+          APP_URL: http://localhost:3000
+
+      - name: Dump container logs
+        if: failure()
+        run: docker compose -f compose.yml -f compose.app.yml logs --no-color migrate app minio-init
+
+      - name: Stop containers
+        if: always()
+        run: docker compose -f compose.yml -f compose.app.yml down -v
