@@ -26,6 +26,7 @@ export function ProjectNav({
   const pathname = usePathname();
   const links = [
     { href: `${basePath}/board`, label: 'Доска' },
+    { href: `${basePath}/list`, label: 'Список' },
     ...(canManage ? [{ href: `${basePath}/settings`, label: 'Настройки' }] : []),
   ];
 

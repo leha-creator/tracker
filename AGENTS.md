@@ -37,7 +37,7 @@ tasker/
 │   │   ├── (auth)/           # /login, /register
 │   │   ├── (app)/            # Защищённая зона: шапка (переключатель пространств, меню), /, /admin,
 │   │   │                     # /workspaces/new, /w/[workspaceSlug] (+ settings, settings/members), /invite/[invitationId],
-│   │   │                     # /w/[workspaceSlug]/projects/new, projects/[projectId]/{board,settings},
+│   │   │                     # /w/[workspaceSlug]/projects/new, projects/[projectId]/{board,list,settings},
 │   │   │                     # /w/[workspaceSlug]/tasks (+ new, [taskNumber])
 │   │   └── api/
 │   │       ├── auth/[...all]/ # Better Auth handler
@@ -46,13 +46,14 @@ tasker/
 │   │   ├── auth/             # Вход, регистрация, выход: Zod-схемы, сервис, Server Actions
 │   │   ├── workspaces/       # Пространства, участники (+ право «Управление проектами»), приглашения (index.ts — сервер, client.ts — клиент)
 │   │   ├── projects/         # Проекты и статусы-колонки: модели (StatusSet), срезы project/status
-│   │   └── tasks/            # Задачи: модели (TaskPlacement, позиции), срезы task/placement/views; зависит от projects и workspaces
+│   │   └── tasks/            # Задачи: модели (TaskPlacement, позиции, запрос списка TaskListQuery), срезы task/placement/views; зависит от projects и workspaces
 │   ├── components/
 │   │   ├── auth/             # Формы входа/регистрации, меню пользователя
 │   │   ├── forms/            # FormField, FormError
 │   │   ├── workspaces/       # Список, переключатель, участники, приглашения
 │   │   ├── projects/         # Список проектов, навигация проекта, настройки проекта и статусов
-│   │   ├── tasks/            # Канбан-доска (dnd-kit), карточка, быстрое создание, страница задачи, размещения, список задач
+│   │   ├── tasks/            # Канбан-доска (dnd-kit), карточка, быстрое создание, страница задачи, размещения;
+│   │                         # task-list/ — список задач: фильтры, сортировка, пагинация (состояние в URL)
 │   │   └── ui/               # shadcn/ui (генерируется CLI, вручную не править)
 │   ├── lib/utils.ts          # cn() для shadcn
 │   ├── generated/prisma/     # Сгенерированный Prisma Client (в .gitignore)
@@ -94,7 +95,7 @@ tasker/
 | `src/shared/mail/index.ts` | `sendMail()` — отправка писем через SMTP |
 | `src/modules/workspaces/index.ts` | Пространства, участники, приглашения: actions и read-функции (`client.ts` — для клиентских компонентов) |
 | `src/modules/projects/index.ts` | Проекты и статусы: actions и read-функции (`listProjects`, `getProject`, `listStatuses`, `listWorkspaceStatuses`; `client.ts` — для клиентских компонентов) |
-| `src/modules/tasks/index.ts` | Задачи и размещения: actions и read-функции (`getTaskByNumber`, `listTasks`, `getBoardCards`; `client.ts` — для клиентских компонентов, в т.ч. `movePlacementAction` и чистые функции переноса карточек) |
+| `src/modules/tasks/index.ts` | Задачи и размещения: actions и read-функции (`getTaskByNumber`, `listTasks`, `listProjectTasks`, `getBoardCards`, `parseTaskListParams`; `client.ts` — для клиентских компонентов, в т.ч. `movePlacementAction` и чистые функции переноса карточек) |
 | `src/modules/auth/index.ts` | `signInAction`, `signUpAction`, `signOutAction`, Zod-схемы форм |
 | `src/proxy.ts` | Оптимистичный редирект неавторизованных на `/login` |
 | `src/app/api/health/route.ts` | Health check инфраструктуры |
@@ -121,7 +122,7 @@ tasker/
 | README | `README.md` | Лендинг: быстрый старт, возможности |
 | Начало работы | `docs/getting-started.md` | Установка, миграции, первый вход и администратор |
 | Конфигурация | `docs/configuration.md` | Переменные окружения, docker-compose, порты |
-| Архитектура | `docs/architecture.md` | Слои, границы ESLint, аутентификация, пространства, проекты, задачи и доступ, `/api/health` |
+| Архитектура | `docs/architecture.md` | Слои, границы ESLint, аутентификация, пространства, проекты, задачи, доска и список, доступ, `/api/health` |
 | Логирование и ошибки | `docs/logging-and-errors.md` | `createLogger`, `AppError`, `ActionResult` |
 | Разработка | `docs/development.md` | Команды, линтеры, тесты, Prisma |
 | Docker-образ и CI | `docs/deployment.md` | Dockerfile, `compose.app.yml`, миграции, smoke-скрипт, GitHub Actions |
