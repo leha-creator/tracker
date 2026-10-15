@@ -81,7 +81,7 @@ Rationale: План реализует первый этап дорожной к
   - Логирование: логгер ещё не создан, и он сам зависит от env. Ошибку валидации выводим только через throw (сообщение содержит имена ключей, без значений секретов).
   - Files: `src/shared/env/env.ts`, `src/shared/env/index.ts`, `.env.example`.
 
-- [ ] Task 5: Структурированный логгер на pino (depends on 4)
+- [x] Task 5: Структурированный логгер на pino (depends on 4)
   - `pnpm add pino`, `pnpm add -D pino-pretty`.
   - `src/shared/logger/logger.ts`:
     - корневой логгер `pino` с уровнем из `env.LOG_LEVEL`;
@@ -157,7 +157,7 @@ Rationale: План реализует первый этап дорожной к
 
 ### Phase 4: Тесты и финализация
 
-- [ ] Task 10: Vitest и тесты сквозных модулей (depends on 4, 5, 6)
+- [x] Task 10: Vitest и тесты сквозных модулей (depends on 4, 5, 6)
   - `pnpm add -D vitest vite-tsconfig-paths`. `vitest.config.ts`: окружение `node`, alias `@/*` через `vite-tsconfig-paths`, мок `server-only` (alias на пустой модуль), `include: ['src/**/*.test.ts']`.
   - Скрипты: `test` (`vitest run`), `test:watch`.
   - Тесты:
@@ -168,7 +168,7 @@ Rationale: План реализует первый этап дорожной к
   - Логирование: в тестах уровень `silent` через `LOG_LEVEL`, кроме теста логгера, где вывод перехватывается.
   - Files: `vitest.config.ts`, `src/test/server-only-mock.ts`, `src/shared/**/*.test.ts`, `package.json`.
 
-- [ ] Task 11: Сводный скрипт проверки и обновление AGENTS.md (depends on 1–10)
+- [x] Task 11: Сводный скрипт проверки и обновление AGENTS.md (depends on 1–10)
   - Скрипт `check` в `package.json`: последовательно `typecheck`, `lint`, `format:check`, `test`.
   - Обновить раздел «Структура проекта» в `AGENTS.md`: реальное дерево (`src/app`, `src/modules`, `src/components/ui`, `src/shared/*`, `prisma/`, `compose.yml`) и таблицу ключевых точек входа (`src/shared/logger`, `src/shared/errors`, `src/shared/db`, `src/app/api/health/route.ts`, `compose.yml`). Убрать фразу «Код приложения ещё не создан».
   - Финальный прогон: `pnpm install` на чистом клоне не падает (`postinstall` генерирует Prisma-клиент), `pnpm check` и `pnpm build` зелёные, `pnpm infra:up` → `pnpm dev` → `GET /api/health` возвращает 200.

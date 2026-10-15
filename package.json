@@ -10,7 +10,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "prepare": "husky",
     "infra:up": "docker compose up -d --wait postgres minio && docker compose run --rm minio-init",
     "infra:down": "docker compose down",
@@ -19,7 +19,10 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1151.0",
@@ -59,7 +62,9 @@
     "prisma": "7.10.0",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.71.2"
+    "typescript-eslint": "8.71.2",
+    "vite-tsconfig-paths": "6.1.1",
+    "vitest": "5.0.4"
   },
   "packageManager": "pnpm@12.11.2",
   "engines": {

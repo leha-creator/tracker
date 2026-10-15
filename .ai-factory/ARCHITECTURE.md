@@ -86,7 +86,10 @@ tasker/
 │       ├── errors/                   # AppError, NotFoundError, ForbiddenError, toActionError()
 │       ├── storage/                  # S3-клиент, presigned URL
 │       ├── logger/                   # pino, LOG_LEVEL
+│       ├── env/                      # Zod-валидация переменных окружения (ленивая)
+│       ├── health/                   # checkHealth(): агрегирует checkDatabase/checkStorage для /api/health
 │       └── types/                    # ActionResult<T> и пр.
+│   └── generated/prisma/             # Сгенерированный Prisma Client (не коммитится)
 └── ...
 ```
 

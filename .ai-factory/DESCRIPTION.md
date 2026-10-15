@@ -36,7 +36,8 @@ Tasker — веб-приложение для управления задача�
 - **Аутентификация:** Better Auth с Prisma-адаптером; плагин `organization` — пространства, участники, роли и приглашения; плагин `admin` — глобальная роль администратора; GitHub OAuth
 - **UI (предлагается):** Tailwind CSS + shadcn/ui, dnd-kit для канбана, Tiptap для rich-text (описания задач, документация)
 - **Валидация:** Zod (общие схемы для форм и серверных обработчиков)
-- **Хранение файлов (предлагается):** S3-совместимое хранилище (MinIO локально), загрузка по presigned URL
+- **Хранение файлов:** S3-совместимое хранилище через `@aws-sdk/client-s3`. Локально — MinIO (образ `pgsty/minio`, официальные образы больше не публикуются). Загрузка по presigned URL
+- **Инфраструктура разработки:** pnpm, docker-compose (Postgres 17 на порту 5433, MinIO), Prisma 7 с `@prisma/adapter-pg`, pino, Vitest, ESLint + Prettier, husky + lint-staged
 - **Интеграции:** GitHub (Octokit, GitHub App, webhooks) — в будущем
 
 ## Архитектурные заметки
