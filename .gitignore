@@ -1,2 +1,42 @@
+# IDE / agent
 .idea/
 .claude/settings.local.json
+.playwright-mcp/
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# generated
+/src/generated/
+
+# misc
+.DS_Store
+*.pem
+*.log
+
+# debug
+npm-debug.log*
+.pnpm-debug.log*
+
+# env files (.env.example is committed)
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts

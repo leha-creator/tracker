@@ -33,7 +33,7 @@ Rationale: План реализует первый этап дорожной к
 
 ### Phase 1: Основа приложения
 
-- [ ] Task 1: Инициализация Next.js + TypeScript на pnpm
+- [x] Task 1: Инициализация Next.js + TypeScript на pnpm
   - `corepack enable`, затем `pnpm create next-app` во временную директорию с опциями: TypeScript, App Router, `src/`, Tailwind, ESLint, alias `@/*`, без Turbopack-специфичных настроек сверх дефолта. Перенести результат в корень репозитория без перезаписи существующих файлов.
   - `package.json`: `name: "tasker"`, `private: true`, `packageManager: "pnpm@<версия>"`, `engines.node: ">=22"`. Скрипты: `dev`, `build`, `start`.
   - `tsconfig.json`: `strict: true`, `noUncheckedIndexedAccess: true`, `noImplicitOverride: true`, alias `@/*` → `./src/*`.
@@ -44,7 +44,7 @@ Rationale: План реализует первый этап дорожной к
   - Проверка: `pnpm dev` открывает стартовую страницу, `pnpm build` проходит.
   - Files: `package.json`, `pnpm-lock.yaml`, `tsconfig.json`, `next.config.ts`, `.gitignore`, `.nvmrc`, `.editorconfig`, `src/app/layout.tsx`, `src/app/page.tsx`.
 
-- [ ] Task 2: Tailwind CSS + shadcn/ui (depends on 1)
+- [x] Task 2: Tailwind CSS + shadcn/ui (depends on 1)
   - Проверить, что Tailwind (v4, `@tailwindcss/postcss`) подключён через `src/app/globals.css`.
   - `pnpm dlx shadcn@latest init`: стиль по умолчанию, базовый цвет neutral, CSS variables, aliases `@/components`, `@/components/ui`, `@/lib/utils`. Утилиту `cn` положить в `src/lib/utils.ts` (так ожидает shadcn CLI).
   - Добавить базовые компоненты: `button`, `card`, `input`, `label`, `sonner` (тосты для ошибок Server Actions на будущих этапах).
@@ -53,7 +53,7 @@ Rationale: План реализует первый этап дорожной к
   - Логирование: не требуется (только UI). Проверить, что в консоли браузера нет ошибок гидратации.
   - Files: `components.json`, `src/app/globals.css`, `src/lib/utils.ts`, `src/components/ui/*`, `src/app/layout.tsx`, `src/app/page.tsx`, `postcss.config.mjs`.
 
-- [ ] Task 3: Линтеры и форматирование (depends on 1, 2)
+- [x] Task 3: Линтеры и форматирование (depends on 1, 2)
   - ESLint flat config (`eslint.config.mjs`): `next/core-web-vitals`, `next/typescript`, `typescript-eslint` (recommended-type-checked для `src/`), `eslint-config-prettier`. Запуск через `eslint` CLI, без `next lint`.
   - Правила архитектурных границ через `no-restricted-imports` / `no-restricted-syntax`:
     - в `src/app/**` и `src/components/**` запрещены импорты `@prisma/client`, `@/generated/prisma*`, `@/shared/db`, `**/*.repository`;

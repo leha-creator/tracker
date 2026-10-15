@@ -1,0 +1,15 @@
+.next
+out
+build
+coverage
+node_modules
+pnpm-lock.yaml
+src/generated
+.ai-factory
+.claude
+.idea
+.playwright-mcp
+*.md
+.mcp.json
+skills-lock.json
+.ai-factory.json
