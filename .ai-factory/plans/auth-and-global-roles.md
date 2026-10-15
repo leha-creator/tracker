@@ -130,7 +130,8 @@ Rationale: План полностью покрывает этап: Better Auth,
 
 ### Phase 3: UI и маршрутизация
 
-- [ ] Task 7: Proxy для оптимистичных редиректов (depends on 3)
+- [x] Task 7: Proxy для оптимистичных редиректов (depends on 3)
+  - **Отклонение:** обратный редирект «есть cookie на /login → /» перенесён в страницы входа (после настоящей проверки `getSession()`): cookie истёкшей сессии зациклил бы `/login ↔ /`.
   - `src/proxy.ts`: `getSessionCookie(request)` из `better-auth/cookies` (без обращения к БД):
     - нет cookie и путь не публичный → redirect на `/login?returnTo=<pathname+search>`;
     - есть cookie и путь `/login` или `/register` → redirect на `/`.
@@ -139,7 +140,8 @@ Rationale: План полностью покрывает этап: Better Auth,
   - Логирование: в proxy не используем pino (edge/proxy runtime и `server-only`); логов нет — диагностика через серверные guards.
   - Files: `src/proxy.ts`.
 
-- [ ] Task 8: Страницы входа и регистрации (depends on 6)
+- [x] Task 8: Страницы входа и регистрации (depends on 6)
+  - **По факту:** `input`/`label` уже были, добавлен `badge`. Fallback Suspense — `FormSkeleton` (без полей, чтобы во время стриминга не дублировались `id`). Редирект вошедшего пользователя — `src/components/auth/auth-redirect.ts` после `getSession()`.
   - `pnpm dlx shadcn@<version> add input label` (и `field`/`form`, если используется в текущем registry) — компоненты не правим вручную.
   - `src/app/(auth)/layout.tsx`: центрированная карточка, без session-запросов.
   - `src/app/(auth)/login/page.tsx` + `src/components/auth/sign-in-form.tsx` (`'use client'`): `useActionState(signInAction)`, поля email/пароль, скрытый `returnTo` из `searchParams`, ошибки полей из `fieldErrors`, общая ошибка — сообщение в форме, кнопка с `pending`-состоянием, ссылка на регистрацию.
@@ -149,7 +151,7 @@ Rationale: План полностью покрывает этап: Better Auth,
   - Логирование: на клиенте не логируем; серверная часть логируется в Task 5.
   - Files: `src/app/(auth)/layout.tsx`, `src/app/(auth)/login/page.tsx`, `src/app/(auth)/register/page.tsx`, `src/components/auth/sign-in-form.tsx`, `src/components/auth/sign-up-form.tsx`, `src/components/ui/input.tsx`, `src/components/ui/label.tsx`.
 
-- [ ] Task 9: Защищённая зона `(app)` и заглушка админки (depends on 4, 6, 7)
+- [x] Task 9: Защищённая зона `(app)` и заглушка админки (depends on 4, 6, 7)
   - Перенести `src/app/page.tsx` в `src/app/(app)/page.tsx`: приветствие с именем пользователя и ролью; убрать текст «Вход и регистрация появятся на следующем этапе».
   - `src/app/(app)/layout.tsx`: шапка с `UserMenu` в `<Suspense>` (по гайду authentication-with-cache-components); защита — `requireUserOrRedirect()` в session-зависимом компоненте/странице, а не top-level `await` в layout, блокирующий `{children}`.
   - `src/components/auth/user-menu.tsx`: имя, email, бейдж «Администратор» для `admin`, ссылка «Админка» только для `admin`, кнопка «Выйти» (`<form action={signOutAction}>`). Скрытие ссылки — UX, не защита.

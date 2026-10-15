@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { headers } from 'next/headers';
+import { connection } from 'next/server';
 import { cache } from 'react';
 
 import { parseGlobalRole, type GlobalRole } from '@/shared/access/global-role';
@@ -30,9 +31,14 @@ export interface AuthSession {
  * Возвращает DTO, а не объекты Better Auth.
  */
 export const getSession = cache(async (): Promise<AuthSession | null> => {
+  // Вне try: при пререндере Next.js прерывает эти вызовы штатно, это не ошибка сессии.
+  // connection() — потому что Better Auth сравнивает срок сессии с Date.now(), а это
+  // запрещено в статическом пререндере Cache Components.
+  await connection();
+  const requestHeaders = await headers();
   let result: Awaited<ReturnType<ReturnType<typeof getAuth>['api']['getSession']>>;
   try {
-    result = await getAuth().api.getSession({ headers: await headers() });
+    result = await getAuth().api.getSession({ headers: requestHeaders });
   } catch (error) {
     log.error({ err: error }, '[auth.getSession] failed to read session');
     throw new InternalError('Не удалось проверить сессию', { cause: error });
