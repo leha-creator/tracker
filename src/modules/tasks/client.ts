@@ -9,6 +9,7 @@ export {
   TASK_PLACEMENT_LIMIT,
   TASK_TITLE_MAX_LENGTH,
 } from './models/task';
+export { TASK_COMMENT_MAX_LENGTH } from './models/task-comment';
 export {
   clearFilters,
   hasActiveFilters,
@@ -42,6 +43,12 @@ export {
   movePlacementAction,
   removeFromProjectAction,
 } from './slices/placement/placement.actions';
+export {
+  createCommentAction,
+  deleteCommentAction,
+  updateCommentAction,
+} from './slices/comment/comment.actions';
+export type { TaskCommentDto, TaskCommentsDto } from './slices/comment/comment.dto';
 export {
   createTaskAction,
   deleteTaskAction,

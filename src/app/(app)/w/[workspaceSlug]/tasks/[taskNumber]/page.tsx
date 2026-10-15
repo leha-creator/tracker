@@ -3,15 +3,23 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
+import { CommentForm } from '@/components/tasks/comments/comment-form';
+import { CommentList } from '@/components/tasks/comments/comment-list';
 import { AddToProjectForm } from '@/components/tasks/add-to-project-form';
 import { TaskDetailsForm } from '@/components/tasks/task-details-form';
 import { TaskPlacements } from '@/components/tasks/task-placements';
 import { Button } from '@/components/ui/button';
 import { ConfirmActionDialog } from '@/components/workspaces/confirm-action-dialog';
 import { listProjects, listWorkspaceStatuses } from '@/modules/projects';
-import { deleteTaskAction, getTaskByNumber, taskNumberSchema } from '@/modules/tasks';
+import {
+  deleteTaskAction,
+  getTaskByNumber,
+  listTaskComments,
+  taskNumberSchema,
+} from '@/modules/tasks';
 import { listMembers } from '@/modules/workspaces';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
+import type { AuthSession } from '@/shared/auth';
 import { NotFoundError } from '@/shared/errors';
 
 export const metadata: Metadata = { title: 'Задача — Tasker' };
@@ -20,15 +28,48 @@ type Props = PageProps<'/w/[workspaceSlug]/tasks/[taskNumber]'>;
 
 const DATE_TIME = new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyle: 'short' });
 
-export default function TaskPage({ params }: Props) {
+export default function TaskPage({ params, searchParams }: Props) {
   return (
     <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-muted" />}>
-      <TaskSection params={params} />
+      <TaskSection params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function TaskSection({ params }: Pick<Props, 'params'>) {
+interface TaskCommentsSectionProps {
+  session: AuthSession;
+  workspaceId: string;
+  taskId: string;
+  taskHref: string;
+  searchParams: Props['searchParams'];
+}
+
+async function TaskCommentsSection({
+  session,
+  workspaceId,
+  taskId,
+  taskHref,
+  searchParams,
+}: TaskCommentsSectionProps) {
+  const { comments: mode } = await searchParams;
+  const comments = await listTaskComments(session, workspaceId, taskId, { all: mode === 'all' });
+  return (
+    <>
+      <h3 id="task-comments-heading" className="font-medium">
+        Комментарии{comments.total > 0 && ` (${comments.total})`}
+      </h3>
+      <CommentList
+        workspaceId={workspaceId}
+        taskId={taskId}
+        comments={comments}
+        taskHref={taskHref}
+      />
+      <CommentForm workspaceId={workspaceId} taskId={taskId} />
+    </>
+  );
+}
+
+async function TaskSection({ params, searchParams }: Props) {
   const { workspaceSlug, taskNumber } = await params;
   const parsed = taskNumberSchema.safeParse(taskNumber);
   if (!parsed.success) notFound();
@@ -72,7 +113,7 @@ async function TaskSection({ params }: Pick<Props, 'params'>) {
               </Button>
             }
             title={`Удалить задачу ${task.key}?`}
-            description="Задача исчезнет со всех досок. Действие нельзя отменить."
+            description="Задача исчезнет со всех досок вместе с комментариями. Действие нельзя отменить."
             confirmLabel="Удалить"
           />
         )}
@@ -111,6 +152,21 @@ async function TaskSection({ params }: Pick<Props, 'params'>) {
           />
         </section>
       </div>
+
+      <section
+        aria-labelledby="task-comments-heading"
+        className="grid max-w-3xl content-start gap-3 border-t pt-6"
+      >
+        <Suspense fallback={<div className="h-40 animate-pulse rounded-xl bg-muted" />}>
+          <TaskCommentsSection
+            session={session}
+            workspaceId={workspace.id}
+            taskId={task.id}
+            taskHref={`/w/${workspace.slug}/tasks/${task.number}`}
+            searchParams={searchParams}
+          />
+        </Suspense>
+      </section>
     </article>
   );
 }

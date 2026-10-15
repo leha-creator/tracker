@@ -39,6 +39,7 @@ model User {
   createdProjects      Project[]
   assignedTasks        Task[]                @relation("TaskAssignee")
   createdTasks         Task[]                @relation("TaskCreator")
+  taskComments         TaskComment[]         @relation("TaskCommentAuthor")
 }
 
 model Session {
@@ -237,6 +238,7 @@ model Task {
   assignee   User?           @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   createdBy  User?           @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
   placements TaskPlacement[]
+  comments   TaskComment[]
 
   @@unique([workspaceId, number])
   @@unique([id, workspaceId])
@@ -272,4 +274,28 @@ model WorkspaceTaskCounter {
   lastNumber  Int    @default(0)
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+// ── Комментарии ────────────────────────────────────────────────────────────────
+// Комментарий ссылается на задачу составным ключом (taskId, workspaceId): не может оказаться в
+// чужом пространстве. Удаление задачи удаляет её комментарии, удаление пользователя — только автора.
+
+model TaskComment {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  workspaceId String
+  taskId      String    @db.Uuid
+  /// Автор; null — пользователь удалён (комментарий остаётся).
+  authorId    String?
+  /// Простой текст.
+  body        String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  /// Момент последнего изменения текста; null — не редактировался.
+  editedAt    DateTime?
+
+  task   Task  @relation(fields: [taskId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  author User? @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, createdAt])
+  @@index([workspaceId])
 }

@@ -14,6 +14,15 @@ export {
   TASK_TITLE_MAX_LENGTH,
   toIsoDate,
 } from './task';
+export {
+  assertCanDeleteComment,
+  assertCanEditComment,
+  canDeleteComment,
+  canEditComment,
+  normalizeCommentBody,
+  TASK_COMMENT_MAX_LENGTH,
+  TASK_COMMENTS_PAGE_SIZE,
+} from './task-comment';
 export { assertCanPlace, resolveMovePosition, TaskPlacement } from './task-placement';
 export type { ColumnCard, MovePosition } from './task-placement';
 export { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from './task-priority';
