@@ -18,6 +18,7 @@ Tasker — простой таск-трекер с рабочими простр
 - **Почта:** SMTP через nodemailer, локально Mailpit (UI http://localhost:8025)
 - **Инфраструктура кода:** pino (логи), Zod (валидация), Vitest, ESLint + Prettier, husky + lint-staged
 - **Пакетный менеджер:** pnpm (через corepack)
+- **Контейнеры и CI:** Docker (multi-stage, standalone Next.js, `node:24-alpine`), GitHub Actions
 
 ## Структура проекта
 
@@ -25,6 +26,7 @@ Tasker — простой таск-трекер с рабочими простр
 tasker/
 ├── .ai-factory/              # Контекст AI Factory (описание, архитектура, правила, планы)
 ├── .claude/                  # Скиллы и субагенты
+├── .github/workflows/ci.yml  # CI: pnpm check + build, миграции на чистом Postgres, сборка образа и smoke-тест
 ├── prisma/
 │   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …) и пространств (Workspace, WorkspaceMember, WorkspaceInvitation)
 │   └── migrations/
@@ -60,7 +62,11 @@ tasker/
 │   │   ├── mail/             # sendMail() (nodemailer), escapeHtml()
 │   │   └── health/           # checkHealth() — агрегирует проверки
 │   └── test/                 # Вспомогательное для Vitest
+├── scripts/smoke-health.sh   # Ожидание 200 и {"status":"ok"} от /api/health (CI и ручная проверка)
 ├── compose.yml               # Postgres (порт 5433) + MinIO (9000/9001) + создание бакета + Mailpit (1025/8025)
+├── compose.app.yml           # Оверлей: сервисы migrate (prisma migrate deploy) и app (образ runner)
+├── Dockerfile                # Multi-stage: base → deps → builder → runner; отдельный target migrate
+├── .dockerignore
 ├── .env.example              # Шаблон переменных окружения
 ├── eslint.config.mjs         # ESLint + правила архитектурных границ
 ├── vitest.config.ts
@@ -85,6 +91,8 @@ tasker/
 | `src/proxy.ts` | Оптимистичный редирект неавторизованных на `/login` |
 | `src/app/api/health/route.ts` | Health check инфраструктуры |
 | `compose.yml` | Локальная инфраструктура |
+| `Dockerfile` / `compose.app.yml` | Образ приложения и миграций, запуск стека в Docker |
+| `.github/workflows/ci.yml` | GitHub Actions |
 | `.mcp.json` | Конфигурация MCP-серверов |
 
 ## Команды
@@ -96,6 +104,7 @@ tasker/
 | `pnpm check` | typecheck + lint + format:check + test |
 | `pnpm build` | Production-сборка |
 | `pnpm db:migrate` | Создать и применить миграцию Prisma |
+| `pnpm app:up` / `pnpm app:down` | Собрать образ и запустить приложение с миграциями в Docker / остановить стек |
 
 ## Документация
 
@@ -107,6 +116,7 @@ tasker/
 | Архитектура | `docs/architecture.md` | Слои, границы ESLint, аутентификация, пространства и доступ, `/api/health` |
 | Логирование и ошибки | `docs/logging-and-errors.md` | `createLogger`, `AppError`, `ActionResult` |
 | Разработка | `docs/development.md` | Команды, линтеры, тесты, Prisma |
+| Docker-образ и CI | `docs/deployment.md` | Dockerfile, `compose.app.yml`, миграции, smoke-скрипт, GitHub Actions |
 
 ## Файлы AI-контекста
 

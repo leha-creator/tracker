@@ -1,4 +1,4 @@
-[← Логирование и ошибки](logging-and-errors.md) · [Back to README](../README.md)
+[← Логирование и ошибки](logging-and-errors.md) · [Back to README](../README.md) · [Docker-образ и CI →](deployment.md)
 
 # Разработка
 
@@ -8,12 +8,13 @@
 |---------|------------|
 | `pnpm dev` | Dev-сервер Next.js (http://localhost:3000) |
 | `pnpm build` / `pnpm start` | Production-сборка и запуск |
-| `pnpm check` | `typecheck` → `lint` → `format:check` → `test`. Запускайте перед пушем |
+| `pnpm check` | `typecheck` → `lint` → `format:check` → `test`. Запускайте перед пушем: то же самое (и `pnpm build`) выполняет CI |
 | `pnpm typecheck` | `next typegen` + `tsc --noEmit` |
 | `pnpm lint` / `pnpm lint:fix` | ESLint |
 | `pnpm format` / `pnpm format:check` | Prettier |
 | `pnpm test` / `pnpm test:watch` | Vitest |
-| `pnpm infra:up` / `pnpm infra:down` / `pnpm infra:logs` | Postgres и MinIO в Docker |
+| `pnpm infra:up` / `pnpm infra:down` / `pnpm infra:logs` | Postgres, MinIO и Mailpit в Docker |
+| `pnpm app:up` / `pnpm app:down` | Собрать образ и запустить приложение с миграциями в Docker / остановить стек ([подробнее](deployment.md)) |
 | `pnpm db:generate` | Сгенерировать Prisma Client |
 | `pnpm db:migrate` | Создать и применить миграцию (dev) |
 | `pnpm db:deploy` | Применить миграции (CI / production) |
@@ -62,3 +63,4 @@ import { prisma, type TransactionClient } from '@/shared/db';
 - [Начало работы](getting-started.md): первый запуск
 - [Архитектура](architecture.md): куда класть новый код
 - [Логирование и ошибки](logging-and-errors.md): обязательные соглашения для нового кода
+- [Docker-образ и CI](deployment.md): сборка образа, `compose.app.yml`, GitHub Actions
