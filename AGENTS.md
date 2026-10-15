@@ -79,7 +79,12 @@ tasker/
 
 | Документ | Путь | Описание |
 |----------|------|----------|
-| — | — | Документация будет создана через `/aif-docs` |
+| README | `README.md` | Лендинг: быстрый старт, возможности |
+| Начало работы | `docs/getting-started.md` | Установка, запуск, проверка, частые проблемы |
+| Конфигурация | `docs/configuration.md` | Переменные окружения, docker-compose, порты |
+| Архитектура | `docs/architecture.md` | Слои, границы ESLint, `/api/health` |
+| Логирование и ошибки | `docs/logging-and-errors.md` | `createLogger`, `AppError`, `ActionResult` |
+| Разработка | `docs/development.md` | Команды, линтеры, тесты, Prisma |
 
 ## Файлы AI-контекста
 
