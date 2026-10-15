@@ -36,6 +36,7 @@ model User {
 
   workspaceMemberships WorkspaceMember[]
   sentInvitations      WorkspaceInvitation[]
+  createdProjects      Project[]
 }
 
 model Session {
@@ -91,7 +92,8 @@ model Verification {
 // ── Рабочие пространства (Better Auth organization) ─────────────────────────────
 // Модели плагина organization под доменными именами: organization → Workspace,
 // member → WorkspaceMember, invitation → WorkspaceInvitation, organizationId → workspaceId.
-// Переименования заданы в src/shared/auth/auth.ts (schema плагина) — менять только вместе.
+// Переименования и дополнительные поля (WorkspaceMember.canManageProjects) заданы в
+// src/shared/auth/auth.ts (schema плагина) — менять только вместе.
 
 model Workspace {
   id        String   @id
@@ -103,15 +105,18 @@ model Workspace {
 
   members     WorkspaceMember[]
   invitations WorkspaceInvitation[]
+  projects    Project[]
 }
 
 model WorkspaceMember {
-  id          String   @id
-  workspaceId String
-  userId      String
+  id                String   @id
+  workspaceId       String
+  userId            String
   /// Роль в пространстве: "owner" | "member".
-  role        String   @default("member")
-  createdAt   DateTime @default(now())
+  role              String   @default("member")
+  /// Право управлять проектами и статусами. Владелец имеет его всегда, независимо от флага.
+  canManageProjects Boolean  @default(false)
+  createdAt         DateTime @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -137,4 +142,53 @@ model WorkspaceInvitation {
 
   @@index([workspaceId, status])
   @@index([email])
+}
+
+// ── Проекты и статусы ──────────────────────────────────────────────────────────
+// Статус хранит workspaceId и ссылается на проект составным ключом (projectId, workspaceId):
+// статус не может оказаться в чужом пространстве.
+
+/// Категория статуса: к выполнению, в работе, выполнено.
+enum StatusCategory {
+  todo
+  in_progress
+  done
+}
+
+model Project {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  workspaceId String
+  name        String
+  description String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  statuses  ProjectStatus[]
+
+  @@unique([workspaceId, name])
+  @@unique([id, workspaceId])
+  @@index([workspaceId])
+}
+
+model ProjectStatus {
+  id          String         @id @default(uuid(7)) @db.Uuid
+  projectId   String         @db.Uuid
+  workspaceId String
+  name        String
+  category    StatusCategory @default(todo)
+  /// Ключ палитры: "gray" | "blue" | "green" | "amber" | "red" | "violet".
+  color       String         @default("gray")
+  /// Порядок колонки в проекте: 0..n-1, пересчитывается при каждом изменении набора.
+  position    Int
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  project Project @relation(fields: [projectId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@index([projectId, position])
+  @@index([workspaceId])
 }

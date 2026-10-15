@@ -14,7 +14,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import type { FormState } from '@/modules/workspaces/client';
+import type { FormState } from '@/shared/types';
 
 interface ConfirmActionDialogProps {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;

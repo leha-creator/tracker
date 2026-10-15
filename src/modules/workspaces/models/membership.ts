@@ -45,4 +45,9 @@ export class Membership {
   assertCanLeave(ownersCount: number): void {
     if (this.isLastOwner(ownersCount)) throw new ValidationError(LAST_OWNER_MESSAGE);
   }
+
+  /** Права выдаются только участникам: у владельца они есть всегда. */
+  assertPermissionsConfigurable(): void {
+    if (this.isOwner) throw new ValidationError('У владельца это право есть всегда');
+  }
 }

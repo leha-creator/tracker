@@ -31,6 +31,7 @@ curl http://localhost:3000/api/health
 - **Next.js 16 + TypeScript (strict)**: App Router, Server Components, Cache Components
 - **Вход и регистрация**: Better Auth (email + пароль), глобальные роли `user` / `admin`, защищённые страницы и `/admin`
 - **Рабочие пространства**: создание, роли владельца и участника, приглашения по email со ссылкой (письма локально ловит Mailpit), единая проверка доступа `requireWorkspaceAccess()`
+- **Проекты и статусы**: проекты в пространстве, настраиваемые колонки-статусы (категория, цвет, порядок), право «Управление проектами», которое владелец выдаёт участникам
 - **Tailwind CSS v4 + shadcn/ui**: готовые компоненты в `src/components/ui`
 - **PostgreSQL + Prisma 7**: driver adapter `@prisma/adapter-pg`, логирование SQL-запросов
 - **S3-хранилище**: MinIO локально, клиент `@aws-sdk/client-s3`
@@ -84,7 +85,7 @@ export async function archiveTaskAction(taskId: string): Promise<ActionResult<nu
 |--------|----------|
 | [Начало работы](docs/getting-started.md) | Установка, запуск, проверка, частые проблемы |
 | [Конфигурация](docs/configuration.md) | Переменные окружения, docker-compose, порты |
-| [Архитектура](docs/architecture.md) | Модули, слои, аутентификация, пространства и доступ, `/api/health` |
+| [Архитектура](docs/architecture.md) | Модули, слои, аутентификация, пространства, проекты и доступ, `/api/health` |
 | [Логирование и ошибки](docs/logging-and-errors.md) | `createLogger`, `LOG_LEVEL`, `AppError`, `ActionResult` |
 | [Разработка](docs/development.md) | Команды, линтеры, тесты, Prisma, коммиты |
 | [Docker-образ и CI](docs/deployment.md) | Сборка образа, `compose.app.yml`, миграции, GitHub Actions |

@@ -7,6 +7,8 @@ export interface MemberDto {
   email: string;
   image: string | null;
   role: WorkspaceRole;
+  /** Выданное право управлять проектами (у владельца право есть всегда, флаг не важен). */
+  canManageProjects: boolean;
   joinedAt: Date;
   isCurrentUser: boolean;
 }

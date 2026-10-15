@@ -6,10 +6,20 @@ import { redirect } from 'next/navigation';
 import { requireUser } from '@/shared/access';
 import { toActionError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
+import type { FormState } from '@/shared/types';
 
-import type { FormState } from '../../workspaces.form-state';
-import { changeMemberRoleSchema, leaveWorkspaceSchema, removeMemberSchema } from './member.schema';
-import { changeMemberRole, leaveWorkspace, removeMember } from './member.service';
+import {
+  changeMemberRoleSchema,
+  leaveWorkspaceSchema,
+  removeMemberSchema,
+  setMemberPermissionSchema,
+} from './member.schema';
+import {
+  changeMemberRole,
+  leaveWorkspace,
+  removeMember,
+  setMemberPermission,
+} from './member.service';
 
 const log = createLogger('workspaces.actions');
 
@@ -54,4 +64,19 @@ export async function leaveWorkspaceAction(
   revalidatePath('/', 'layout');
   log.debug({ to: '/' }, '[workspaces.actions.leave] redirect');
   redirect('/');
+}
+
+export async function setMemberPermissionAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  try {
+    const input = setMemberPermissionSchema.parse(Object.fromEntries(formData));
+    const session = await requireUser();
+    await setMemberPermission(session, input);
+    revalidatePath('/', 'layout');
+    return { ok: true, data: null };
+  } catch (error) {
+    return { ...toActionError(error, { action: 'setMemberPermission' }), values: {} };
+  }
 }

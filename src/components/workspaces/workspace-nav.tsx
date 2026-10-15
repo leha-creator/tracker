@@ -14,14 +14,30 @@ interface WorkspaceNavProps {
   role: WorkspaceRole;
 }
 
+function isProjectsPath(base: string, path: string): boolean {
+  return path === base || path.startsWith(`${base}/projects`);
+}
+
 /** Навигация пространства. Ссылка «Настройки» скрыта для участников ради UX — доступ проверяет страница. */
 export function WorkspaceNav({ slug, name, role }: WorkspaceNavProps) {
   const pathname = usePathname();
   const base = `/w/${slug}`;
   const links = [
-    { href: base, label: 'Обзор', exact: true },
-    { href: `${base}/settings/members`, label: 'Участники', exact: false },
-    ...(role === 'owner' ? [{ href: `${base}/settings`, label: 'Настройки', exact: true }] : []),
+    { href: base, label: 'Проекты', isActive: (path: string) => isProjectsPath(base, path) },
+    {
+      href: `${base}/settings/members`,
+      label: 'Участники',
+      isActive: (path: string) => path.startsWith(`${base}/settings/members`),
+    },
+    ...(role === 'owner'
+      ? [
+          {
+            href: `${base}/settings`,
+            label: 'Настройки',
+            isActive: (path: string) => path === `${base}/settings`,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -32,7 +48,7 @@ export function WorkspaceNav({ slug, name, role }: WorkspaceNavProps) {
       </div>
       <nav aria-label="Разделы пространства" className="flex gap-1 rounded-lg bg-muted p-1">
         {links.map((link) => {
-          const active = link.exact ? pathname === link.href : pathname.startsWith(link.href);
+          const active = link.isActive(pathname);
           return (
             <Link
               key={link.href}

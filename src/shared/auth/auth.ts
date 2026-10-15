@@ -32,6 +32,7 @@ const PENDING_INVITATIONS_LIMIT = 100;
  * Плагин organization под доменными именами (см. prisma/schema.prisma):
  * organization → Workspace, member → WorkspaceMember, invitation → WorkspaceInvitation,
  * organizationId → workspaceId. Роли пространства — только owner и member.
+ * Дополнительное поле участника canManageProjects — тоже в prisma/schema.prisma.
  */
 function workspacesPlugin() {
   return organization({
@@ -45,7 +46,20 @@ function workspacesPlugin() {
     cancelPendingInvitationsOnReInvite: true,
     schema: {
       organization: { modelName: 'workspace' },
-      member: { modelName: 'workspaceMember', fields: { organizationId: 'workspaceId' } },
+      member: {
+        modelName: 'workspaceMember',
+        fields: { organizationId: 'workspaceId' },
+        additionalFields: {
+          // Право управлять проектами. input: false — эндпоинты плагина поле не принимают,
+          // его меняет только сервис участников (src/modules/workspaces/slices/member).
+          canManageProjects: {
+            type: 'boolean',
+            defaultValue: false,
+            required: false,
+            input: false,
+          },
+        },
+      },
       invitation: { modelName: 'workspaceInvitation', fields: { organizationId: 'workspaceId' } },
       session: { fields: { activeOrganizationId: 'activeWorkspaceId' } },
     },

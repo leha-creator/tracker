@@ -1,4 +1,4 @@
-import type { ActionFailure, ActionSuccess } from '@/shared/types';
+import type { ActionFailure, ActionSuccess } from './action-result';
 
 /**
  * Состояние формы для useActionState: успех с данными или ошибка вместе с введёнными значениями

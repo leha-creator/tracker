@@ -6,8 +6,8 @@ import { redirect } from 'next/navigation';
 import { requireUser } from '@/shared/access';
 import { toActionError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
+import { formValues, type FormState } from '@/shared/types';
 
-import { formValues, type FormState } from '../../workspaces.form-state';
 import type { WorkspaceSummaryDto } from './workspace.dto';
 import {
   createWorkspaceSchema,
