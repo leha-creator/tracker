@@ -72,7 +72,7 @@ Rationale: План реализует первый этап дорожной к
 
 ### Phase 2: Сквозная инфраструктура (`src/shared`)
 
-- [ ] Task 4: Валидация переменных окружения (depends on 1)
+- [x] Task 4: Валидация переменных окружения (depends on 1)
   - `src/shared/env/env.ts`: Zod-схема серверных переменных: `NODE_ENV`, `LOG_LEVEL` (`trace|debug|info|warn|error|fatal|silent`, по умолчанию `debug` в development и `info` в production), `DATABASE_URL`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_FORCE_PATH_STYLE`. Парсинг ленивый (через функцию/геттер), чтобы `next build` не падал без `.env`.
   - При невалидном окружении бросать ошибку со списком невалидных ключей, без значений.
   - `import 'server-only'` в модуле env.
@@ -95,7 +95,7 @@ Rationale: План реализует первый этап дорожной к
   - Логирование: при инициализации один раз логировать `INFO [logger] initialized { level, env }`.
   - Files: `src/shared/logger/logger.ts`, `src/shared/logger/index.ts`, `next.config.ts`.
 
-- [ ] Task 6: Единый формат ошибок и `ActionResult` (depends on 5)
+- [x] Task 6: Единый формат ошибок и `ActionResult` (depends on 5)
   - `src/shared/errors/app-error.ts`: базовый `AppError extends Error` с полями `code` (строковый union `ErrorCode`), `httpStatus`, `details?`, `expose` (можно ли показывать сообщение клиенту), `cause`.
   - Доменные ошибки: `ValidationError` (`VALIDATION_ERROR`, 400, `fieldErrors?: Record<string, string[]>`), `UnauthorizedError` (`UNAUTHORIZED`, 401), `ForbiddenError` (`FORBIDDEN`, 403), `NotFoundError` (`NOT_FOUND`, 404), `ConflictError` (`CONFLICT`, 409). Инфраструктурные: `InternalError` (`INTERNAL_ERROR`, 500, `expose: false`).
   - `src/shared/types/action-result.ts`: `ActionResult<T> = { ok: true; data: T } | { ok: false; error: ActionError }`, `ActionError = { code: ErrorCode; message: string; fieldErrors?: Record<string, string[]> }`.
