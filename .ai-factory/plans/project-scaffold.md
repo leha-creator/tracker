@@ -116,7 +116,7 @@ Rationale: План реализует первый этап дорожной к
 
 ### Phase 3: Инфраструктура данных
 
-- [ ] Task 7: docker-compose для Postgres и MinIO (depends on 4)
+- [x] Task 7: docker-compose для Postgres и MinIO (depends on 4)
   - `compose.yml`:
     - `postgres`: образ `postgres:17-alpine`, переменные из `.env` (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`), порт `5432`, volume `postgres-data`, healthcheck `pg_isready`;
     - `minio`: образ `minio/minio` (зафиксированный тег), `server /data --console-address ":9001"`, порты `9000`/`9001`, volume `minio-data`, healthcheck через `mc ready local` или `curl /minio/health/live`;
@@ -128,7 +128,7 @@ Rationale: План реализует первый этап дорожной к
   - Проверка: `pnpm infra:up` поднимает оба сервиса в состоянии healthy, бакет создан, консоль MinIO открывается на `http://localhost:9001`.
   - Files: `compose.yml`, `.env.example`, `package.json`.
 
-- [ ] Task 8: Prisma + PostgreSQL (depends on 5, 7)
+- [x] Task 8: Prisma + PostgreSQL (depends on 5, 7)
   - `pnpm add @prisma/client`, `pnpm add -D prisma`. Если текущая мажорная версия этого требует, добавить `@prisma/adapter-pg` и `prisma.config.ts`.
   - `prisma/schema.prisma`: `datasource db { provider = "postgresql" }`, генератор клиента (при генераторе `prisma-client` — `output = "../src/generated/prisma"`). Доменных моделей нет, только комментарий о том, что модели добавляются на следующих этапах.
   - `src/shared/db/prisma.ts`: singleton `PrismaClient` через `globalThis`, чтобы не плодить подключения при HMR. `import 'server-only'`.
@@ -141,7 +141,7 @@ Rationale: План реализует первый этап дорожной к
   - Скрипты: `db:generate`, `db:migrate` (`prisma migrate dev`), `db:deploy`, `db:studio`, `postinstall: prisma generate`.
   - Files: `prisma/schema.prisma`, `prisma.config.ts` (если нужен), `src/shared/db/prisma.ts`, `src/shared/db/health.ts`, `src/shared/db/index.ts`, `package.json`.
 
-- [ ] Task 9: Клиент S3/MinIO и эндпоинт `/api/health` (depends on 6, 8)
+- [x] Task 9: Клиент S3/MinIO и эндпоинт `/api/health` (depends on 6, 8)
   - `pnpm add @aws-sdk/client-s3`.
   - `src/shared/storage/s3-client.ts`: singleton `S3Client` из `env.S3_*` (`forcePathStyle` для MinIO), `import 'server-only'`.
   - `src/shared/storage/health.ts`: `checkStorage()` через `HeadBucketCommand`, возвращает `{ ok, latencyMs }`.
@@ -176,3 +176,12 @@ Rationale: План реализует первый этап дорожной к
   - Files: `package.json`, `AGENTS.md`.
 
 <!-- Commit checkpoint: tasks 10-11 -->
+
+## Отклонения от плана (по ходу реализации)
+
+- **MinIO:** официальные образы `minio/minio` и `minio/mc` больше не публикуются. По решению пользователя используются `pgsty/minio` (сборка MinIO из исходников) и `pgsty/mc` (закреплён по digest).
+- **Порт Postgres:** на хосте по умолчанию `5433`, потому что 5432 часто занят другими проектами. Переопределяется через `POSTGRES_PORT`.
+- **`infra:up`:** `docker compose up -d --wait postgres minio && docker compose run --rm minio-init`. Флаг `--wait` считает ошибкой завершение одноразового контейнера `minio-init`.
+- **Prisma 7:** генератор `prisma-client` (выход в `src/generated/prisma`), `prisma.config.ts`, driver adapter `@prisma/adapter-pg`.
+- **`/api/health`:** роут вызывает `checkHealth()` из `src/shared/health`, а не `checkDatabase`/`checkStorage` напрямую, потому что ESLint запрещает импорт `@/shared/db` из `app/`. Вместо `dynamic = 'force-dynamic'`, удалённого в режиме Cache Components в Next 16, используется `await connection()`.
+- **Логгер:** `pino-pretty` подключён синхронным потоком, а не transport (без worker threads). `pino-pretty` — runtime-зависимость.

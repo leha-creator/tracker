@@ -1,0 +1,14 @@
+// Схема БД Tasker. Конфигурация подключения — в prisma.config.ts.
+// Доменные модели (пользователи, пространства, проекты, задачи) добавляются на следующих этапах
+// дорожной карты (.ai-factory/ROADMAP.md). Соглашения: модели в PascalCase в единственном числе,
+// поля — camelCase, индексы по workspaceId / projectId / assigneeId / dueDate.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
