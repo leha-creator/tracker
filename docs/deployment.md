@@ -39,33 +39,25 @@ Runtime-образ не мигрирует БД при старте. Так в �
 
 ```bash
 pnpm app:up     # docker compose -f compose.yml -f compose.app.yml up -d --build --wait app
-sh scripts/smoke-health.sh   # ждёт 200 и {"status":"ok"} от http://localhost:3000/api/health
-pnpm app:down   # останавливает app и инфраструктуру (тома сохраняются)
+sh scripts/smoke-health.sh   # ждёт 200 и {"status":"ok"} от http://localhost:3001/api/health
+pnpm app:down   # останавливает контейнерный стек (тома сохраняются)
 ```
 
 Порядок запуска такой: `postgres` (healthy) → `migrate` (успешно завершился) → `app`, причём `app` дополнительно ждёт `minio-init` и `mailpit`. Внутри сети compose приложение обращается к `postgres:5432`, `http://minio:9000` и `mailpit:1025`. Значения `DATABASE_URL`, `S3_ENDPOINT` и `SMTP_HOST` из `.env` указывают на `localhost`, поэтому здесь они не используются.
 
-Контейнерный стек и `pnpm infra:up` работают с одним compose-проектом `tasker`, то есть с теми же контейнерами и томами. Из этого следует:
+Контейнерный стек изолирован от dev-инфраструктуры (`pnpm infra:up`):
 
-- `migrate` применяет миграции к той же БД, с которой работает `pnpm dev`;
-- `pnpm app:down` останавливает и dev-инфраструктуру;
-- приложение в Docker и `pnpm dev` по умолчанию претендуют на порт 3000, поэтому для одновременной работы задайте другой `APP_PORT`.
+- `compose.app.yml` задаёт имя проекта `tasker-app` — свои контейнеры и тома, отдельная БД. `migrate` не трогает базу `pnpm dev`, `pnpm app:down` не останавливает dev-инфраструктуру;
+- порты Postgres и MinIO наружу не публикуются (`!reset []`), UI Mailpit — на `8026`, приложение — на `3001`. Оба стека и `pnpm dev` (порт 3000) могут работать одновременно.
 
-Чтобы поднять второй, изолированный стек (например, рядом с dev-инфраструктурой), задайте другое имя проекта и другие порты:
-
-```bash
-POSTGRES_PORT=5434 MINIO_API_PORT=9100 MINIO_CONSOLE_PORT=9101 \
-MAILPIT_SMTP_PORT=1026 MAILPIT_UI_PORT=8026 APP_PORT=3001 \
-  docker compose -p tasker-ci -f compose.yml -f compose.app.yml up -d --build --wait app
-APP_URL=http://localhost:3001 sh scripts/smoke-health.sh
-docker compose -p tasker-ci -f compose.yml -f compose.app.yml down -v
-```
+Удалить стек вместе с данными: `docker compose -f compose.yml -f compose.app.yml down -v`.
 
 ### Переменные `compose.app.yml`
 
 | Переменная | По умолчанию | Описание |
 |------------|--------------|----------|
-| `APP_PORT` | `3000` | Порт приложения на хосте |
+| `APP_PORT` | `3001` | Порт приложения на хосте |
+| `APP_MAILPIT_UI_PORT` | `8026` | Порт UI Mailpit контейнерного стека на хосте |
 | `APP_URL` | `http://localhost:${APP_PORT}` | Публичный адрес, передаётся в `BETTER_AUTH_URL` |
 | `APP_LOG_LEVEL` | `info` | `LOG_LEVEL` контейнера (не берётся из `LOG_LEVEL` в `.env`, где для dev стоит `debug`) |
 | `APP_IMAGE` / `MIGRATE_IMAGE` | `tasker:local` / `tasker-migrate:local` | Теги образов |
@@ -84,7 +76,7 @@ docker compose -p tasker-ci -f compose.yml -f compose.app.yml down -v
 
 | Переменная | По умолчанию | Описание |
 |------------|--------------|----------|
-| `APP_URL` | `http://localhost:3000` | Адрес приложения |
+| `APP_URL` | `http://localhost:3001` | Адрес приложения |
 | `SMOKE_TIMEOUT` | `60` | Общий таймаут, с |
 | `SMOKE_INTERVAL` | `2` | Пауза между попытками, с |
 

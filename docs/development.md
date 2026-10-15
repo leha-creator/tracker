@@ -14,7 +14,7 @@
 | `pnpm format` / `pnpm format:check` | Prettier |
 | `pnpm test` / `pnpm test:watch` | Vitest |
 | `pnpm infra:up` / `pnpm infra:down` / `pnpm infra:logs` | Postgres, MinIO и Mailpit в Docker |
-| `pnpm app:up` / `pnpm app:down` | Собрать образ и запустить приложение с миграциями в Docker / остановить стек ([подробнее](deployment.md)) |
+| `pnpm app:up` / `pnpm app:down` | Собрать образ и запустить приложение с миграциями в Docker (http://localhost:3001, отдельный проект `tasker-app`) / остановить стек ([подробнее](deployment.md)) |
 | `pnpm db:generate` | Сгенерировать Prisma Client |
 | `pnpm db:migrate` | Создать и применить миграцию (dev) |
 | `pnpm db:deploy` | Применить миграции (CI / production) |

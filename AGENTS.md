@@ -104,7 +104,7 @@ tasker/
 | `pnpm check` | typecheck + lint + format:check + test |
 | `pnpm build` | Production-сборка |
 | `pnpm db:migrate` | Создать и применить миграцию Prisma |
-| `pnpm app:up` / `pnpm app:down` | Собрать образ и запустить приложение с миграциями в Docker / остановить стек |
+| `pnpm app:up` / `pnpm app:down` | Собрать образ и запустить приложение с миграциями в Docker (проект `tasker-app`, порт 3001) / остановить стек |
 
 ## Документация
 

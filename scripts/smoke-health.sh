@@ -2,15 +2,15 @@
 # Smoke-проверка запущенного приложения: ждёт, пока GET $APP_URL/api/health
 # не ответит 200 со статусом "ok".
 #
-#   sh scripts/smoke-health.sh                                 # http://localhost:3000
-#   APP_URL=http://localhost:3001 SMOKE_TIMEOUT=120 sh scripts/smoke-health.sh
+#   sh scripts/smoke-health.sh                                 # http://localhost:3001 (порт pnpm app:up)
+#   APP_URL=http://localhost:3000 SMOKE_TIMEOUT=120 sh scripts/smoke-health.sh
 #
-# Переменные: APP_URL (по умолчанию http://localhost:3000), SMOKE_TIMEOUT — общий таймаут
+# Переменные: APP_URL (по умолчанию http://localhost:3001), SMOKE_TIMEOUT — общий таймаут
 # в секундах (60), SMOKE_INTERVAL — пауза между попытками в секундах (2).
 # Код выхода: 0 — приложение здорово, 1 — таймаут (печатается последний ответ).
 set -u
 
-APP_URL="${APP_URL:-http://localhost:3000}"
+APP_URL="${APP_URL:-http://localhost:3001}"
 TIMEOUT="${SMOKE_TIMEOUT:-60}"
 INTERVAL="${SMOKE_INTERVAL:-2}"
 URL="${APP_URL%/}/api/health"

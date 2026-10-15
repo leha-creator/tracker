@@ -72,7 +72,7 @@ export async function archiveTaskAction(taskId: string): Promise<ActionResult<nu
 | `pnpm build` | Production-сборка |
 | `pnpm infra:up` / `pnpm infra:down` | Поднять / остановить Postgres, MinIO и Mailpit |
 | `pnpm db:migrate` | Создать и применить миграцию Prisma |
-| `pnpm app:up` / `pnpm app:down` | Запустить приложение с миграциями и инфраструктурой в Docker / остановить |
+| `pnpm app:up` / `pnpm app:down` | Запустить приложение с миграциями и инфраструктурой в Docker (http://localhost:3001) / остановить |
 
 Полный список команд описан в [docs/development.md](docs/development.md).
 

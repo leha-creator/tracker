@@ -8,8 +8,25 @@
 # здесь НЕ используются — адреса собираются из отдельных переменных с локальными дефолтами.
 # Значения по умолчанию — только для локального запуска; в окружении с реальными данными
 # задайте BETTER_AUTH_SECRET, пароли и ключи явно.
+#
+# Отдельное имя проекта: контейнеры и тома не пересекаются с dev-инфраструктурой
+# (`pnpm infra:up`, проект `tasker`) — app:up не мигрирует dev-БД, app:down её не останавливает.
+# Порты инфраструктуры наружу не публикуются (кроме UI Mailpit), чтобы оба стека
+# могли работать одновременно.
+name: tasker-app
 
 services:
+  postgres:
+    ports: !reset []
+
+  minio:
+    ports: !reset []
+
+  # UI Mailpit нужен, чтобы читать письма приглашений из контейнерного стека.
+  mailpit:
+    ports: !override
+      - '${APP_MAILPIT_UI_PORT:-8026}:8025'
+
   # Разово применяет миграции Prisma и завершается; app стартует только после успеха.
   migrate:
     build:
@@ -37,7 +54,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     ports:
-      - '${APP_PORT:-3000}:3000'
+      - '${APP_PORT:-3001}:3000'
     environment:
       NODE_ENV: production
       LOG_LEVEL: ${APP_LOG_LEVEL:-info}
@@ -50,7 +67,7 @@ services:
       S3_FORCE_PATH_STYLE: 'true'
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-local-dev-secret-change-me-0123456789abcdef}
       # Публичный адрес приложения (как его видит браузер).
-      BETTER_AUTH_URL: ${APP_URL:-http://localhost:${APP_PORT:-3000}}
+      BETTER_AUTH_URL: ${APP_URL:-http://localhost:${APP_PORT:-3001}}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@example.com}
       SMTP_HOST: mailpit
       SMTP_PORT: '1025'
