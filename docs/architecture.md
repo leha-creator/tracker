@@ -13,19 +13,22 @@ src/
 │   ├── (auth)/         # /login, /register
 │   ├── (app)/          # Защищённая зона: /, /admin, /workspaces/new,
 │   │                   # /w/[workspaceSlug] (+ /settings, /settings/members), /invite/[invitationId],
-│   │                   # /w/[workspaceSlug]/projects/new, /projects/[projectId]/{board,settings}
+│   │                   # /w/[workspaceSlug]/projects/new, /projects/[projectId]/{board,settings},
+│   │                   # /w/[workspaceSlug]/tasks (+ /new, /[taskNumber])
 │   └── api/
 │       ├── auth/[...all]/  # Better Auth
 │       └── health/     # GET /api/health
 ├── modules/            # Доменные модули
 │   ├── auth/           # Вход, регистрация, выход
 │   ├── workspaces/     # Пространства, участники, приглашения
-│   └── projects/       # Проекты и статусы-колонки
+│   ├── projects/       # Проекты и статусы-колонки
+│   └── tasks/          # Задачи, размещения в проектах, доска и список
 ├── components/
 │   ├── auth/           # Формы входа и регистрации, меню пользователя
 │   ├── forms/          # FormField, FormError
 │   ├── workspaces/     # Список и переключатель пространств, участники, приглашения
-│   ├── projects/       # Список проектов, доска, настройки проекта и статусов
+│   ├── projects/       # Список проектов, колонки доски, настройки проекта и статусов
+│   ├── tasks/          # Карточка, быстрое создание, страница задачи, список задач
 │   └── ui/             # shadcn/ui (генерируется CLI)
 ├── lib/utils.ts        # cn()
 ├── generated/prisma/   # Prisma Client (генерируется, не коммитится)
@@ -43,7 +46,7 @@ src/
 └── test/               # Утилиты Vitest
 ```
 
-Остальные модули (tasks, documents, integrations/github) появятся на следующих этапах. Внутри модуля код делится на срезы: `slices/<entity>/<entity>.{actions,service,repository,schema,dto}.ts`, `models/`, `index.ts`.
+Остальные модули (documents, integrations/github) появятся на следующих этапах. Внутри модуля код делится на срезы: `slices/<entity>/<entity>.{actions,service,repository,schema,dto}.ts`, `models/`, `index.ts`.
 
 Публичный API модуля:
 
@@ -59,6 +62,8 @@ src/
 ```
 app/ → modules/<m>/index.ts → *.actions.ts → *.service.ts → models/, *.repository.ts → shared/db
 ```
+
+Между модулями: `tasks → projects, workspaces` (только через `index.ts`). Обратных зависимостей нет: страница доски сама собирает колонки из `projects` и карточки из `tasks`.
 
 ## Границы, которые проверяет ESLint
 
@@ -97,6 +102,7 @@ app/ → modules/<m>/index.ts → *.actions.ts → *.service.ts → models/, *.r
 | `@/modules/auth` | `signInAction`, `signUpAction`, `signOutAction` и Zod-схемы форм |
 | `@/modules/workspaces` | Пространства, участники, приглашения (см. ниже) |
 | `@/modules/projects` | Проекты и статусы (см. ниже) |
+| `@/modules/tasks` | Задачи и их размещения в проектах (см. ниже) |
 
 ### Guard-функции
 
@@ -183,12 +189,38 @@ Guard-функции пространства возвращают `WorkspaceAcc
 |------|--------|
 | `/w/[workspaceSlug]/projects/new` | Право `manageProjects` (иначе 404) |
 | `/w/[workspaceSlug]/projects/[projectId]` | Редирект на `/board` (`redirects` в `next.config.ts`, параметр ограничен UUID) |
-| `/w/[workspaceSlug]/projects/[projectId]/board` | Участник. Колонки по статусам; карточки задач — следующий этап |
+| `/w/[workspaceSlug]/projects/[projectId]/board` | Участник. Колонки по статусам с карточками задач, «+ Задача» в каждой колонке |
 | `/w/[workspaceSlug]/projects/[projectId]/settings` | Право `manageProjects` (иначе 404): свойства проекта, статусы, удаление |
 
 Проект для layout и страниц загружает `projects/[projectId]/_lib/load-project.ts` (`cache()` на запрос): невалидный id, чужой или удалённый проект → 404.
 
-Ограничение этапа: удаление статуса и проекта пока не проверяет задачи — перенос задач в другой статус появится вместе с задачами.
+- **Удаление статуса с задачами** требует выбрать статус для переноса (`moveToStatusId`; правило — в `StatusSet.remove`). В той же транзакции `statusRepository.reassignPlacements` меняет `statusId` размещений, позиции не пересчитываются: дробные ключи двух колонок сливаются в одну. Это единственное место, где `projects` пишет в таблицу модуля `tasks`: колонкой управляет `projects`, а зависимости от `tasks` у него нет.
+- **Удаление проекта** каскадом удаляет статусы и размещения задач. Сами задачи остаются в пространстве. Диалог удаления показывает число задач (`ProjectDto.tasksCount`).
+
+## Задачи
+
+| Модель | Поля |
+|--------|------|
+| `Task` | `id` (UUID v7), `workspaceId`, `number` (сквозной в пространстве, `#42`), `title`, `description` (простой текст), `priority` (`none` / `low` / `medium` / `high` / `urgent`), `dueDate` (дата без времени), `assigneeId`, `createdById` |
+| `TaskPlacement` | Ключ `(taskId, projectId)`; `workspaceId`, `statusId`, `position` (дробный ключ) |
+| `WorkspaceTaskCounter` | `workspaceId`, `lastNumber`: счётчик номеров задач |
+
+- **Статус хранится только в размещении.** Задача может быть в нескольких проектах (до 20), в каждом — своё размещение со статусом и позицией. В `Task` статуса нет.
+- **Целостность на уровне БД.** Размещение ссылается на задачу и проект составными ключами с `workspaceId`, а на статус — ключом `(statusId, projectId)`. Размещение не может оказаться в чужом пространстве или в статусе другого проекта. FK на статус — `NO ACTION`: статус с задачами без переноса не удалить, а каскад проекта проходит.
+- **Номер задачи** выдаётся атомарно: `INSERT … ON CONFLICT DO UPDATE … RETURNING` в транзакции создания. Номера не переиспользуются. URL задачи — по номеру.
+- **Порядок карточек** задают дробные ключи ([`fractional-indexing`](https://github.com/rocicorp/fractional-indexing)), поэтому перемещение карточки меняет одну строку. Ключи сравниваются побайтно: колонка `position` создана с `COLLATE "C"`. Новая карточка и смена статуса ставят задачу в конец колонки. При совпадении ключей (гонка) порядок определяет `taskId`.
+- **Ответственный** — только участник пространства (`isWorkspaceMember` из `@/modules/workspaces`). Участника удаляет плагин Better Auth вне транзакций приложения, поэтому с задач его снимает триггер БД на `WorkspaceMember` (миграция `add_tasks`).
+- **Права.** Любой участник создаёт и редактирует задачи и меняет их размещения. Удалить задачу может автор или владелец пространства.
+- **Срок** — дата без времени (`@db.Date`), форматируется в UTC. Задача просрочена, если срок прошёл, а статус не в категории `done`. На доске учитывается статус в этом проекте, в списке — все размещения.
+- **Описание** выводится как текст (`whitespace-pre-wrap`), HTML не рендерится. Rich-text появится вместе с проектной документацией.
+
+| Путь | Доступ |
+|------|--------|
+| `/w/[workspaceSlug]/tasks` | Участник: задачи пространства, новые сверху, «Показать ещё» по 50 (курсор `createdAt` + `id`) |
+| `/w/[workspaceSlug]/tasks/new` | Участник: создание задачи; `?projectId=` предвыбирает проект |
+| `/w/[workspaceSlug]/tasks/[taskNumber]` | Участник: поля задачи, проекты и статусы, удаление. Некорректный номер или задача другого пространства → not found |
+
+Карточки доски отдаёт `getBoardCards()` (один запрос), статусы всех проектов для селектов — `listWorkspaceStatuses()` из `@/modules/projects`.
 
 ## HTTP-эндпоинты
 
@@ -212,5 +244,5 @@ Guard-функции пространства возвращают `WorkspaceAcc
 
 - [Логирование и ошибки](logging-and-errors.md): единый формат ответов
 - [Конфигурация](configuration.md): SMTP и настройки плагина `organization`
-- [Разработка](development.md): линтеры и тесты
+- [Разработка](development.md): линтеры, тесты, ручные правки миграций
 - [`.ai-factory/ARCHITECTURE.md`](../.ai-factory/ARCHITECTURE.md): полные правила и примеры кода

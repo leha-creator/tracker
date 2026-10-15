@@ -28,6 +28,7 @@ function toProjectDto(row: ProjectRow): ProjectDto {
     name: row.name,
     description: row.description,
     createdAt: row.createdAt,
+    tasksCount: row._count.placements,
   };
 }
 
@@ -62,6 +63,7 @@ export async function listProjects(
     name: row.name,
     description: row.description,
     statusesCount: row._count.statuses,
+    tasksCount: row._count.placements,
   }));
 }
 
@@ -173,10 +175,12 @@ export async function deleteProject(
     throw error;
   }
 
-  // Проверка задач в проекте появится на этапе «Задачи».
   const count = await projectRepository.delete(workspaceId, projectId);
   if (count === 0) throw new NotFoundError('Проект не найден');
 
-  log.info({ workspaceId, projectId, userId: session.user.id }, '[project] deleted');
+  log.info(
+    { workspaceId, projectId, userId: session.user.id, tasksCount: project._count.placements },
+    '[project] deleted',
+  );
   return { workspaceSlug: project.workspace.slug };
 }

@@ -8,10 +8,16 @@ import type { StatusSet } from '../../models';
 
 const requireWorkspacePermission = vi.fn<() => Promise<WorkspaceAccess>>();
 const lockProject = vi.fn<() => Promise<boolean>>();
-const listByProject =
-  vi.fn<
-    () => Promise<{ id: string; name: string; category: string; color: string; position: number }[]>
-  >();
+interface StatusRowMock {
+  id: string;
+  name: string;
+  category: string;
+  color: string;
+  position: number;
+  _count: { placements: number };
+}
+const listByProject = vi.fn<() => Promise<StatusRowMock[]>>();
+const reassignPlacements = vi.fn<(...args: unknown[]) => Promise<number>>();
 const saveSet = vi.fn<(tx: unknown, ws: string, project: string, set: StatusSet) => string[]>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
@@ -26,6 +32,7 @@ vi.mock('./status.repository', () => ({
     lockProject: () => lockProject(),
     listByProject: () => listByProject(),
     saveSet: (...args: Parameters<typeof saveSet>) => saveSet(...args),
+    reassignPlacements: (...args: unknown[]) => reassignPlacements(...args),
   },
 }));
 
@@ -65,9 +72,24 @@ beforeEach(() => {
   });
   lockProject.mockResolvedValue(true);
   saveSet.mockReturnValue([]);
+  reassignPlacements.mockResolvedValue(0);
   listByProject.mockResolvedValue([
-    { id: S1, name: 'К выполнению', category: 'todo', color: 'gray', position: 0 },
-    { id: S2, name: 'Готово', category: 'done', color: 'green', position: 1 },
+    {
+      id: S1,
+      name: 'К выполнению',
+      category: 'todo',
+      color: 'gray',
+      position: 0,
+      _count: { placements: 0 },
+    },
+    {
+      id: S2,
+      name: 'Готово',
+      category: 'done',
+      color: 'green',
+      position: 1,
+      _count: { placements: 0 },
+    },
   ]);
 });
 
@@ -92,7 +114,14 @@ describe('status mutations', () => {
 
   it('refuses to delete the last status', async () => {
     listByProject.mockResolvedValue([
-      { id: S1, name: 'К выполнению', category: 'todo', color: 'gray', position: 0 },
+      {
+        id: S1,
+        name: 'К выполнению',
+        category: 'todo',
+        color: 'gray',
+        position: 0,
+        _count: { placements: 0 },
+      },
     ]);
     await expect(deleteStatus(session, { ...ref, statusId: S1 })).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
@@ -113,7 +142,11 @@ describe('status mutations', () => {
     await expect(
       addStatus(session, { ...ref, name: 'В работе', category: 'in_progress', color: 'blue' }),
     ).resolves.toEqual({ statusId: 'new-id' });
-    expect(savedSet().statuses.at(-1)).toMatchObject({ id: null, name: 'В работе', position: 2 });
+    expect(savedSet().statuses.at(-1)).toMatchObject({
+      id: null,
+      name: 'В работе',
+      position: 2,
+    });
   });
 
   it('rejects malformed status id before touching the database', async () => {
@@ -121,5 +154,74 @@ describe('status mutations', () => {
       code: 'NOT_FOUND',
     });
     expect(lockProject).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleteStatus with tasks', () => {
+  const S3 = '0192f3a0-0000-7000-8000-0000000000a3';
+
+  beforeEach(() => {
+    listByProject.mockResolvedValue([
+      {
+        id: S1,
+        name: 'К выполнению',
+        category: 'todo',
+        color: 'gray',
+        position: 0,
+        _count: { placements: 3 },
+      },
+      {
+        id: S2,
+        name: 'Готово',
+        category: 'done',
+        color: 'green',
+        position: 1,
+        _count: { placements: 0 },
+      },
+    ]);
+  });
+
+  it('requires a move target', async () => {
+    await expect(deleteStatus(session, { ...ref, statusId: S1 })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      fieldErrors: { moveToStatusId: expect.any(Array) },
+    });
+    expect(reassignPlacements).not.toHaveBeenCalled();
+    expect(saveSet).not.toHaveBeenCalled();
+  });
+
+  it('rejects the removed status as a target', async () => {
+    await expect(
+      deleteStatus(session, { ...ref, statusId: S1, moveToStatusId: S1 }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+
+  it('returns NOT_FOUND for a target of another project', async () => {
+    await expect(
+      deleteStatus(session, { ...ref, statusId: S1, moveToStatusId: S3 }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(reassignPlacements).not.toHaveBeenCalled();
+  });
+
+  it('moves tasks before saving the set', async () => {
+    const order: string[] = [];
+    reassignPlacements.mockImplementation(() => {
+      order.push('reassign');
+      return Promise.resolve(3);
+    });
+    saveSet.mockImplementation(() => {
+      order.push('save');
+      return [];
+    });
+    await deleteStatus(session, { ...ref, statusId: S1, moveToStatusId: S2 });
+    expect(reassignPlacements).toHaveBeenCalledWith(expect.anything(), 'ws-1', PROJECT_ID, S1, S2);
+    expect(order).toEqual(['reassign', 'save']);
+    expect(savedSet().removedIds).toEqual([S1]);
+  });
+
+  it('deletes an empty status without a target', async () => {
+    await deleteStatus(session, { ...ref, statusId: S2 });
+    expect(reassignPlacements).not.toHaveBeenCalled();
+    expect(savedSet().removedIds).toEqual([S2]);
   });
 });

@@ -18,10 +18,11 @@ export function StatusList({ workspaceId, projectId, statuses }: StatusListProps
         {statuses.map((status, index) => (
           <StatusRow
             // Ключ меняется вместе с данными: после сохранения строка берёт значения с сервера.
-            key={`${status.id}:${status.name}:${status.category}:${status.color}`}
+            key={`${status.id}:${status.name}:${status.category}:${status.color}:${status.tasksCount}`}
             workspaceId={workspaceId}
             projectId={projectId}
             status={status}
+            otherStatuses={statuses.filter((other) => other.id !== status.id)}
             isFirst={index === 0}
             isLast={index === statuses.length - 1}
             isOnly={statuses.length === 1}

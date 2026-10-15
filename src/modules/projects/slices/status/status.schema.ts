@@ -33,7 +33,17 @@ export const moveStatusSchema = z.object({
   direction: z.enum(['up', 'down'], { error: 'Недопустимое направление' }),
 });
 
-export const deleteStatusSchema = z.object({ ...projectRef, statusId: entityIdField });
+/** Статус для переноса задач удаляемого статуса; пусто → не задан (нужен, только если задачи есть). */
+const moveToStatusField = z
+  .union([z.literal(''), entityIdField])
+  .optional()
+  .transform((value) => (value ? value : undefined));
+
+export const deleteStatusSchema = z.object({
+  ...projectRef,
+  statusId: entityIdField,
+  moveToStatusId: moveToStatusField,
+});
 
 export type AddStatusInput = z.infer<typeof addStatusSchema>;
 export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;

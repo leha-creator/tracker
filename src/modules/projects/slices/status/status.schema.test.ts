@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { addStatusSchema, moveStatusSchema } from './status.schema';
+import { addStatusSchema, deleteStatusSchema, moveStatusSchema } from './status.schema';
 
 const ref = { workspaceId: 'ws', projectId: '0192f3a0-0000-7000-8000-000000000001' };
 const STATUS_ID = '0192f3a0-0000-7000-8000-0000000000a1';
@@ -41,6 +41,27 @@ describe('moveStatusSchema', () => {
   it('rejects unknown direction', () => {
     expect(
       moveStatusSchema.safeParse({ ...ref, statusId: STATUS_ID, direction: 'left' }).success,
+    ).toBe(false);
+  });
+});
+
+describe('deleteStatusSchema', () => {
+  it('treats empty move target as not set', () => {
+    expect(
+      deleteStatusSchema.parse({ ...ref, statusId: STATUS_ID, moveToStatusId: '' }).moveToStatusId,
+    ).toBeUndefined();
+    expect(
+      deleteStatusSchema.parse({ ...ref, statusId: STATUS_ID }).moveToStatusId,
+    ).toBeUndefined();
+  });
+
+  it('accepts a UUID move target and rejects garbage', () => {
+    expect(
+      deleteStatusSchema.parse({ ...ref, statusId: STATUS_ID, moveToStatusId: STATUS_ID })
+        .moveToStatusId,
+    ).toBe(STATUS_ID);
+    expect(
+      deleteStatusSchema.safeParse({ ...ref, statusId: STATUS_ID, moveToStatusId: 'abc' }).success,
     ).toBe(false);
   });
 });

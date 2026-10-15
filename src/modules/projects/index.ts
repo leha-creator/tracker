@@ -3,4 +3,4 @@
 export * from './client';
 
 export { getProject, listProjects } from './slices/project/project.service';
-export { listStatuses } from './slices/status/status.service';
+export { listStatuses, listWorkspaceStatuses } from './slices/status/status.service';

@@ -13,6 +13,7 @@ const findInWorkspace = vi.fn<() => Promise<{ id: string; userId: string; role: 
 const countOwners = vi.fn<() => Promise<number>>();
 const setCanManageProjects =
   vi.fn<(ws: string, memberId: string, value: boolean) => Promise<number>>();
+const isMember = vi.fn<(ws: string, userId: string) => Promise<boolean>>();
 const updateMemberRole = vi.fn();
 const removeMember = vi.fn();
 const leaveOrganization = vi.fn();
@@ -29,6 +30,7 @@ vi.mock('./member.repository', () => ({
     setCanManageProjects: (...args: Parameters<typeof setCanManageProjects>) =>
       setCanManageProjects(...args),
     listByWorkspace: vi.fn(),
+    isMember: (...args: Parameters<typeof isMember>) => isMember(...args),
   },
 }));
 vi.mock('../../organization-api', () => ({
@@ -38,6 +40,7 @@ vi.mock('../../organization-api', () => ({
 
 const {
   changeMemberRole,
+  isWorkspaceMember,
   leaveWorkspace,
   removeMember: removeMemberService,
   setMemberPermission,
@@ -188,5 +191,16 @@ describe('setMemberPermission', () => {
     setCanManageProjects.mockResolvedValue(1);
     await setMemberPermission(session, input);
     expect(setCanManageProjects).toHaveBeenCalledWith('ws-1', 'm-2', true);
+  });
+});
+
+describe('isWorkspaceMember', () => {
+  it('checks membership within the workspace', async () => {
+    isMember.mockResolvedValue(true);
+    await expect(isWorkspaceMember('ws-1', 'user-2')).resolves.toBe(true);
+    expect(isMember).toHaveBeenCalledWith('ws-1', 'user-2');
+
+    isMember.mockResolvedValue(false);
+    await expect(isWorkspaceMember('ws-1', 'stranger')).resolves.toBe(false);
   });
 });

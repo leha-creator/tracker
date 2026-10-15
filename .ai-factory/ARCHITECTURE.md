@@ -60,12 +60,13 @@ tasker/
 │   │   │
 │   │   ├── tasks/
 │   │   │   ├── slices/
-│   │   │   │   ├── task/             # CRUD задачи, срок, приоритет, ответственный
+│   │   │   │   ├── task/             # CRUD задачи, номер (#42), срок, приоритет, ответственный; список с курсором
 │   │   │   │   ├── placement/        # размещение задачи в проекте: статус + позиция
 │   │   │   │   ├── comment/
 │   │   │   │   ├── attachment/
 │   │   │   │   └── views/            # запросы для канбана и списка (read-модели)
-│   │   │   ├── models/               # Task, TaskPlacement, Priority
+│   │   │   ├── models/               # правила задачи, TaskPlacement, позиции (fractional-indexing), Priority
+│   │   │   ├── client.ts
 │   │   │   └── index.ts
 │   │   │
 │   │   ├── documents/
@@ -114,6 +115,7 @@ tasker/
 - ✅ Модели — чистый TypeScript без Prisma, Next.js и React
 - ✅ Модуль импортирует другой модуль только через его `index.ts`
 - ✅ Если модулю нужны клиентские компоненты, он дополнительно экспортирует `client.ts`: actions, Zod-схемы, чистые функции и типы без server-only кода. Клиентские компоненты импортируют `@/modules/<module>/client`, серверный код — `@/modules/<module>`
+- ✅ `tasks` зависит от `projects` и `workspaces` (через их `index.ts`), но не наоборот. Страница доски сама собирает колонки из `projects` и карточки из `tasks`
 - ✅ `integrations/github` зависит от `tasks`, но `tasks` не зависит от `integrations/github`
 - ❌ Компоненты и страницы не импортируют `prisma` и репозитории
 - ❌ Actions не вызывают репозитории в обход сервиса
@@ -129,6 +131,8 @@ tasker/
 - **Транзакции:** если операция затрагивает несколько агрегатов (перемещение карточки с пересчётом позиций), репозиторий принимает `Prisma.TransactionClient`, а сервис открывает `prisma.$transaction`.
 - **Авторизация:** централизована в `shared/access`. Каждый сервисный метод, работающий с данными пространства, первым делом вызывает `requireWorkspaceAccess(session, workspaceId, minRole)` (неучастнику — `NOT_FOUND`, низкой роли — `FORBIDDEN`). Страницы `/w/[workspaceSlug]/*` используют `requireWorkspaceAccessBySlug(slug, minRole)` → `notFound()`.
 - **Права в пространстве сверх роли.** Владелец имеет все права; участнику владелец выдаёт отдельные права (сейчас — `manageProjects`, флаг `WorkspaceMember.canManageProjects`, объявлен в плагине с `input: false`). Сервисы проверяют их через `requireWorkspacePermission(session, workspaceId, permission)`, страницы — через `access.permissions`. Флаг меняет сервис участников через репозиторий: у плагина нет API для дополнительных полей.
+- **Удаление колонки с задачами.** Жизненный цикл статуса принадлежит `projects`, поэтому `deleteStatus` в той же транзакции переводит размещения удаляемого статуса в выбранный (`statusRepository.reassignPlacements`, меняется только `statusId`) — единственное место, где `projects` пишет в таблицу модуля `tasks`. FK размещения на статус — `NO ACTION`: статус с задачами без переноса не удалить, каскад проекта проходит.
+- **Снятие ответственного при выходе из пространства** — триггер БД на `WorkspaceMember` (миграция `add_tasks`): участника удаляет плагин Better Auth вне транзакций приложения, а модуль `workspaces` не знает о задачах.
 - **Пространства — плагин Better Auth `organization`** под доменными именами (`Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `workspaceId`). Мутации идут через `auth.api.*` плагина (`callOrganizationApi`), чтение — через репозитории модуля. Текущее пространство берётся из URL, а не из `session.activeWorkspaceId`.
 
 ## Ключевые принципы

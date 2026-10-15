@@ -3,17 +3,26 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface ProjectNavProps {
   basePath: string;
+  /** Ссылка «Новая задача» с выбранным проектом. */
+  newTaskHref: string;
   name: string;
   description: string | null;
   canManage: boolean;
 }
 
 /** Шапка проекта с вкладками. «Настройки» скрыты без права управления — доступ проверяет страница. */
-export function ProjectNav({ basePath, name, description, canManage }: ProjectNavProps) {
+export function ProjectNav({
+  basePath,
+  newTaskHref,
+  name,
+  description,
+  canManage,
+}: ProjectNavProps) {
   const pathname = usePathname();
   const links = [
     { href: `${basePath}/board`, label: 'Доска' },
@@ -30,7 +39,7 @@ export function ProjectNav({ basePath, name, description, canManage }: ProjectNa
           </p>
         )}
       </div>
-      <nav aria-label="Разделы проекта" className="flex gap-1">
+      <nav aria-label="Разделы проекта" className="flex items-center gap-1">
         {links.map((link) => {
           const active = pathname.startsWith(link.href);
           return (
@@ -49,6 +58,9 @@ export function ProjectNav({ basePath, name, description, canManage }: ProjectNa
             </Link>
           );
         })}
+        <Button asChild size="sm" className="ml-2">
+          <Link href={newTaskHref}>Новая задача</Link>
+        </Button>
       </nav>
     </div>
   );

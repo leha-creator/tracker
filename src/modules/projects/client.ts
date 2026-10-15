@@ -22,12 +22,13 @@ export {
 export type { ProjectStatusDto } from './slices/status/status.dto';
 export { addStatusSchema, updateStatusSchema } from './slices/status/status.schema';
 export {
+  isEntityId,
   PROJECT_DESCRIPTION_MAX_LENGTH,
   PROJECT_NAME_MAX_LENGTH,
   PROJECT_NAME_MIN_LENGTH,
 } from './models/project';
 export { STATUS_CATEGORIES, STATUS_CATEGORY_LABELS } from './models/status-category';
 export type { StatusCategory } from './models/status-category';
-export { STATUS_COLOR_LABELS, STATUS_COLORS } from './models/status-color';
+export { parseStatusColor, STATUS_COLOR_LABELS, STATUS_COLORS } from './models/status-color';
 export type { StatusColor } from './models/status-color';
 export { STATUS_LIMIT, STATUS_NAME_MAX_LENGTH } from './models/status-set';

@@ -3,11 +3,9 @@
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { startTransition, useActionState, useState } from 'react';
 
-import { ConfirmActionDialog } from '@/components/workspaces/confirm-action-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  deleteStatusAction,
   moveStatusAction,
   STATUS_NAME_MAX_LENGTH,
   updateStatusAction,
@@ -15,6 +13,7 @@ import {
 } from '@/modules/projects/client';
 import type { FormState } from '@/shared/types';
 
+import { DeleteStatusDialog } from './delete-status-dialog';
 import { StatusDot } from './status-badge';
 import { CategorySelect, ColorSelect } from './status-selects';
 
@@ -22,6 +21,7 @@ interface StatusRowProps {
   workspaceId: string;
   projectId: string;
   status: ProjectStatusDto;
+  otherStatuses: ProjectStatusDto[];
   isFirst: boolean;
   isLast: boolean;
   isOnly: boolean;
@@ -32,6 +32,7 @@ export function StatusRow({
   workspaceId,
   projectId,
   status,
+  otherStatuses,
   isFirst,
   isLast,
   isOnly,
@@ -113,9 +114,14 @@ export function StatusRow({
           >
             <ArrowDown />
           </Button>
-          <ConfirmActionDialog
-            action={deleteStatusAction}
-            fields={ids}
+          <span className="px-1 text-xs text-muted-foreground tabular-nums" title="Задач в статусе">
+            {status.tasksCount}
+          </span>
+          <DeleteStatusDialog
+            workspaceId={workspaceId}
+            projectId={projectId}
+            status={status}
+            otherStatuses={otherStatuses}
             trigger={
               <Button
                 type="button"
@@ -127,9 +133,6 @@ export function StatusRow({
                 Удалить
               </Button>
             }
-            title={`Удалить статус «${status.name}»?`}
-            description="Колонка исчезнет с доски проекта."
-            confirmLabel="Удалить"
           />
         </div>
       </form>

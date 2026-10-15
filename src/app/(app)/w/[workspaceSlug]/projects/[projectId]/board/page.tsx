@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 
 import { BoardColumns } from '@/components/projects/board-columns';
 import { listStatuses } from '@/modules/projects';
+import { getBoardCards } from '@/modules/tasks';
 
 import { loadProjectPage } from '../_lib/load-project';
 
@@ -21,6 +22,18 @@ export default function ProjectBoardPage({ params }: Props) {
 async function BoardSection({ params }: Pick<Props, 'params'>) {
   const { workspaceSlug, projectId } = await params;
   const { session, workspace, project } = await loadProjectPage(workspaceSlug, projectId);
-  const statuses = await listStatuses(session, workspace.id, project.id);
-  return <BoardColumns statuses={statuses} />;
+  // Колонки — из модуля projects, карточки — из tasks: модули друг о друге не знают.
+  const [statuses, cards] = await Promise.all([
+    listStatuses(session, workspace.id, project.id),
+    getBoardCards(session, workspace.id, project.id),
+  ]);
+  return (
+    <BoardColumns
+      workspaceId={workspace.id}
+      workspaceSlug={workspace.slug}
+      projectId={project.id}
+      statuses={statuses}
+      cards={cards}
+    />
+  );
 }

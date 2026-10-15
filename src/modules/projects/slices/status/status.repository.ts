@@ -10,8 +10,52 @@ export const statusRepository = {
     return db.projectStatus.findMany({
       where: { workspaceId, projectId },
       orderBy: { position: 'asc' },
-      select: { id: true, name: true, category: true, color: true, position: true },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        color: true,
+        position: true,
+        _count: { select: { placements: true } },
+      },
     });
+  },
+
+  /** Статусы всех проектов пространства (для селектов статуса) — один запрос. */
+  listByWorkspace(workspaceId: string) {
+    return prisma.projectStatus.findMany({
+      where: { workspaceId },
+      orderBy: [{ projectId: 'asc' }, { position: 'asc' }],
+      select: {
+        id: true,
+        projectId: true,
+        name: true,
+        category: true,
+        color: true,
+        position: true,
+        _count: { select: { placements: true } },
+      },
+    });
+  },
+
+  /**
+   * Переносит задачи удаляемого статуса в другой статус проекта. Исключение из правила владения
+   * таблицами: размещения принадлежат модулю tasks, но жизненный цикл колонки — проектам, а модуль
+   * projects не зависит от tasks. Меняется только statusId; дробные позиции двух колонок
+   * корректно сливаются в одну. Возвращает число перенесённых задач.
+   */
+  async reassignPlacements(
+    tx: TransactionClient,
+    workspaceId: string,
+    projectId: string,
+    fromStatusId: string,
+    toStatusId: string,
+  ): Promise<number> {
+    const { count } = await tx.taskPlacement.updateMany({
+      where: { workspaceId, projectId, statusId: fromStatusId },
+      data: { statusId: toStatusId },
+    });
+    return count;
   },
 
   /**

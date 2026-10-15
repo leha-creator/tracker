@@ -54,6 +54,17 @@ export async function listMembers(session: AuthSession, workspaceId: string): Pr
   });
 }
 
+/**
+ * Является ли пользователь участником пространства. Без проверки сессии: только для серверных
+ * модулей, которые уже проверили доступ текущего пользователя к пространству (например,
+ * ответственный задачи в модуле tasks).
+ */
+export async function isWorkspaceMember(workspaceId: string, userId: string): Promise<boolean> {
+  const result = await memberRepository.isMember(workspaceId, userId);
+  log.debug({ workspaceId, userId, result }, '[member.isWorkspaceMember]');
+  return result;
+}
+
 export async function changeMemberRole(
   session: AuthSession,
   input: { workspaceId: string; memberId: string; role: WorkspaceRole },

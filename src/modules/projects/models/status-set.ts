@@ -99,13 +99,35 @@ export class StatusSet {
     return true;
   }
 
-  remove(id: string): void {
+  /**
+   * Удаляет статус. Если в нём есть задачи (`tasksCount > 0`), нужен статус этого же набора
+   * для их переноса (`moveToId`). Возвращает id статуса переноса или null.
+   */
+  remove(id: string, options: { tasksCount?: number; moveToId?: string } = {}): string | null {
     const index = this.indexOf(id);
     if (this.items.length <= 1) {
       throw new ValidationError('В проекте должен остаться хотя бы один статус');
     }
+    const moveToId =
+      (options.tasksCount ?? 0) > 0 ? this.checkMoveTarget(id, options.moveToId) : null;
     this.items = this.items.filter((_, i) => i !== index);
     this.removed.push(id);
+    return moveToId;
+  }
+
+  private checkMoveTarget(id: string, moveToId: string | undefined): string {
+    if (!moveToId) {
+      throw new ValidationError('В статусе есть задачи: выберите статус для их переноса', {
+        fieldErrors: { moveToStatusId: ['Выберите статус для задач'] },
+      });
+    }
+    if (moveToId === id) {
+      throw new ValidationError('Задачи нельзя перенести в удаляемый статус', {
+        fieldErrors: { moveToStatusId: ['Выберите другой статус'] },
+      });
+    }
+    this.indexOf(moveToId);
+    return moveToId;
   }
 
   private indexOf(id: string): number {

@@ -21,10 +21,17 @@ interface DeleteProjectDialogProps {
   workspaceId: string;
   projectId: string;
   name: string;
+  /** Задачи проекта: их размещения удалятся, сами задачи останутся в пространстве. */
+  tasksCount: number;
 }
 
 /** Удаление проекта с подтверждением вводом названия (сервер проверяет совпадение сам). */
-export function DeleteProjectDialog({ workspaceId, projectId, name }: DeleteProjectDialogProps) {
+export function DeleteProjectDialog({
+  workspaceId,
+  projectId,
+  name,
+  tasksCount,
+}: DeleteProjectDialogProps) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     deleteProjectAction,
     null,
@@ -43,8 +50,10 @@ export function DeleteProjectDialog({ workspaceId, projectId, name }: DeleteProj
           <AlertDialogHeader>
             <AlertDialogTitle>Удалить «{name}»?</AlertDialogTitle>
             <AlertDialogDescription>
-              Проект и его статусы будут удалены без возможности восстановления. Введите название
-              проекта, чтобы подтвердить.
+              Проект и его статусы будут удалены без возможности восстановления.
+              {tasksCount > 0 &&
+                ` Задач в проекте: ${tasksCount}. Они будут убраны из проекта, но останутся в пространстве.`}{' '}
+              Введите название проекта, чтобы подтвердить.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <input type="hidden" name="workspaceId" value={workspaceId} />

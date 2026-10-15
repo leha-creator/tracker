@@ -63,6 +63,7 @@ async function SettingsSection({ params }: Pick<Props, 'params'>) {
             workspaceId={workspace.id}
             projectId={project.id}
             name={project.name}
+            tasksCount={project.tasksCount}
           />
         </CardContent>
       </Card>

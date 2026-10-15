@@ -2,7 +2,7 @@ import 'server-only';
 
 import { requireWorkspaceAccess, requireWorkspacePermission } from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
-import { prisma } from '@/shared/db';
+import { prisma, type TransactionClient } from '@/shared/db';
 import { NotFoundError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
@@ -27,8 +27,8 @@ interface ProjectRef {
 
 type StatusRow = Awaited<ReturnType<typeof statusRepository.listByProject>>[number];
 
-function toStatusDto(row: StatusRow): ProjectStatusDto {
-  return { ...row, color: parseStatusColor(row.color) };
+function toStatusDto({ _count, ...row }: StatusRow): ProjectStatusDto {
+  return { ...row, color: parseStatusColor(row.color), tasksCount: _count.placements };
 }
 
 function assertIds(ref: ProjectRef, statusId?: string): void {
@@ -38,13 +38,14 @@ function assertIds(ref: ProjectRef, statusId?: string): void {
 
 /**
  * Общий сценарий изменения набора: право → блокировка проекта → загрузка набора →
- * метод модели → сохранение. Нарушение инварианта логируется как WARN.
+ * метод модели → (beforeSave) → сохранение. Нарушение инварианта логируется как WARN.
  */
 async function mutateStatusSet(
   session: AuthSession,
   ref: ProjectRef,
   operation: string,
-  mutate: (set: StatusSet) => void,
+  mutate: (set: StatusSet, statuses: readonly ProjectStatusDto[]) => void,
+  beforeSave?: (tx: TransactionClient) => Promise<void>,
 ): Promise<string[]> {
   const { workspaceId, projectId } = ref;
   await requireWorkspacePermission(session, workspaceId, 'manageProjects');
@@ -54,10 +55,12 @@ async function mutateStatusSet(
       log.warn({ workspaceId, projectId, operation }, '[status] project not found in workspace');
       throw new NotFoundError('Проект не найден');
     }
-    const rows = await statusRepository.listByProject(workspaceId, projectId, tx);
-    const set = StatusSet.fromPersisted(rows.map(toStatusDto));
+    const statuses = (await statusRepository.listByProject(workspaceId, projectId, tx)).map(
+      toStatusDto,
+    );
+    const set = StatusSet.fromPersisted(statuses);
     try {
-      mutate(set);
+      mutate(set, statuses);
     } catch (error) {
       log.warn(
         { workspaceId, projectId, operation, err: error },
@@ -65,6 +68,7 @@ async function mutateStatusSet(
       );
       throw error;
     }
+    await beforeSave?.(tx);
     return statusRepository.saveSet(tx, workspaceId, projectId, set);
   });
 }
@@ -80,6 +84,24 @@ export async function listStatuses(
 
   const rows = await statusRepository.listByProject(workspaceId, projectId);
   return rows.map(toStatusDto);
+}
+
+/** Статусы всех проектов пространства по id проекта (порядок — по позиции). */
+export async function listWorkspaceStatuses(
+  session: AuthSession,
+  workspaceId: string,
+): Promise<Record<string, ProjectStatusDto[]>> {
+  await requireWorkspaceAccess(session, workspaceId);
+  const rows = await statusRepository.listByWorkspace(workspaceId);
+  const byProject: Record<string, ProjectStatusDto[]> = {};
+  for (const { projectId, ...row } of rows) {
+    (byProject[projectId] ??= []).push(toStatusDto(row));
+  }
+  log.debug(
+    { userId: session.user.id, workspaceId, projects: Object.keys(byProject).length },
+    '[status.listWorkspaceStatuses]',
+  );
+  return byProject;
 }
 
 export async function addStatus(
@@ -139,18 +161,48 @@ export async function moveStatus(
   log.info({ projectId, statusId, direction, moved }, '[status] moved');
 }
 
+/**
+ * Удаляет статус. Задачи статуса (если есть) переносятся в `moveToStatusId` того же проекта
+ * в той же транзакции — до удаления строки статуса (FK размещения не даст удалить статус с задачами).
+ */
 export async function deleteStatus(
   session: AuthSession,
-  input: ProjectRef & { statusId: string },
+  input: ProjectRef & { statusId: string; moveToStatusId?: string },
 ): Promise<void> {
-  const { workspaceId, projectId, statusId } = input;
+  const { workspaceId, projectId, statusId, moveToStatusId } = input;
   assertIds(input, statusId);
+  if (moveToStatusId !== undefined && !isEntityId(moveToStatusId)) {
+    throw new NotFoundError('Статус не найден');
+  }
   log.debug(
-    { userId: session.user.id, workspaceId, projectId, statusId },
+    { userId: session.user.id, workspaceId, projectId, statusId, moveToStatusId },
     '[status.deleteStatus] start',
   );
 
-  // Перенос задач из удаляемого статуса появится на этапе «Задачи».
-  await mutateStatusSet(session, input, 'delete', (set) => set.remove(statusId));
-  log.info({ projectId, statusId }, '[status] deleted');
+  let tasksCount = 0;
+  let target: string | null = null;
+  let movedTasks = 0;
+  await mutateStatusSet(
+    session,
+    input,
+    'delete',
+    (set, statuses) => {
+      tasksCount = statuses.find((status) => status.id === statusId)?.tasksCount ?? 0;
+      if (tasksCount > 0 && !moveToStatusId) {
+        log.warn({ projectId, statusId, tasksCount }, '[status.deleteStatus] target required');
+      }
+      target = set.remove(statusId, { tasksCount, moveToId: moveToStatusId });
+    },
+    async (tx) => {
+      if (!target) return;
+      movedTasks = await statusRepository.reassignPlacements(
+        tx,
+        workspaceId,
+        projectId,
+        statusId,
+        target,
+      );
+    },
+  );
+  log.info({ projectId, statusId, movedTasks, moveToStatusId: target }, '[status] deleted');
 }

@@ -3,6 +3,7 @@ export interface ProjectListItemDto {
   name: string;
   description: string | null;
   statusesCount: number;
+  tasksCount: number;
 }
 
 export interface ProjectDto {
@@ -12,4 +13,6 @@ export interface ProjectDto {
   name: string;
   description: string | null;
   createdAt: Date;
+  /** Число задач, размещённых в проекте. */
+  tasksCount: number;
 }

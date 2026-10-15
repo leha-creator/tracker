@@ -17,6 +17,14 @@ export const memberRepository = {
     });
   },
 
+  async isMember(workspaceId: string, userId: string): Promise<boolean> {
+    const row = await prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId } },
+      select: { id: true },
+    });
+    return row !== null;
+  },
+
   countOwners(workspaceId: string) {
     return prisma.workspaceMember.count({ where: { workspaceId, role: 'owner' } });
   },

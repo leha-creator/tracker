@@ -25,6 +25,11 @@ export function WorkspaceNav({ slug, name, role }: WorkspaceNavProps) {
   const links = [
     { href: base, label: 'Проекты', isActive: (path: string) => isProjectsPath(base, path) },
     {
+      href: `${base}/tasks`,
+      label: 'Задачи',
+      isActive: (path: string) => path.startsWith(`${base}/tasks`),
+    },
+    {
       href: `${base}/settings/members`,
       label: 'Участники',
       isActive: (path: string) => path.startsWith(`${base}/settings/members`),

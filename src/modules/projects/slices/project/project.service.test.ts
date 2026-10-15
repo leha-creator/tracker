@@ -23,6 +23,7 @@ type ProjectRow = {
   description: string | null;
   createdAt: Date;
   workspace: { slug: string };
+  _count: { placements: number };
 };
 const findInWorkspace = vi.fn<(...args: unknown[]) => Promise<ProjectRow | null>>();
 const countInWorkspace = vi.fn<() => Promise<number>>();
@@ -78,6 +79,7 @@ const projectRow: ProjectRow = {
   description: null,
   createdAt: new Date('2026-10-15'),
   workspace: { slug: 'team' },
+  _count: { placements: 0 },
 };
 
 function allow() {

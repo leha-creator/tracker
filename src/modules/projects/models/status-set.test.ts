@@ -134,4 +134,37 @@ describe('StatusSet.remove', () => {
     expect(() => set.remove('s-3')).toThrow(expect.objectContaining({ code: 'VALIDATION_ERROR' }));
     expect(ids(set)).toEqual(['s-3']);
   });
+
+  it('removes an empty status without a move target', () => {
+    expect(persisted().remove('s-1', { tasksCount: 0 })).toBeNull();
+  });
+
+  it('requires a move target when the status has tasks', () => {
+    const set = persisted();
+    expect(() => set.remove('s-1', { tasksCount: 2 })).toThrow(
+      expect.objectContaining({
+        code: 'VALIDATION_ERROR',
+        fieldErrors: { moveToStatusId: expect.any(Array) },
+      }),
+    );
+    expect(set.removedIds).toEqual([]);
+  });
+
+  it('rejects moving tasks into the removed status', () => {
+    expect(() => persisted().remove('s-1', { tasksCount: 1, moveToId: 's-1' })).toThrow(
+      expect.objectContaining({ code: 'VALIDATION_ERROR' }),
+    );
+  });
+
+  it('rejects a move target outside the set', () => {
+    expect(() => persisted().remove('s-1', { tasksCount: 1, moveToId: 'foreign' })).toThrow(
+      expect.objectContaining({ code: 'NOT_FOUND' }),
+    );
+  });
+
+  it('returns the move target', () => {
+    const set = persisted();
+    expect(set.remove('s-1', { tasksCount: 1, moveToId: 's-3' })).toBe('s-3');
+    expect(ids(set)).toEqual(['s-2', 's-3']);
+  });
 });

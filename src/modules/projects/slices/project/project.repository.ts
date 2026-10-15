@@ -11,6 +11,7 @@ const PROJECT_SELECT = {
   description: true,
   createdAt: true,
   workspace: { select: { slug: true } },
+  _count: { select: { placements: true } },
 } as const;
 
 // Все запросы — с workspaceId в where: проект из чужого пространства не находится (защита от IDOR).
@@ -19,7 +20,12 @@ export const projectRepository = {
     return prisma.project.findMany({
       where: { workspaceId },
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, description: true, _count: { select: { statuses: true } } },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        _count: { select: { statuses: true, placements: true } },
+      },
     });
   },
 
@@ -83,7 +89,10 @@ export const projectRepository = {
     return count;
   },
 
-  /** Удаляет проект пространства (статусы — каскадом); возвращает число удалённых строк. */
+  /**
+   * Удаляет проект пространства; статусы и размещения задач — каскадом (задачи остаются
+   * в пространстве). Возвращает число удалённых строк.
+   */
   async delete(workspaceId: string, projectId: string): Promise<number> {
     const { count } = await prisma.project.deleteMany({ where: { id: projectId, workspaceId } });
     return count;

@@ -47,6 +47,8 @@ import { prisma, type TransactionClient } from '@/shared/db';
 ```
 
 - Новая модель: правка `schema.prisma` → `pnpm db:migrate --name <change>` → миграция появляется в `prisma/migrations/`. Затем `pnpm db:generate`: Prisma 7 после миграции не генерирует клиент сам, и без этого `tsc` не увидит новые модели.
+- `migrate dev` интерактивный. Если миграция требует подтверждения (например, новый уникальный индекс на существующей таблице) или её нужно дописать вручную, создайте каталог `prisma/migrations/<timestamp>_<name>/` и сгенерируйте SQL: `pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script -o <каталог>/migration.sql`. После правки примените миграцию через `pnpm db:deploy`.
+- То, чего нет в схеме Prisma, дописывается в SQL миграции вручную с комментарием. Пример — `add_tasks`: `COLLATE "C"` для `TaskPlacement.position` и триггер снятия ответственного. Drift такие правки не дают: `migrate diff --from-config-datasource --to-schema …` после применения возвращает пустую миграцию.
 
 ## Зависимости
 

@@ -6,4 +6,6 @@ export interface ProjectStatusDto {
   category: StatusCategory;
   color: StatusColor;
   position: number;
+  /** Число задач проекта в этом статусе. */
+  tasksCount: number;
 }
