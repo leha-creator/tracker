@@ -99,6 +99,22 @@ function ConfiguredApp({ app }: { app: NonNullable<GithubAppSetupDto['app']> }) 
           )}
         </dd>
       </dl>
+      <div className="grid gap-1 rounded-md bg-muted px-3 py-2">
+        <p className="font-medium">Остался один шаг на GitHub</p>
+        <p className="text-muted-foreground">
+          Для входа через GitHub нужен email пользователя, а это право GitHub не даёт задать при
+          создании. Откройте настройки приложения на GitHub → <b>Permissions & events</b> →{' '}
+          <b>Account permissions</b> → <b>Email addresses</b>: <b>Read-only</b> и сохраните.
+        </p>
+        <a
+          href={app.settingsUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="w-fit text-primary hover:underline"
+        >
+          Настройки приложения на GitHub
+        </a>
+      </div>
       <div className="flex flex-wrap gap-2">
         <ConfirmActionDialog
           action={deleteGithubAppAction}

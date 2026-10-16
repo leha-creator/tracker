@@ -8,13 +8,16 @@ export const MANIFEST_STATE_TTL_MS = 60 * 60 * 1000;
 /** Контекст HKDF: ключ не совпадает с ключами Better Auth и state установки. */
 const HKDF_INFO = 'tasker:github-app-manifest-state';
 
-/** Права приложения: только чтение (docs/github.md). */
+/**
+ * Права приложения: только чтение (docs/github.md). Право пользователя «Email addresses» манифест
+ * не принимает (GitHub отвечает «Default permission … is not included in the list») — его
+ * администратор включает в настройках приложения после создания.
+ */
 const PERMISSIONS = {
   metadata: 'read',
   contents: 'read',
   pull_requests: 'read',
   checks: 'read',
-  email_addresses: 'read',
 } as const;
 
 const EVENTS = ['pull_request', 'pull_request_review', 'push', 'create', 'delete', 'check_suite'];

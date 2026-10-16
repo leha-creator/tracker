@@ -29,6 +29,7 @@ export interface GithubAppConfigInput {
   name: string;
   htmlUrl: string;
   ownerLogin: string | null;
+  ownerType: string | null;
   clientId: string;
   clientSecret: string;
   privateKey: string;
@@ -43,6 +44,7 @@ export interface StoredGithubAppInfo {
   name: string;
   htmlUrl: string;
   ownerLogin: string | null;
+  ownerType: string | null;
   webhookActive: boolean;
   createdAt: Date;
 }
@@ -178,6 +180,7 @@ export async function getStoredGithubAppInfo(): Promise<StoredGithubAppInfo | nu
       name: true,
       htmlUrl: true,
       ownerLogin: true,
+      ownerType: true,
       webhookActive: true,
       createdAt: true,
     },
@@ -196,6 +199,7 @@ export async function saveGithubAppConfig(
     name: input.name,
     htmlUrl: input.htmlUrl,
     ownerLogin: input.ownerLogin,
+    ownerType: input.ownerType,
     clientId: input.clientId,
     clientSecret: encryptSecret(input.clientSecret, secret),
     privateKey: encryptSecret(input.privateKey, secret),

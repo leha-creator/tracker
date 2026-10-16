@@ -856,6 +856,8 @@ model GithubAppConfig {
   htmlUrl       String
   /// Владелец приложения на GitHub (пользователь или организация).
   ownerLogin    String?
+  /// "User" | "Organization": от него зависит адрес настроек приложения на GitHub.
+  ownerType     String?
   clientId      String
   clientSecret  String
   privateKey    String

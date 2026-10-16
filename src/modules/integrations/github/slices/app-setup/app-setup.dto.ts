@@ -11,6 +11,8 @@ export interface GithubAppSetupDto {
     name: string;
     slug: string;
     htmlUrl: string;
+    /** Права и события приложения на GitHub. */
+    settingsUrl: string;
     ownerLogin: string | null;
     webhookActive: boolean;
     createdAt: string;

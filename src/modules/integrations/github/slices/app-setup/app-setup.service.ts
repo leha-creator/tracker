@@ -31,6 +31,18 @@ const log = createLogger('github.app-setup');
 /** Причина ошибки неверного state (для кода ошибки на странице админки). */
 export const INVALID_MANIFEST_STATE = 'invalid_manifest_state';
 
+/** Настройки приложения на GitHub (права и события): у приложения организации — свой адрес. */
+function appSettingsUrl(app: {
+  slug: string;
+  ownerLogin: string | null;
+  ownerType: string | null;
+}) {
+  const slug = encodeURIComponent(app.slug);
+  return app.ownerType === 'Organization' && app.ownerLogin
+    ? `https://github.com/organizations/${encodeURIComponent(app.ownerLogin)}/settings/apps/${slug}/permissions`
+    : `https://github.com/settings/apps/${slug}/permissions`;
+}
+
 /** Состояние GitHub App для админки (только администратор ресурса). */
 export async function getGithubAppSetup(): Promise<GithubAppSetupDto> {
   await requireAdmin();
@@ -48,6 +60,7 @@ export async function getGithubAppSetup(): Promise<GithubAppSetupDto> {
       name: stored.name,
       slug: stored.slug,
       htmlUrl: stored.htmlUrl,
+      settingsUrl: appSettingsUrl(stored),
       ownerLogin: stored.ownerLogin,
       webhookActive: stored.webhookActive,
       createdAt: stored.createdAt.toISOString(),
@@ -89,7 +102,7 @@ interface ManifestConversion {
   slug?: string;
   name: string;
   html_url: string;
-  owner?: { login?: string } | null;
+  owner?: { login?: string; type?: string } | null;
   client_id: string;
   client_secret: string;
   webhook_secret: string | null;
@@ -138,6 +151,7 @@ export async function completeGithubAppManifest(input: {
       name: data.name,
       htmlUrl: data.html_url,
       ownerLogin: data.owner?.login ?? null,
+      ownerType: data.owner?.type ?? null,
       clientId: data.client_id,
       clientSecret: data.client_secret,
       privateKey: data.pem,

@@ -31,7 +31,7 @@ describe('buildAppManifest', () => {
       request_oauth_on_install: false,
       hook_attributes: { url: 'https://tracker.example.com/api/webhooks/github', active: true },
     });
-    expect(Object.values(manifest.default_permissions)).toEqual(Array(5).fill('read') as string[]);
+    expect(Object.values(manifest.default_permissions)).toEqual(Array(4).fill('read') as string[]);
     expect(manifest.default_events).toContain('pull_request');
   });
 
