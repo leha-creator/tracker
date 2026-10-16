@@ -39,7 +39,7 @@ export interface WorkspaceContext {
 const findMembership = cache((workspaceId: string, userId: string) =>
   prisma.workspaceMember.findUnique({
     where: { workspaceId_userId: { workspaceId, userId } },
-    select: { id: true, role: true, canManageProjects: true },
+    select: { id: true, role: true, canManageProjects: true, canManageDocuments: true },
   }),
 );
 
@@ -50,7 +50,10 @@ const findWorkspaceBySlug = cache((slug: string, userId: string) =>
       id: true,
       slug: true,
       name: true,
-      members: { where: { userId }, select: { id: true, role: true, canManageProjects: true } },
+      members: {
+        where: { userId },
+        select: { id: true, role: true, canManageProjects: true, canManageDocuments: true },
+      },
     },
   }),
 );
@@ -97,6 +100,7 @@ export async function requireWorkspaceAccess(
 
 const PERMISSION_DENIED_MESSAGES: Record<WorkspacePermission, string> = {
   manageProjects: 'Недостаточно прав для управления проектами',
+  manageDocuments: 'Недостаточно прав для управления документами',
 };
 
 /**

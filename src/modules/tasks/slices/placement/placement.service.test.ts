@@ -79,7 +79,7 @@ beforeEach(() => {
     workspaceId: 'ws-1',
     memberId: 'm-1',
     role: 'member',
-    permissions: { manageProjects: false },
+    permissions: { manageProjects: false, manageDocuments: false },
   });
   taskExists.mockResolvedValue(true);
   findStatus.mockResolvedValue({ id: S2, projectId: PROJECT_ID, category: 'in_progress' });

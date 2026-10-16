@@ -32,21 +32,29 @@ describe('hasWorkspaceRole', () => {
 });
 
 describe('resolveWorkspacePermissions', () => {
-  it('owner manages projects even without the flag', () => {
-    expect(resolveWorkspacePermissions('owner', { canManageProjects: false })).toEqual({
+  const noFlags = { canManageProjects: false, canManageDocuments: false };
+
+  it('owner has every permission even without flags', () => {
+    expect(resolveWorkspacePermissions('owner', noFlags)).toEqual({
       manageProjects: true,
+      manageDocuments: true,
     });
   });
 
-  it('member without the flag cannot manage projects', () => {
-    expect(resolveWorkspacePermissions('member', { canManageProjects: false })).toEqual({
+  it('member without flags has no permissions', () => {
+    expect(resolveWorkspacePermissions('member', noFlags)).toEqual({
       manageProjects: false,
+      manageDocuments: false,
     });
   });
 
-  it('member with the flag manages projects', () => {
-    expect(resolveWorkspacePermissions('member', { canManageProjects: true })).toEqual({
+  it('member gets each permission from its own flag', () => {
+    expect(resolveWorkspacePermissions('member', { ...noFlags, canManageProjects: true })).toEqual({
       manageProjects: true,
+      manageDocuments: false,
     });
+    expect(resolveWorkspacePermissions('member', { ...noFlags, canManageDocuments: true })).toEqual(
+      { manageProjects: false, manageDocuments: true },
+    );
   });
 });

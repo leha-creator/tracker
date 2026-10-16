@@ -31,6 +31,7 @@ describe('getWorkspaceSections', () => {
     expect(getWorkspaceSections('a', 'member').map((item) => item.label)).toEqual([
       'Проекты',
       'Задачи',
+      'Документы',
       'Участники',
     ]);
     expect(owner.map((item) => item.label)).toContain('Настройки');
@@ -42,6 +43,8 @@ describe('getWorkspaceSections', () => {
     ['/w/a/projects/p1/board', ['Проекты']],
     ['/w/a/tasks', ['Задачи']],
     ['/w/a/tasks/12', ['Задачи']],
+    ['/w/a/docs', ['Документы']],
+    ['/w/a/docs/d1/edit', ['Документы']],
     ['/w/a/settings/members', ['Участники']],
     ['/w/a/members/u1', ['Участники']],
     ['/w/a/settings', ['Настройки']],
@@ -52,6 +55,7 @@ describe('getWorkspaceSections', () => {
   it('не путает пространства с общим префиксом', () => {
     expect(activeLabels(owner, '/w/ab')).toEqual([]);
     expect(activeLabels(owner, '/w/a/tasksx')).toEqual([]);
+    expect(activeLabels(owner, '/w/a/docsx')).toEqual([]);
   });
 });
 

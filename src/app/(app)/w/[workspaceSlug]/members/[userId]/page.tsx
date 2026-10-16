@@ -77,6 +77,9 @@ async function MemberProfile({ params }: Pick<Props, 'params'>) {
             {member.role !== 'owner' && member.canManageProjects && (
               <Badge variant="outline">Управляет проектами</Badge>
             )}
+            {member.role !== 'owner' && member.canManageDocuments && (
+              <Badge variant="outline">Управляет документами</Badge>
+            )}
           </div>
         </div>
         {member.isCurrentUser && (

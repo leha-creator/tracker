@@ -139,6 +139,20 @@ export const viewsRepository = {
       },
     });
   },
+
+  /** Номер, название и категории статусов задач пространства по id (для других модулей). */
+  listTaskSummaries(workspaceId: string, taskIds: string[]) {
+    return prisma.task.findMany({
+      where: { workspaceId, id: { in: taskIds } },
+      orderBy: { number: 'desc' },
+      select: {
+        id: true,
+        number: true,
+        title: true,
+        placements: { select: { status: { select: { category: true } } } },
+      },
+    });
+  },
 };
 
 export type BoardPlacementRow = Awaited<

@@ -107,7 +107,7 @@ function accessAs(role: WorkspaceRole, userId = session.user.id) {
       workspaceId,
       memberId: 'm-1',
       role,
-      permissions: { manageProjects: role === 'owner' },
+      permissions: { manageProjects: role === 'owner', manageDocuments: role === 'owner' },
     }),
   );
 }

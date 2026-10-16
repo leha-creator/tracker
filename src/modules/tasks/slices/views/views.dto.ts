@@ -45,3 +45,14 @@ export interface MemberTaskSummaryDto {
   /** Ближайшие открытые задачи: сначала с ранним сроком, без срока — в конце. */
   openTasks: TaskListItemDto[];
 }
+
+/** Задача кратко — для ссылок из других модулей (документы). */
+export interface TaskSummaryDto {
+  id: string;
+  number: number;
+  /** `#42` */
+  key: string;
+  title: string;
+  /** Во всех проектах задачи статус «Готово». */
+  isDone: boolean;
+}

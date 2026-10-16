@@ -68,7 +68,7 @@ beforeEach(() => {
     workspaceId: 'ws-1',
     memberId: 'm-1',
     role: 'owner',
-    permissions: { manageProjects: true },
+    permissions: { manageProjects: true, manageDocuments: true },
   });
   lockProject.mockResolvedValue(true);
   saveSet.mockReturnValue([]);

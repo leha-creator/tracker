@@ -9,6 +9,8 @@ export interface MemberDto {
   role: WorkspaceRole;
   /** Выданное право управлять проектами (у владельца право есть всегда, флаг не важен). */
   canManageProjects: boolean;
+  /** Выданное право управлять документами (у владельца — всегда). */
+  canManageDocuments: boolean;
   joinedAt: Date;
   isCurrentUser: boolean;
 }
@@ -23,6 +25,8 @@ export interface WorkspaceMemberDto {
   role: WorkspaceRole;
   /** Право управлять проектами: у владельца — всегда. */
   canManageProjects: boolean;
+  /** Выданное право управлять документами (у владельца — всегда). */
+  canManageDocuments: boolean;
   joinedAt: Date;
   registeredAt: Date;
   isCurrentUser: boolean;

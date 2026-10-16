@@ -9,6 +9,7 @@ export { getTaskByNumber } from './slices/task/task.service';
 export {
   getBoardCards,
   getMemberTaskSummary,
+  getTaskSummaries,
   listProjectTasks,
   listTasks,
 } from './slices/views/views.queries';

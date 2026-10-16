@@ -91,4 +91,5 @@ export type {
   BoardCardsDto,
   MemberTaskSummaryDto,
   TaskListPageDto,
+  TaskSummaryDto,
 } from './slices/views/views.dto';

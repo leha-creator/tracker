@@ -10,6 +10,7 @@ import { createLogger } from '@/shared/logger';
 import {
   comparePositions,
   formatTaskKey,
+  isTaskOpen,
   isTaskOverdue,
   MEMBER_DONE_RECENT_DAYS,
   MEMBER_OPEN_TASKS_LIMIT,
@@ -33,6 +34,7 @@ import type {
   BoardCardsDto,
   MemberTaskSummaryDto,
   TaskListPageDto,
+  TaskSummaryDto,
 } from './views.dto';
 import { viewsRepository, type BoardPlacementRow } from './views.repository';
 
@@ -269,4 +271,34 @@ export async function listProjectTasks(
     result.clamped ? query.page : undefined,
   );
   return page;
+}
+
+/** Предел числа задач в одном запросе кратких данных. */
+const TASK_SUMMARIES_LIMIT = 100;
+
+/**
+ * Номер, название и «выполнена ли» задач пространства по id — для ссылок из других модулей
+ * (документы). Чужие и несуществующие id пропускаются.
+ */
+export async function getTaskSummaries(
+  session: AuthSession,
+  workspaceId: string,
+  taskIds: readonly string[],
+): Promise<TaskSummaryDto[]> {
+  await requireWorkspaceAccess(session, workspaceId);
+  const ids = [...new Set(taskIds)].filter(isEntityId).slice(0, TASK_SUMMARIES_LIMIT);
+  if (ids.length === 0) return [];
+
+  const rows = await viewsRepository.listTaskSummaries(workspaceId, ids);
+  log.debug(
+    { workspaceId, userId: session.user.id, requested: taskIds.length, found: rows.length },
+    '[views.getTaskSummaries]',
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    number: row.number,
+    key: formatTaskKey(row.number),
+    title: row.title,
+    isDone: !isTaskOpen(row.placements.map((placement) => placement.status.category)),
+  }));
 }

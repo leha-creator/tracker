@@ -4,7 +4,7 @@
 
 ## Обзор проекта
 
-Tasker — простой таск-трекер с рабочими пространствами, ролями (admin / владелец пространства / участник), канбан-доской и списком задач; задача может находиться в нескольких проектах со своим статусом в каждом. Есть профили пользователей (фото, должность, описание), @упоминания в комментариях и уведомления (в приложении и письмом). Подробности — в [`.ai-factory/DESCRIPTION.md`](.ai-factory/DESCRIPTION.md).
+Tasker — простой таск-трекер с рабочими пространствами, ролями (admin / владелец пространства / участник), канбан-доской и списком задач; задача может находиться в нескольких проектах со своим статусом в каждом. Есть профили пользователей (фото, должность, описание), @упоминания в комментариях и уведомления (в приложении и письмом). У каждого пространства — раздел «Документы»: папки, теги, Markdown-заметки и файлы с просмотром, привязка к задачам. Подробности — в [`.ai-factory/DESCRIPTION.md`](.ai-factory/DESCRIPTION.md).
 
 ## Технологический стек
 
@@ -28,7 +28,7 @@ tasker/
 ├── .claude/                  # Скиллы и субагенты
 ├── .github/workflows/ci.yml  # CI/CD: pnpm check + build, миграции на чистом Postgres, образ и smoke-тест; на main — GHCR и деплой
 ├── prisma/
-│   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …), пространств (Workspace, WorkspaceMember, WorkspaceInvitation), проектов (Project, ProjectStatus), задач (Task, TaskPlacement, WorkspaceTaskCounter, TaskComment, TaskAttachment), профилей (UserProfile), уведомлений (Notification, NotificationPreference)
+│   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …), пространств (Workspace, WorkspaceMember, WorkspaceInvitation), проектов (Project, ProjectStatus), задач (Task, TaskPlacement, WorkspaceTaskCounter, TaskComment, TaskAttachment), профилей (UserProfile), уведомлений (Notification, NotificationPreference), документов (DocumentFolder, Document, DocumentTag, DocumentTagAssignment, TaskDocumentLink)
 │   └── migrations/
 ├── prisma.config.ts          # Подключение Prisma CLI (DATABASE_URL, миграции)
 ├── src/
@@ -40,21 +40,24 @@ tasker/
 │   │   │                     # /workspaces/new, /w/[workspaceSlug] (+ settings, settings/members), /invite/[invitationId],
 │   │   │                     # /w/[workspaceSlug]/projects/new, projects/[projectId]/{board,list,settings},
 │   │   │                     # /w/[workspaceSlug]/tasks (+ new, [taskNumber]), /w/[workspaceSlug]/members/[userId] (публичный профиль),
+│   │   │                     # /w/[workspaceSlug]/docs (+ new, [documentId], [documentId]/edit) — документы пространства,
 │   │   │                     # /profile (+ notifications, account), /notifications
 │   │   └── api/
 │   │       ├── auth/[...all]/ # Better Auth handler
 │   │       ├── attachments/[attachmentId]/ # GET — проверка доступа и 302 на presigned-ссылку файла
+│   │       ├── documents/[documentId]/file/ # GET — файл документа (302 на presigned-ссылку) или Markdown заметки
 │   │       ├── users/[userId]/avatar/ # GET — фото профиля (общее пространство или admin), 302 на presigned-ссылку
 │   │       ├── w/[workspaceSlug]/members/[userId]/card/ # GET — данные карточки участника при наведении
 │   │       ├── notifications/ # GET — последние уведомления и счётчик (+ unread-count для опроса)
 │   │       └── health/       # GET /api/health — состояние БД и хранилища
 │   ├── modules/              # Доменные модули
 │   │   ├── auth/             # Вход, регистрация, выход: Zod-схемы, сервис, Server Actions
-│   │   ├── workspaces/       # Пространства, участники (+ право «Управление проектами»), приглашения (index.ts — сервер, client.ts — клиент)
+│   │   ├── workspaces/       # Пространства, участники (+ права «Управление проектами» и «Управление документами»), приглашения (index.ts — сервер, client.ts — клиент)
 │   │   ├── projects/         # Проекты и статусы-колонки: модели (StatusSet), срезы project/status
 │   │   ├── tasks/            # Задачи: модели (TaskPlacement, позиции, запрос списка TaskListQuery, права на комментарии, правила вложений), @упоминания (comment-mentions), срезы task/placement/comment/attachment/views; зависит от projects, workspaces и notifications
 │   │   ├── profiles/         # Профиль: UserProfile (должность, описание, ключ фото), фото по presigned POST, имя и User.image через auth.api.updateUser; зависит от workspaces
 │   │   ├── notifications/    # Уведомления: notify/notifyByEmail для других модулей (никогда не бросают), настройки «тип × канал», письма через after(); ни от кого не зависит
+│   │   ├── documents/        # Документы пространства: папки (дерево), Markdown-заметки (версия), файлы (presigned POST, квота), теги, связи с задачами; зависит от tasks
 │   │   └── admin/            # Администрирование ресурса: модели (правила над пользователями, запрос списка), срез user (чтение — репозиторий, изменения — плагин admin через callAdminApi); зависит от workspaces и profiles
 │   ├── components/
 │   │   ├── layout/           # Каркас: PageContainer (ширина страниц), WorkspaceSections и TabLink (навигация),
@@ -72,6 +75,8 @@ tasker/
 │   │   ├── users/            # UserAvatar (фото или инициалы), UserHoverCard (карточка участника при наведении, данные — по запросу)
 │   │   ├── profile/          # Свой профиль: вкладки, фото, форма «О себе», матрица настроек уведомлений
 │   │   ├── notifications/    # Колокольчик (опрос счётчика), элемент и лента уведомлений
+│   │   ├── documents/        # Раздел «Документы»: дерево папок, список и фильтры (URL), загрузка, диалоги; markdown/ — безопасный рендер;
+│   │   │                     # note-editor/ — редактор заметки; viewers/ — просмотр картинок, PDF, текста, CSV, JSON, медиа; task-documents/ — раздел в задаче
 │   │   └── ui/               # shadcn/ui (генерируется CLI, вручную не править)
 │   ├── lib/                  # utils.ts — cn() для shadcn; use-prefers-reduced-motion.ts — общий хук (доска, статусы)
 │   ├── generated/prisma/     # Сгенерированный Prisma Client (в .gitignore)
@@ -118,7 +123,8 @@ tasker/
 | `src/shared/mail/index.ts` | `sendMail()` — отправка писем через SMTP |
 | `src/modules/workspaces/index.ts` | Пространства, участники, приглашения: actions и read-функции (`client.ts` — для клиентских компонентов) |
 | `src/modules/projects/index.ts` | Проекты и статусы: actions и read-функции (`listProjects`, `getProject`, `listStatuses`, `listWorkspaceStatuses`; `client.ts` — для клиентских компонентов, в т.ч. `moveStatusAction` и чистая функция `reorderStatuses`) |
-| `src/modules/tasks/index.ts` | Задачи, размещения, комментарии и вложения: actions и read-функции (`getTaskByNumber`, `listTaskComments`, `listTaskAttachments`, `getAttachmentDownload`, `listTasks`, `listProjectTasks`, `getBoardCards`, `getMemberTaskSummary`, `parseTaskListParams`; чистые функции упоминаний `extractMentions`, `filterMentionCandidates`, `findMentionQuery`; `client.ts` — для клиентских компонентов, в т.ч. `movePlacementAction` и чистые функции переноса карточек) |
+| `src/modules/tasks/index.ts` | Задачи, размещения, комментарии и вложения: actions и read-функции (`getTaskByNumber`, `listTaskComments`, `listTaskAttachments`, `getAttachmentDownload`, `listTasks`, `listProjectTasks`, `getBoardCards`, `getMemberTaskSummary`, `getTaskSummaries`, `parseTaskListParams`; чистые функции упоминаний `extractMentions`, `filterMentionCandidates`, `findMentionQuery`; `client.ts` — для клиентских компонентов, в т.ч. `movePlacementAction` и чистые функции переноса карточек) |
+| `src/modules/documents/index.ts` | Документы пространства: `listDocuments`, `parseDocumentListParams`, `listFolderTree`, `getDocument`, `getDocumentText`, `getDocumentFile` (для `/api/documents/[id]/file`), `getWorkspaceStorageUsage`, `listTags`, `listTaskDocuments`, `listDocumentTasks`; actions папок, заметок, загрузки, тегов и связей с задачами (`client.ts` — в т.ч. `applyMarkdownFormat`, `parseDelimited`) |
 | `src/modules/profiles/index.ts` | Профили: `getMyProfile`, `getProfileCards`, `getAvatarDownload`, `prepareAvatarCleanup`; actions профиля и фото (`client.ts` — в т.ч. `isAvatarUrl`) |
 | `src/modules/notifications/index.ts` | Уведомления: `notify`, `notifyByEmail` (для модулей), `listMyNotifications`, `countMyUnreadNotifications`, `getMyNotificationPreferences`; actions прочтения и настроек (`client.ts`) |
 | `src/modules/admin/index.ts` | Пользователи ресурса: `listAdminUsers`, `parseAdminUserListParams`; actions блокировки, роли, сессий и удаления (`client.ts` — для клиентских компонентов) |

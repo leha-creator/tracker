@@ -26,6 +26,13 @@ describe('setMemberPermissionSchema', () => {
     expect(setMemberPermissionSchema.parse({ ...base, value }).value).toBe(expected);
   });
 
+  it('accepts manageDocuments', () => {
+    expect(
+      setMemberPermissionSchema.parse({ ...base, permission: 'manageDocuments', value: 'true' })
+        .permission,
+    ).toBe('manageDocuments');
+  });
+
   it('rejects unknown permission', () => {
     expect(
       setMemberPermissionSchema.safeParse({ ...base, permission: 'manageAll', value: 'true' })

@@ -89,7 +89,7 @@ function allow() {
       workspaceId,
       memberId: 'm-1',
       role: 'member',
-      permissions: { manageProjects: true },
+      permissions: { manageProjects: true, manageDocuments: true },
     }),
   );
 }
@@ -102,7 +102,7 @@ beforeEach(() => {
     workspaceId: 'ws-1',
     memberId: 'm-1',
     role: 'member',
-    permissions: { manageProjects: false },
+    permissions: { manageProjects: false, manageDocuments: false },
   });
 });
 

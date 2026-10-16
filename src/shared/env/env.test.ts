@@ -40,6 +40,16 @@ describe('parseEnv', () => {
     expect(env.S3_FORCE_PATH_STYLE).toBe(false);
   });
 
+  it('defaults and validates DOCUMENTS_WORKSPACE_QUOTA_MB', () => {
+    expect(parseEnv(VALID_ENV).DOCUMENTS_WORKSPACE_QUOTA_MB).toBe(1024);
+    expect(
+      parseEnv({ ...VALID_ENV, DOCUMENTS_WORKSPACE_QUOTA_MB: '256' }).DOCUMENTS_WORKSPACE_QUOTA_MB,
+    ).toBe(256);
+    expect(() => parseEnv({ ...VALID_ENV, DOCUMENTS_WORKSPACE_QUOTA_MB: '0' })).toThrow(
+      EnvValidationError,
+    );
+  });
+
   it('lists invalid keys without leaking values', () => {
     const source = {
       ...VALID_ENV,

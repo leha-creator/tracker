@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { PERMISSION_FLAGS, type WorkspacePermission } from '@/shared/access/workspace-role';
 import { prisma } from '@/shared/db';
 
 export const memberRepository = {
@@ -11,6 +12,7 @@ export const memberRepository = {
         id: true,
         role: true,
         canManageProjects: true,
+        canManageDocuments: true,
         createdAt: true,
         user: { select: { id: true, name: true, email: true, image: true } },
       },
@@ -33,6 +35,7 @@ export const memberRepository = {
         id: true,
         role: true,
         canManageProjects: true,
+        canManageDocuments: true,
         createdAt: true,
         user: { select: { id: true, name: true, email: true, image: true, createdAt: true } },
       },
@@ -98,10 +101,15 @@ export const memberRepository = {
    * для дополнительных полей участника (поле объявлено с input: false). where с workspaceId —
    * защита от IDOR. Возвращает число изменённых строк.
    */
-  async setCanManageProjects(workspaceId: string, memberId: string, value: boolean) {
+  async setPermission(
+    workspaceId: string,
+    memberId: string,
+    permission: WorkspacePermission,
+    value: boolean,
+  ) {
     const { count } = await prisma.workspaceMember.updateMany({
       where: { id: memberId, workspaceId },
-      data: { canManageProjects: value },
+      data: { [PERMISSION_FLAGS[permission]]: value },
     });
     return count;
   },

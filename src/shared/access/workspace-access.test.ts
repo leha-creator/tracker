@@ -2,12 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AuthSession } from '@/shared/auth';
 
-type Membership = { id: string; role: string; canManageProjects: boolean } | null;
+type Membership = {
+  id: string;
+  role: string;
+  canManageProjects: boolean;
+  canManageDocuments: boolean;
+} | null;
 type WorkspaceRow = {
   id: string;
   slug: string;
   name: string;
-  members: { id: string; role: string; canManageProjects: boolean }[];
+  members: { id: string; role: string; canManageProjects: boolean; canManageDocuments: boolean }[];
 } | null;
 
 const findMember = vi.fn<() => Promise<Membership>>();
@@ -61,14 +66,24 @@ describe('requireWorkspaceAccess', () => {
   });
 
   it('throws FORBIDDEN when member requires owner', async () => {
-    findMember.mockResolvedValue({ id: 'm-1', role: 'member', canManageProjects: false });
+    findMember.mockResolvedValue({
+      id: 'm-1',
+      role: 'member',
+      canManageProjects: false,
+      canManageDocuments: false,
+    });
     await expect(requireWorkspaceAccess(sessionOf(), 'ws-1', 'owner')).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
   });
 
   it('throws FORBIDDEN for unknown role in DB', async () => {
-    findMember.mockResolvedValue({ id: 'm-1', role: 'admin', canManageProjects: false });
+    findMember.mockResolvedValue({
+      id: 'm-1',
+      role: 'admin',
+      canManageProjects: false,
+      canManageDocuments: false,
+    });
     await expect(requireWorkspaceAccess(sessionOf(), 'ws-1')).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
@@ -82,13 +97,18 @@ describe('requireWorkspaceAccess', () => {
   });
 
   it('returns access for owner', async () => {
-    findMember.mockResolvedValue({ id: 'm-1', role: 'owner', canManageProjects: false });
+    findMember.mockResolvedValue({
+      id: 'm-1',
+      role: 'owner',
+      canManageProjects: false,
+      canManageDocuments: false,
+    });
     await expect(requireWorkspaceAccess(sessionOf(), 'ws-1', 'owner')).resolves.toEqual({
       userId: 'user-1',
       workspaceId: 'ws-1',
       memberId: 'm-1',
       role: 'owner',
-      permissions: { manageProjects: true },
+      permissions: { manageProjects: true, manageDocuments: true },
     });
   });
 });
@@ -119,7 +139,7 @@ describe('requireWorkspaceAccessBySlug', () => {
     getSession.mockResolvedValue(sessionOf());
     findWorkspace.mockResolvedValue({
       ...workspace,
-      members: [{ id: 'm-1', role: 'member', canManageProjects: false }],
+      members: [{ id: 'm-1', role: 'member', canManageProjects: false, canManageDocuments: false }],
     });
     await expect(requireWorkspaceAccessBySlug('team', 'owner')).rejects.toThrow('NEXT_NOT_FOUND');
   });
@@ -128,7 +148,7 @@ describe('requireWorkspaceAccessBySlug', () => {
     getSession.mockResolvedValue(sessionOf());
     findWorkspace.mockResolvedValue({
       ...workspace,
-      members: [{ id: 'm-1', role: 'member', canManageProjects: false }],
+      members: [{ id: 'm-1', role: 'member', canManageProjects: false, canManageDocuments: false }],
     });
     const context = await requireWorkspaceAccessBySlug('team');
     expect(context.workspace).toEqual(workspace);
@@ -137,7 +157,7 @@ describe('requireWorkspaceAccessBySlug', () => {
       workspaceId: 'ws-1',
       memberId: 'm-1',
       role: 'member',
-      permissions: { manageProjects: false },
+      permissions: { manageProjects: false, manageDocuments: false },
     });
   });
 });
@@ -151,23 +171,69 @@ describe('requireWorkspacePermission', () => {
   });
 
   it('throws FORBIDDEN for member without the flag', async () => {
-    findMember.mockResolvedValue({ id: 'm-1', role: 'member', canManageProjects: false });
+    findMember.mockResolvedValue({
+      id: 'm-1',
+      role: 'member',
+      canManageProjects: false,
+      canManageDocuments: false,
+    });
     await expect(
       requireWorkspacePermission(sessionOf(), 'ws-1', 'manageProjects'),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('allows member with the flag', async () => {
-    findMember.mockResolvedValue({ id: 'm-1', role: 'member', canManageProjects: true });
+    findMember.mockResolvedValue({
+      id: 'm-1',
+      role: 'member',
+      canManageProjects: true,
+      canManageDocuments: false,
+    });
     await expect(
       requireWorkspacePermission(sessionOf(), 'ws-1', 'manageProjects'),
-    ).resolves.toMatchObject({ role: 'member', permissions: { manageProjects: true } });
+    ).resolves.toMatchObject({
+      role: 'member',
+      permissions: { manageProjects: true, manageDocuments: false },
+    });
+  });
+
+  it('checks manageDocuments by its own flag', async () => {
+    findMember.mockResolvedValue({
+      id: 'm-1',
+      role: 'member',
+      canManageProjects: true,
+      canManageDocuments: false,
+    });
+    await expect(
+      requireWorkspacePermission(sessionOf(), 'ws-1', 'manageDocuments'),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Недостаточно прав для управления документами',
+    });
+
+    findMember.mockResolvedValue({
+      id: 'm-1',
+      role: 'member',
+      canManageProjects: false,
+      canManageDocuments: true,
+    });
+    await expect(
+      requireWorkspacePermission(sessionOf(), 'ws-1', 'manageDocuments'),
+    ).resolves.toMatchObject({ permissions: { manageProjects: false, manageDocuments: true } });
   });
 
   it('allows owner without the flag', async () => {
-    findMember.mockResolvedValue({ id: 'm-1', role: 'owner', canManageProjects: false });
+    findMember.mockResolvedValue({
+      id: 'm-1',
+      role: 'owner',
+      canManageProjects: false,
+      canManageDocuments: false,
+    });
     await expect(
       requireWorkspacePermission(sessionOf(), 'ws-1', 'manageProjects'),
-    ).resolves.toMatchObject({ role: 'owner', permissions: { manageProjects: true } });
+    ).resolves.toMatchObject({
+      role: 'owner',
+      permissions: { manageProjects: true, manageDocuments: true },
+    });
   });
 });

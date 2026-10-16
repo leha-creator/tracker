@@ -125,7 +125,7 @@ function accessAs(role: WorkspaceRole) {
       workspaceId,
       memberId: 'm-1',
       role,
-      permissions: { manageProjects: role === 'owner' },
+      permissions: { manageProjects: role === 'owner', manageDocuments: role === 'owner' },
     }),
   );
 }

@@ -32,6 +32,11 @@ export function getWorkspaceSections(slug: string, role: WorkspaceRole): NavItem
     },
     { href: `${base}/tasks`, label: 'Задачи', isActive: (path) => isWithin(path, `${base}/tasks`) },
     {
+      href: `${base}/docs`,
+      label: 'Документы',
+      isActive: (path) => isWithin(path, `${base}/docs`),
+    },
+    {
       href: `${base}/settings/members`,
       label: 'Участники',
       // Профиль участника открывается из «Участников» — вкладка остаётся активной.

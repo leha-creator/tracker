@@ -30,7 +30,11 @@ import {
   type FormState,
   type MemberDto,
 } from '@/modules/workspaces/client';
-import { WORKSPACE_ROLES, type WorkspaceRole } from '@/shared/access/workspace-role';
+import {
+  WORKSPACE_ROLES,
+  type WorkspacePermission,
+  type WorkspaceRole,
+} from '@/shared/access/workspace-role';
 
 import { ConfirmActionDialog } from '@/components/forms/confirm-action-dialog';
 import { WORKSPACE_ROLE_LABELS } from './role-label';
@@ -58,6 +62,7 @@ export function MembersTable({
           <TableHead>Участник</TableHead>
           <TableHead className="w-40">Роль</TableHead>
           <TableHead className="w-32">Проекты</TableHead>
+          <TableHead className="w-32">Документы</TableHead>
           <TableHead className="w-44 text-right">
             <span className="sr-only">Действия</span>
           </TableHead>
@@ -151,7 +156,20 @@ function MemberRow({
         )}
       </TableCell>
       <TableCell>
-        <ProjectsPermissionCell workspaceId={workspaceId} member={member} canManage={canManage} />
+        <MemberPermissionCell
+          workspaceId={workspaceId}
+          member={member}
+          permission="manageProjects"
+          canManage={canManage}
+        />
+      </TableCell>
+      <TableCell>
+        <MemberPermissionCell
+          workspaceId={workspaceId}
+          member={member}
+          permission="manageDocuments"
+          canManage={canManage}
+        />
       </TableCell>
       <TableCell className="text-right">
         {member.isCurrentUser ? (
@@ -188,42 +206,51 @@ function MemberRow({
   );
 }
 
+const PERMISSION_LABELS: Record<WorkspacePermission, string> = {
+  manageProjects: 'Управление проектами',
+  manageDocuments: 'Управление документами',
+};
+
+function hasPermissionFlag(member: MemberDto, permission: WorkspacePermission): boolean {
+  return permission === 'manageProjects' ? member.canManageProjects : member.canManageDocuments;
+}
+
 /**
- * Право «Управление проектами». У владельца оно есть всегда; участнику его выдаёт владелец.
- * Пока запрос идёт — показываем запрошенное значение, после ответа — значение сервера.
+ * Право участника сверх роли («Управление проектами», «Управление документами»). У владельца
+ * оно есть всегда; участнику его выдаёт владелец. Пока запрос идёт — показываем запрошенное
+ * значение, после ответа — значение сервера.
  */
-function ProjectsPermissionCell({
+function MemberPermissionCell({
   workspaceId,
   member,
+  permission,
   canManage,
 }: {
   workspaceId: string;
   member: MemberDto;
+  permission: WorkspacePermission;
   canManage: boolean;
 }) {
   const [state, action, pending] = useActionState<FormState, FormData>(
     setMemberPermissionAction,
     null,
   );
-  const [requested, setRequested] = useState(member.canManageProjects);
+  const granted = hasPermissionFlag(member, permission);
+  const [requested, setRequested] = useState(granted);
   const error = state && !state.ok ? state.error.message : undefined;
 
   if (member.role === 'owner') {
     return <span className="text-sm text-muted-foreground">Всегда</span>;
   }
   if (!canManage) {
-    return (
-      <span className="text-sm text-muted-foreground">
-        {member.canManageProjects ? 'Управляет' : 'Нет'}
-      </span>
-    );
+    return <span className="text-sm text-muted-foreground">{granted ? 'Управляет' : 'Нет'}</span>;
   }
 
   function toggle(value: boolean) {
     const formData = new FormData();
     formData.set('workspaceId', workspaceId);
     formData.set('memberId', member.id);
-    formData.set('permission', 'manageProjects');
+    formData.set('permission', permission);
     formData.set('value', String(value));
     setRequested(value);
     startTransition(() => action(formData));
@@ -232,10 +259,10 @@ function ProjectsPermissionCell({
   return (
     <div className="grid gap-1">
       <Switch
-        checked={pending ? requested : member.canManageProjects}
+        checked={pending ? requested : granted}
         disabled={pending}
         onCheckedChange={toggle}
-        aria-label={`Управление проектами: ${member.name}`}
+        aria-label={`${PERMISSION_LABELS[permission]}: ${member.name}`}
       />
       {error && (
         <p role="alert" className="text-xs text-destructive">

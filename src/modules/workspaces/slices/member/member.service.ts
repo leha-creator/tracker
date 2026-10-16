@@ -52,6 +52,7 @@ export async function listMembers(session: AuthSession, workspaceId: string): Pr
         image: row.user.image,
         role,
         canManageProjects: row.canManageProjects,
+        canManageDocuments: row.canManageDocuments,
         joinedAt: row.createdAt,
         isCurrentUser: row.user.id === session.user.id,
       },
@@ -96,6 +97,7 @@ export async function getMember(
     image: row.user.image,
     role,
     canManageProjects: role === 'owner' || row.canManageProjects,
+    canManageDocuments: role === 'owner' || row.canManageDocuments,
     joinedAt: row.createdAt,
     registeredAt: row.user.createdAt,
     isCurrentUser: row.user.id === session.user.id,
@@ -244,7 +246,7 @@ export async function setMemberPermission(
     throw error;
   }
 
-  const count = await memberRepository.setCanManageProjects(workspaceId, memberId, value);
+  const count = await memberRepository.setPermission(workspaceId, memberId, permission, value);
   if (count === 0) throw new NotFoundError('Участник не найден');
   log.info(
     { workspaceId, memberId, permission, value, byUserId: session.user.id },

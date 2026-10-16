@@ -7,5 +7,6 @@ export {
   deleteObjects,
   headObject,
   readObjectPrefix,
+  readObjectText,
 } from './objects';
 export type { UploadPost } from './objects';

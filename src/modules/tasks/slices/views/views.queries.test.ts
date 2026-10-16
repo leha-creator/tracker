@@ -19,6 +19,7 @@ const memberSummary =
     ) => Promise<unknown>
   >();
 const isWorkspaceMember = vi.fn<(ws: string, userId: string) => Promise<boolean>>();
+const listTaskSummaries = vi.fn<(ws: string, ids: string[]) => Promise<unknown[]>>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
@@ -41,10 +42,11 @@ vi.mock('./views.repository', () => ({
       userId: string,
       options: { today: Date; since: Date; take: number },
     ) => memberSummary(ws, userId, options),
+    listTaskSummaries: (ws: string, ids: string[]) => listTaskSummaries(ws, ids),
   },
 }));
 
-const { getBoardCards, getMemberTaskSummary, listProjectTasks, listTasks } =
+const { getBoardCards, getMemberTaskSummary, getTaskSummaries, listProjectTasks, listTasks } =
   await import('./views.queries');
 const { defaultTaskListQuery, TASK_LIST_PAGE_SIZE } = await import('../../models');
 
@@ -90,7 +92,7 @@ beforeEach(() => {
     workspaceId: 'ws-1',
     memberId: 'm-1',
     role: 'member',
-    permissions: { manageProjects: false },
+    permissions: { manageProjects: false, manageDocuments: false },
   });
 });
 
@@ -271,5 +273,27 @@ describe('getMemberTaskSummary', () => {
       openTasks: [],
     });
     expect((await getMemberTaskSummary(session, 'ws-1', 'user-2')).lastActivityAt).toBeNull();
+  });
+});
+
+describe('getTaskSummaries', () => {
+  const T1 = '0192f3a0-0000-7000-8000-0000000000a1';
+  const T2 = '0192f3a0-0000-7000-8000-0000000000a2';
+
+  it('maps keys and done state, skipping malformed ids', async () => {
+    listTaskSummaries.mockResolvedValue([
+      { id: T2, number: 42, title: 'Готовая', placements: [{ status: { category: 'done' } }] },
+      { id: T1, number: 7, title: 'Без проекта', placements: [] },
+    ]);
+    await expect(getTaskSummaries(session, 'ws-1', [T1, T2, T1, '../x'])).resolves.toEqual([
+      { id: T2, number: 42, key: '#42', title: 'Готовая', isDone: true },
+      { id: T1, number: 7, key: '#7', title: 'Без проекта', isDone: false },
+    ]);
+    expect(listTaskSummaries).toHaveBeenCalledWith('ws-1', [T1, T2]);
+  });
+
+  it('does not query without ids', async () => {
+    await expect(getTaskSummaries(session, 'ws-1', [])).resolves.toEqual([]);
+    expect(listTaskSummaries).not.toHaveBeenCalled();
   });
 });

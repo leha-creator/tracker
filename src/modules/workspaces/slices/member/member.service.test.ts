@@ -11,8 +11,8 @@ const requireWorkspaceAccess =
   >();
 const findInWorkspace = vi.fn<() => Promise<{ id: string; userId: string; role: string } | null>>();
 const countOwners = vi.fn<() => Promise<number>>();
-const setCanManageProjects =
-  vi.fn<(ws: string, memberId: string, value: boolean) => Promise<number>>();
+const setPermission =
+  vi.fn<(ws: string, memberId: string, permission: string, value: boolean) => Promise<number>>();
 const isMember = vi.fn<(ws: string, userId: string) => Promise<boolean>>();
 const countByUsers = vi.fn<(userIds: string[]) => Promise<Map<string, number>>>();
 const listSoleOwned =
@@ -33,8 +33,7 @@ vi.mock('./member.repository', () => ({
   memberRepository: {
     findInWorkspace: () => findInWorkspace(),
     countOwners: () => countOwners(),
-    setCanManageProjects: (...args: Parameters<typeof setCanManageProjects>) =>
-      setCanManageProjects(...args),
+    setPermission: (...args: Parameters<typeof setPermission>) => setPermission(...args),
     listByWorkspace: vi.fn(),
     isMember: (...args: Parameters<typeof isMember>) => isMember(...args),
     countByUsers: (...args: Parameters<typeof countByUsers>) => countByUsers(...args),
@@ -83,7 +82,7 @@ function accessAs(role: WorkspaceRole) {
       workspaceId,
       memberId: 'm-self',
       role,
-      permissions: { manageProjects: role === 'owner' },
+      permissions: { manageProjects: role === 'owner', manageDocuments: role === 'owner' },
     });
   });
 }
@@ -183,14 +182,14 @@ describe('setMemberPermission', () => {
   it('forbids non-owner', async () => {
     accessAs('member');
     await expect(setMemberPermission(session, input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    expect(setCanManageProjects).not.toHaveBeenCalled();
+    expect(setPermission).not.toHaveBeenCalled();
   });
 
   it('returns NOT_FOUND for member of another workspace', async () => {
     accessAs('owner');
     findInWorkspace.mockResolvedValue(null);
     await expect(setMemberPermission(session, input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    expect(setCanManageProjects).not.toHaveBeenCalled();
+    expect(setPermission).not.toHaveBeenCalled();
   });
 
   it('rejects configuring an owner', async () => {
@@ -199,15 +198,23 @@ describe('setMemberPermission', () => {
     await expect(setMemberPermission(session, input)).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
     });
-    expect(setCanManageProjects).not.toHaveBeenCalled();
+    expect(setPermission).not.toHaveBeenCalled();
   });
 
   it('grants the permission to a member', async () => {
     accessAs('owner');
     findInWorkspace.mockResolvedValue({ id: 'm-2', userId: 'user-2', role: 'member' });
-    setCanManageProjects.mockResolvedValue(1);
+    setPermission.mockResolvedValue(1);
     await setMemberPermission(session, input);
-    expect(setCanManageProjects).toHaveBeenCalledWith('ws-1', 'm-2', true);
+    expect(setPermission).toHaveBeenCalledWith('ws-1', 'm-2', 'manageProjects', true);
+  });
+
+  it('grants manageDocuments with its own flag', async () => {
+    accessAs('owner');
+    findInWorkspace.mockResolvedValue({ id: 'm-2', userId: 'user-2', role: 'member' });
+    setPermission.mockResolvedValue(1);
+    await setMemberPermission(session, { ...input, permission: 'manageDocuments', value: false });
+    expect(setPermission).toHaveBeenCalledWith('ws-1', 'm-2', 'manageDocuments', false);
   });
 });
 
@@ -252,6 +259,7 @@ describe('getMember', () => {
     id: 'm-2',
     role: 'member',
     canManageProjects: false,
+    canManageDocuments: false,
     createdAt: new Date('2026-02-01'),
     user: {
       id: 'user-2',
@@ -280,6 +288,16 @@ describe('getMember', () => {
     accessAs('member');
     findByUser.mockResolvedValue({ ...row, role: 'owner' });
     expect((await getMember(session, 'ws-1', 'user-2')).canManageProjects).toBe(true);
+  });
+
+  it('owners always manage documents, members — by the flag', async () => {
+    accessAs('member');
+    findByUser.mockResolvedValue({ ...row, role: 'owner' });
+    expect((await getMember(session, 'ws-1', 'user-2')).canManageDocuments).toBe(true);
+    findByUser.mockResolvedValue({ ...row, canManageDocuments: true });
+    expect((await getMember(session, 'ws-1', 'user-2')).canManageDocuments).toBe(true);
+    findByUser.mockResolvedValue(row);
+    expect((await getMember(session, 'ws-1', 'user-2')).canManageDocuments).toBe(false);
   });
 
   it('hides non-members', async () => {

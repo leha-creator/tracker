@@ -109,6 +109,34 @@ export async function readObjectPrefix(key: string, bytes: number): Promise<Uint
 }
 
 /**
+ * Начало объекта как текст UTF-8 (для просмотра текстовых файлов): не больше `maxBytes`.
+ * `truncated` — объект длиннее лимита. Неполная последняя последовательность UTF-8 заменяется
+ * символом U+FFFD, а не роняет чтение.
+ */
+export async function readObjectText(
+  key: string,
+  maxBytes: number,
+): Promise<{ text: string; truncated: boolean }> {
+  try {
+    // На байт больше лимита: так видно, что объект длиннее, без отдельного HeadObject.
+    const result = await getS3Client().send(
+      new GetObjectCommand({ Bucket: getBucketName(), Key: key, Range: `bytes=0-${maxBytes}` }),
+    );
+    const bytes = result.Body ? await result.Body.transformToByteArray() : new Uint8Array();
+    const truncated = bytes.length > maxBytes;
+    const text = new TextDecoder('utf-8', { fatal: false }).decode(
+      truncated ? bytes.subarray(0, maxBytes) : bytes,
+    );
+    // Ключ не логируем: только объём.
+    log.debug({ bytes: Math.min(bytes.length, maxBytes), truncated }, '[storage] read object text');
+    return { text, truncated };
+  } catch (error) {
+    log.error({ err: error }, '[storage] read object text failed');
+    throw error;
+  }
+}
+
+/**
  * Удаляет объекты пачками. Не бросает исключений: возвращает число ключей, которые удалить
  * не удалось (ошибки логируются).
  */

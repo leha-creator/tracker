@@ -28,6 +28,8 @@ const envSchema = z
      * По умолчанию — S3_ENDPOINT (в Docker сервер ходит в minio:9000, а браузер — в localhost).
      */
     S3_PUBLIC_ENDPOINT: z.url().optional(),
+    /** Квота файлового хранилища одного пространства (раздел «Документы»), МБ. */
+    DOCUMENTS_WORKSPACE_QUOTA_MB: z.coerce.number().int().positive().max(1_048_576).default(1024),
 
     BETTER_AUTH_SECRET: z.string().min(32),
     BETTER_AUTH_URL: z.url(),

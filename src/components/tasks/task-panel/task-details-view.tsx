@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
+import { TaskDocumentsSection } from '@/components/documents/task-documents/task-documents-section';
 import { listProjects, listWorkspaceStatuses } from '@/modules/projects';
 import { getTaskByNumber, listTaskComments, type MentionCandidate } from '@/modules/tasks';
 import { listMembers } from '@/modules/workspaces';
@@ -172,6 +173,17 @@ export async function TaskDetailsView({
               <TaskAttachmentsSection
                 session={session}
                 workspaceId={workspace.id}
+                taskId={task.id}
+              />
+            </Suspense>
+          </section>
+
+          <section aria-labelledby="task-documents-heading" className="grid gap-3">
+            <Suspense fallback={<div className="h-16 animate-pulse rounded-xl bg-muted" />}>
+              <TaskDocumentsSection
+                session={session}
+                workspaceId={workspace.id}
+                workspaceSlug={workspace.slug}
                 taskId={task.id}
               />
             </Suspense>
