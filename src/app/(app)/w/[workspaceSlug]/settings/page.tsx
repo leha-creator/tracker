@@ -26,7 +26,8 @@ async function SettingsSection({
   const { workspace } = await requireWorkspaceAccessBySlug(workspaceSlug, 'owner');
 
   return (
-    <div className="grid gap-6">
+    <div className="grid w-full max-w-3xl gap-6">
+      <h1 className="text-2xl font-semibold tracking-tight">Настройки пространства</h1>
       <Card>
         <CardHeader>
           <CardTitle>Основное</CardTitle>

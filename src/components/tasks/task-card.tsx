@@ -20,14 +20,17 @@ export function TaskCard({ card, href, className, ...props }: TaskCardProps) {
       href={href}
       {...props}
       className={cn(
-        'grid gap-2 rounded-lg border bg-background p-3 text-sm shadow-xs transition-colors hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        // relative — чтобы sr-only подписи внутри не позиционировались относительно страницы.
+        'relative grid gap-2 rounded-lg bg-card p-3 text-sm shadow-card transition-[box-shadow,translate,scale,opacity] duration-200 ease-out hover:shadow-card-hover',
+        'motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0 motion-safe:active:scale-[0.99]',
+        'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         className,
       )}
     >
       <span className="line-clamp-3 font-medium break-words">{card.title}</span>
       <span className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-muted-foreground tabular-nums">{card.key}</span>
-        <PriorityBadge priority={card.priority} />
+        <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{card.key}</span>
+        <PriorityBadge priority={card.priority} compact />
         {card.dueDate && <DueDate value={card.dueDate} isOverdue={card.isOverdue} />}
         {card.assignee && <AssigneeAvatar user={card.assignee} className="ml-auto" />}
       </span>

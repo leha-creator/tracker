@@ -42,9 +42,9 @@ async function TasksSection({ params, searchParams }: Props) {
   return (
     <section className="grid gap-4" aria-labelledby="tasks-heading">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="tasks-heading" className="text-lg font-semibold">
+        <h1 id="tasks-heading" className="text-2xl font-semibold tracking-tight">
           Задачи
-        </h2>
+        </h1>
         <Button asChild size="sm">
           <Link href={`/w/${workspace.slug}/tasks/new`}>Новая задача</Link>
         </Button>

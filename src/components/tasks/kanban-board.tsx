@@ -27,7 +27,7 @@ import { toast } from 'sonner';
 
 import { StatusDot } from '@/components/projects/status-badge';
 import { cn } from '@/lib/utils';
-import { STATUS_CATEGORY_LABELS, type ProjectStatusDto } from '@/modules/projects/client';
+import type { ProjectStatusDto } from '@/modules/projects/client';
 import {
   findCardColumn,
   moveCard,
@@ -232,8 +232,12 @@ export function KanbanBoard({
         }),
       }}
     >
-      <div className="-mx-6 overflow-x-auto px-6 pb-2">
-        <ol className="flex min-w-max items-start gap-3" aria-label="Колонки доски">
+      {/* data-board: на sm+ доска растягивается на высоту экрана (globals.css), колонки прокручиваются сами. */}
+      <div
+        data-board
+        className="relative -mx-4 overflow-x-auto edge-fade-x px-4 pb-2 sm:-mx-6 sm:px-6"
+      >
+        <ol className="flex h-full min-w-max items-start gap-3" aria-label="Колонки доски">
           {statuses.map((status) => (
             <BoardColumn
               key={status.id}
@@ -254,7 +258,7 @@ export function KanbanBoard({
             card={activeCard}
             href={`/w/${workspaceSlug}/tasks/${activeCard.number}`}
             tabIndex={-1}
-            className="cursor-grabbing shadow-lg ring-2 ring-primary/30"
+            className="cursor-grabbing shadow-card-hover ring-2 ring-primary/40"
           />
         )}
       </DragOverlay>
@@ -289,54 +293,48 @@ function BoardColumn({
       ref={setNodeRef}
       aria-label={`${status.name}: ${cards.length}`}
       className={cn(
-        'flex w-72 shrink-0 flex-col gap-3 rounded-xl bg-muted/50 p-3 transition-colors',
+        'flex max-h-full w-72 shrink-0 flex-col rounded-xl bg-muted/70 transition-colors',
         isOver && 'bg-muted',
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 px-3 pt-3 pb-2">
         <StatusDot color={status.color} />
-        <h3 className="truncate text-sm font-medium">{status.name}</h3>
+        <h2 className="truncate text-sm font-medium">{status.name}</h2>
         <span className="text-xs text-muted-foreground tabular-nums">{cards.length}</span>
-        <span className="ml-auto text-xs text-muted-foreground">
-          {STATUS_CATEGORY_LABELS[status.category]}
-        </span>
       </div>
       <SortableContext
         id={status.id}
         items={cards.map((card) => card.taskId)}
         strategy={verticalListSortingStrategy}
       >
-        {cards.length > 0 ? (
-          <ul className="grid gap-2">
-            {cards.map((card) => (
-              <li key={card.taskId}>
-                <SortableTaskCard
-                  card={card}
-                  statusId={status.id}
-                  href={`/w/${workspaceSlug}/tasks/${card.number}`}
-                  shouldSuppressClick={shouldSuppressClick}
-                  reduceMotion={reduceMotion}
-                />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p
-            className={cn(
-              'rounded-lg border border-dashed p-3 text-center text-xs text-muted-foreground',
-              isOver && 'border-primary/50 text-foreground',
-            )}
-          >
-            Нет задач
-          </p>
-        )}
+        {/* Список прокручивается внутри колонки; пустой список — зона броска. */}
+        <ul
+          className={cn(
+            'mx-1 grid min-h-14 [scrollbar-width:thin] content-start gap-2 overflow-y-auto rounded-lg px-2 py-1 transition-colors',
+            cards.length === 0 && isOver && 'bg-primary/5 ring-1 ring-primary/30 ring-inset',
+          )}
+        >
+          {cards.map((card) => (
+            <li key={card.taskId}>
+              <SortableTaskCard
+                card={card}
+                statusId={status.id}
+                href={`/w/${workspaceSlug}/tasks/${card.number}`}
+                shouldSuppressClick={shouldSuppressClick}
+                reduceMotion={reduceMotion}
+              />
+            </li>
+          ))}
+        </ul>
       </SortableContext>
-      <QuickCreateTask
-        workspaceId={workspaceId}
-        projectId={projectId}
-        statusId={status.id}
-        statusName={status.name}
-      />
+      <div className="grid px-3 pt-1 pb-3">
+        <QuickCreateTask
+          workspaceId={workspaceId}
+          projectId={projectId}
+          statusId={status.id}
+          statusName={status.name}
+        />
+      </div>
     </li>
   );
 }

@@ -30,7 +30,7 @@ async function SettingsSection({ params }: Pick<Props, 'params'>) {
   const statuses = await listStatuses(session, workspace.id, project.id);
 
   return (
-    <div className="grid gap-6">
+    <div className="grid w-full max-w-3xl gap-6">
       <Card>
         <CardHeader>
           <CardTitle>Основное</CardTitle>

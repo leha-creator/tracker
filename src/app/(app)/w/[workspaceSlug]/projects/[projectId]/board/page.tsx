@@ -13,9 +13,29 @@ type Props = PageProps<'/w/[workspaceSlug]/projects/[projectId]/board'>;
 
 export default function ProjectBoardPage({ params }: Props) {
   return (
-    <Suspense fallback={<div className="h-48 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<BoardSkeleton />}>
       <BoardSection params={params} />
     </Suspense>
+  );
+}
+
+const SKELETON_CARDS = [3, 2, 1];
+
+/** Заглушка в форме доски: колонки с карточками. data-board — та же высота, что у доски. */
+function BoardSkeleton() {
+  return (
+    <div data-board aria-hidden className="-mx-4 overflow-hidden px-4 sm:-mx-6 sm:px-6">
+      <div className="flex items-start gap-3">
+        {SKELETON_CARDS.map((count, column) => (
+          <div key={column} className="grid w-72 shrink-0 gap-2 rounded-xl bg-muted/70 p-3">
+            <div className="h-4 w-24 animate-pulse rounded bg-muted-foreground/15" />
+            {Array.from({ length: count }, (_, card) => (
+              <div key={card} className="h-20 animate-pulse rounded-lg bg-card shadow-card" />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

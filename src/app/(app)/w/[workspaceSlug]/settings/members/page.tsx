@@ -30,7 +30,8 @@ async function MembersSection({ params }: Pick<Props, 'params'>) {
   ]);
 
   return (
-    <div className="grid gap-6">
+    <div className="grid w-full max-w-3xl gap-6">
+      <h1 className="text-2xl font-semibold tracking-tight">Участники</h1>
       {isOwner && (
         <Card>
           <CardHeader>

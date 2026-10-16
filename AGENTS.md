@@ -35,7 +35,8 @@ tasker/
 │   ├── proxy.ts              # Оптимистичный редирект на /login по session-cookie (не авторизация)
 │   ├── app/                  # Представление (Next.js): страницы, layout, route handlers
 │   │   ├── (auth)/           # /login, /register
-│   │   ├── (app)/            # Защищённая зона: шапка (переключатель пространств, меню), /, /admin (→ /admin/users),
+│   │   ├── not-found.tsx     # 404 для неизвестных адресов (+ w/[workspaceSlug]/not-found.tsx внутри пространства)
+│   │   ├── (app)/            # Защищённая зона: sticky-шапка (переключатель и разделы пространства, меню пользователя, skip-link), /, /admin (→ /admin/users),
 │   │   │                     # /workspaces/new, /w/[workspaceSlug] (+ settings, settings/members), /invite/[invitationId],
 │   │   │                     # /w/[workspaceSlug]/projects/new, projects/[projectId]/{board,list,settings},
 │   │   │                     # /w/[workspaceSlug]/tasks (+ new, [taskNumber])
@@ -50,7 +51,9 @@ tasker/
 │   │   ├── tasks/            # Задачи: модели (TaskPlacement, позиции, запрос списка TaskListQuery, права на комментарии, правила вложений), срезы task/placement/comment/attachment/views; зависит от projects и workspaces
 │   │   └── admin/            # Администрирование ресурса: модели (правила над пользователями, запрос списка), срез user (чтение — репозиторий, изменения — плагин admin через callAdminApi); зависит от workspaces
 │   ├── components/
-│   │   ├── auth/             # Формы входа/регистрации, меню пользователя
+│   │   ├── layout/           # Каркас: PageContainer (ширина страниц), WorkspaceSections и TabLink (навигация),
+│   │   │                     # nav-items.ts (чистые функции активного раздела), ThemeProvider (next-themes), NotFoundMessage
+│   │   ├── auth/             # Формы входа/регистрации, меню пользователя (аватар, тема, выход)
 │   │   ├── forms/            # FormField, FormError, ConfirmActionDialog (подтверждение; управляемый режим open/onOpenChange)
 │   │   ├── admin/            # Навигация админки; users/ — таблица пользователей, фильтры (URL), меню действий, диалоги блокировки и удаления
 │   │   ├── workspaces/       # Список, переключатель, участники, приглашения
@@ -134,7 +137,7 @@ tasker/
 | README | `README.md` | Лендинг: быстрый старт, возможности |
 | Начало работы | `docs/getting-started.md` | Установка, миграции, первый вход и администратор |
 | Конфигурация | `docs/configuration.md` | Переменные окружения, docker-compose, порты, хранилище и CORS |
-| Архитектура | `docs/architecture.md` | Слои, границы ESLint, аутентификация, пространства, проекты, задачи, доска, список, комментарии и вложения, администрирование, доступ, HTTP-эндпоинты |
+| Архитектура | `docs/architecture.md` | Слои, границы ESLint, аутентификация, пространства, проекты, задачи, доска, список, комментарии и вложения, администрирование, раскладка, навигация и тема, доступ, HTTP-эндпоинты |
 | Логирование и ошибки | `docs/logging-and-errors.md` | `createLogger`, `AppError`, `ActionResult` |
 | Разработка | `docs/development.md` | Команды, линтеры, тесты, Prisma |
 | Docker-образ и CI | `docs/deployment.md` | Dockerfile, `compose.app.yml`, миграции, smoke-скрипт, GitHub Actions |

@@ -1,21 +1,50 @@
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { TASK_PRIORITY_LABELS, type TaskPriority } from '@/modules/tasks/client';
 
+import { isPriorityProminent, priorityLevel } from './priority-level';
+
 // Полные имена классов: Tailwind находит их в исходниках.
-const PRIORITY_CLASSES: Record<Exclude<TaskPriority, 'none'>, string> = {
-  low: 'bg-sky-500/10 text-sky-700 dark:text-sky-300',
-  medium: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  high: 'bg-orange-500/15 text-orange-700 dark:text-orange-300',
-  urgent: 'bg-red-500/15 text-red-700 dark:text-red-300',
+const PRIORITY_TONES: Record<Exclude<TaskPriority, 'none'>, string> = {
+  low: 'text-muted-foreground',
+  medium: 'text-muted-foreground',
+  high: 'text-orange-600 dark:text-orange-400',
+  urgent: 'text-red-600 dark:text-red-400',
 };
 
-/** Бейдж приоритета; «без приоритета» не показывается. */
-export function PriorityBadge({ priority }: { priority: TaskPriority }) {
+const BARS = [0, 1, 2];
+
+interface PriorityBadgeProps {
+  priority: TaskPriority;
+  /** Компактно (карточка доски): подпись видна только у высокого и срочного, у остальных — sr-only. */
+  compact?: boolean;
+}
+
+/** Индикатор приоритета: три деления и подпись. «Без приоритета» не показывается. */
+export function PriorityBadge({ priority, compact = false }: PriorityBadgeProps) {
   if (priority === 'none') return null;
+  const level = priorityLevel(priority);
+  const label = TASK_PRIORITY_LABELS[priority];
+  const showLabel = !compact || isPriorityProminent(priority);
+
   return (
-    <Badge variant="secondary" className={cn(PRIORITY_CLASSES[priority])}>
-      {TASK_PRIORITY_LABELS[priority]}
-    </Badge>
+    <span
+      title={`Приоритет: ${label}`}
+      className={cn('inline-flex items-center gap-1 text-xs font-medium', PRIORITY_TONES[priority])}
+    >
+      <svg aria-hidden viewBox="0 0 12 12" className="size-3 shrink-0" fill="currentColor">
+        {BARS.map((bar) => (
+          <rect
+            key={bar}
+            x={1 + bar * 3.75}
+            y={8 - bar * 3}
+            width={2.5}
+            height={3 + bar * 3}
+            rx={0.75}
+            opacity={bar < level ? 1 : 0.25}
+          />
+        ))}
+      </svg>
+      <span className={showLabel ? undefined : 'sr-only'}>{label}</span>
+    </span>
   );
 }

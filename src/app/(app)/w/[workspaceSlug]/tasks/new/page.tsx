@@ -32,7 +32,9 @@ async function NewTaskSection({ params, searchParams }: Props) {
   return (
     <Card className="w-full max-w-2xl">
       <CardHeader>
-        <CardTitle>Новая задача</CardTitle>
+        <CardTitle role="heading" aria-level={1}>
+          Новая задача
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <CreateTaskForm

@@ -27,7 +27,9 @@ async function NewProjectSection({
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Новый проект</CardTitle>
+        <CardTitle role="heading" aria-level={1}>
+          Новый проект
+        </CardTitle>
         <CardDescription>
           Колонки «К выполнению», «В работе» и «Готово» создадутся сразу — их можно изменить в
           настройках проекта.

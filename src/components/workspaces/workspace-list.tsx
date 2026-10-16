@@ -33,7 +33,7 @@ export function WorkspaceList({ items }: { items: WorkspaceListItemDto[] }) {
   }
 
   return (
-    <ul className="grid gap-3 sm:grid-cols-2">
+    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {items.map((workspace) => (
         <li key={workspace.id}>
           <Link

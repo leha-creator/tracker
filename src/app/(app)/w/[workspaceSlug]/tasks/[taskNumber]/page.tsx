@@ -56,9 +56,9 @@ async function TaskCommentsSection({
   const comments = await listTaskComments(session, workspaceId, taskId, { all: mode === 'all' });
   return (
     <>
-      <h3 id="task-comments-heading" className="font-medium">
+      <h2 id="task-comments-heading" className="font-medium">
         Комментарии{comments.total > 0 && ` (${comments.total})`}
-      </h3>
+      </h2>
       <CommentList
         workspaceId={workspaceId}
         taskId={taskId}
@@ -89,7 +89,7 @@ async function TaskSection({ params, searchParams }: Props) {
   const freeProjects = projects.filter((project) => !placedIds.has(project.id));
 
   return (
-    <article className="grid gap-6">
+    <article className="grid w-full max-w-5xl gap-6">
       <header className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
         <div className="min-w-0">
           <p className="text-sm text-muted-foreground">
@@ -98,7 +98,7 @@ async function TaskSection({ params, searchParams }: Props) {
             </Link>{' '}
             / <span className="tabular-nums">{task.key}</span>
           </p>
-          <h2 className="text-xl font-semibold break-words">{task.title}</h2>
+          <h1 className="text-2xl font-semibold tracking-tight break-words">{task.title}</h1>
           <p className="text-xs text-muted-foreground">
             {task.createdBy ? `Автор: ${task.createdBy.name} · ` : ''}
             создана {DATE_TIME.format(task.createdAt)} · изменена {DATE_TIME.format(task.updatedAt)}
@@ -122,9 +122,9 @@ async function TaskSection({ params, searchParams }: Props) {
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section aria-labelledby="task-fields-heading" className="grid content-start gap-3">
-          <h3 id="task-fields-heading" className="sr-only">
+          <h2 id="task-fields-heading" className="sr-only">
             Поля задачи
-          </h3>
+          </h2>
           <TaskDetailsForm
             workspaceId={workspace.id}
             task={task}
@@ -133,9 +133,9 @@ async function TaskSection({ params, searchParams }: Props) {
         </section>
 
         <section aria-labelledby="task-projects-heading" className="grid content-start gap-3">
-          <h3 id="task-projects-heading" className="font-medium">
+          <h2 id="task-projects-heading" className="font-medium">
             Проекты
-          </h3>
+          </h2>
           <TaskPlacements
             workspaceId={workspace.id}
             workspaceSlug={workspace.slug}

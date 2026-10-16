@@ -22,9 +22,9 @@ export async function TaskAttachmentsSection({
 
   return (
     <>
-      <h3 id="task-attachments-heading" className="font-medium">
+      <h2 id="task-attachments-heading" className="font-medium">
         Вложения{attachments.length > 0 && ` (${attachments.length})`}
-      </h3>
+      </h2>
       <AttachmentDropzone
         workspaceId={workspaceId}
         taskId={taskId}

@@ -20,7 +20,7 @@ const dateFormat = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long' });
 
 export default function InvitationPage({ params }: Props) {
   return (
-    <main className="flex flex-1 justify-center p-6">
+    <main id="main-content" className="flex flex-1 justify-center px-4 py-6 sm:px-6">
       <Card className="w-full max-w-md self-start">
         <Suspense fallback={<div className="m-6 h-32 animate-pulse rounded-md bg-muted" />}>
           <InvitationSection params={params} />

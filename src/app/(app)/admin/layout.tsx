@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 
 import { AdminNav } from '@/components/admin/admin-nav';
+import { PageContainer } from '@/components/layout/page-container';
 import { requireAdminOrNotFound } from '@/shared/access';
 
 // Без собственного metadata.title и заголовка в статическом shell: он отдаётся до проверки роли
@@ -10,12 +11,12 @@ import { requireAdminOrNotFound } from '@/shared/access';
 
 export default function AdminLayout({ children }: LayoutProps<'/admin'>) {
   return (
-    <main className="mx-auto grid w-full max-w-6xl gap-6 p-6">
+    <PageContainer as="main" id="main-content" size="wide" className="grid gap-6 py-6">
       <Suspense fallback={<div className="h-20 animate-pulse rounded-xl bg-muted" />}>
         <AdminHeader />
       </Suspense>
       {children}
-    </main>
+    </PageContainer>
   );
 }
 
@@ -24,7 +25,7 @@ async function AdminHeader() {
   await requireAdminOrNotFound('/admin');
   return (
     <div className="grid gap-3">
-      <h1 className="text-2xl font-semibold">Администрирование</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Администрирование</h1>
       <AdminNav />
     </div>
   );

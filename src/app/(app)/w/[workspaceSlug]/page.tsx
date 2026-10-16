@@ -22,10 +22,13 @@ async function ProjectsSection({ params }: Pick<PageProps<'/w/[workspaceSlug]'>,
 
   return (
     <section className="grid gap-4" aria-labelledby="projects-heading">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="projects-heading" className="text-lg font-semibold">
-          Проекты
-        </h2>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="truncate text-2xl font-semibold tracking-tight">{workspace.name}</h1>
+          <h2 id="projects-heading" className="text-sm text-muted-foreground">
+            Проекты
+          </h2>
+        </div>
         {canManage && projects.length > 0 && (
           <Button asChild size="sm">
             <Link href={`/w/${workspace.slug}/projects/new`}>Создать проект</Link>

@@ -8,9 +8,9 @@ type Props = LayoutProps<'/w/[workspaceSlug]/projects/[projectId]'>;
 
 export default function ProjectLayout({ children, params }: Props) {
   return (
-    <div className="grid gap-4">
+    <div data-project-shell className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
       {/* Шапка читает проект за границей Suspense: {children} не ждёт её. Страницы проверяют доступ сами. */}
-      <Suspense fallback={<div className="h-16 animate-pulse rounded-lg bg-muted" />}>
+      <Suspense fallback={<div className="h-32 animate-pulse rounded-lg bg-muted" />}>
         <ProjectHeader params={params} />
       </Suspense>
       {children}
@@ -24,6 +24,7 @@ async function ProjectHeader({ params }: Pick<Props, 'params'>) {
   return (
     <ProjectNav
       basePath={`/w/${workspace.slug}/projects/${project.id}`}
+      projectsHref={`/w/${workspace.slug}`}
       newTaskHref={`/w/${workspace.slug}/tasks/new?projectId=${project.id}`}
       name={project.name}
       description={project.description}

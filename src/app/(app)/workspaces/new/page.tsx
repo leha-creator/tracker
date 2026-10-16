@@ -7,10 +7,12 @@ export const metadata: Metadata = { title: 'Новое пространство 
 
 export default function NewWorkspacePage() {
   return (
-    <main className="flex flex-1 justify-center p-6">
+    <main id="main-content" className="flex flex-1 justify-center px-4 py-6 sm:px-6">
       <Card className="w-full max-w-md self-start">
         <CardHeader>
-          <CardTitle>Новое пространство</CardTitle>
+          <CardTitle role="heading" aria-level={1}>
+            Новое пространство
+          </CardTitle>
           <CardDescription>
             Вы станете владельцем и сможете пригласить в пространство участников.
           </CardDescription>
