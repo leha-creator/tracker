@@ -1,4 +1,4 @@
-[← Docker-образ и CI](deployment.md) · [Back to README](../README.md)
+[← Docker-образ и CI](deployment.md) · [Back to README](../README.md) · [Интеграция с GitHub →](github.md)
 
 # Продакшен
 
@@ -168,6 +168,32 @@ MAIL_FROM="Tasker <no-reply@plwedding.ru>"
 
 Перенос данных: `backup.sh db` и `files` на старом сервере, файлы — на новый, восстановление командами выше.
 
+## GitHub App
+
+Интеграция включается, когда в `/opt/tasker/.env` заданы все шесть переменных `GITHUB_*` (как создать приложение — [Интеграция с GitHub](github.md#создание-github-app)). Пустые значения выключают её, приложение работает как раньше.
+
+Адреса приложения для `tracker.plwedding.ru`:
+
+| Поле GitHub App | Значение |
+|-----------------|----------|
+| Homepage URL | `https://tracker.plwedding.ru` |
+| Callback URL | `https://tracker.plwedding.ru/api/auth/callback/github` |
+| Setup URL (Redirect on update) | `https://tracker.plwedding.ru/api/integrations/github/setup` |
+| Webhook URL | `https://tracker.plwedding.ru/api/webhooks/github` |
+
+```
+GITHUB_APP_ID=123456
+GITHUB_APP_SLUG=tasker-plwedding
+GITHUB_APP_PRIVATE_KEY='-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----\n'
+GITHUB_APP_CLIENT_ID=Iv23li...
+GITHUB_APP_CLIENT_SECRET='<client secret>'
+GITHUB_WEBHOOK_SECRET='<openssl rand -hex 32>'
+```
+
+Ключ — одной строкой с `\n`, в одинарных кавычках. Затем `$C up -d app`. Проверка: в настройках GitHub App → **Advanced → Recent Deliveries** повторить доставку `ping` или любого события — ответ `200` (`ignored` для `ping`), в логах `[github.webhook] received`. Ответ `401` значит, что секрет не совпадает; `404` — переменные не дошли до контейнера (`$C exec app printenv GITHUB_APP_ID`).
+
+Edge-прокси пропускает `/api/webhooks/github` как обычный запрос приложения, отдельной настройки Caddy не нужно.
+
 ## Безопасность
 
 - Снаружи открыты только 22, 80 и 443. Postgres и MinIO наружу не публикуются, из MinIO через прокси доступен только путь бакета. Анонимный доступ к бакету закрыт.
@@ -179,4 +205,5 @@ MAIL_FROM="Tasker <no-reply@plwedding.ru>"
 
 - [Docker-образ и CI](deployment.md): образы, `compose.app.yml`, джобы проверок
 - [Конфигурация](configuration.md): переменные приложения
+- [Интеграция с GitHub](github.md): создание GitHub App и что делает интеграция
 - [`deploy/edge/README.md`](../deploy/edge/README.md): edge-прокси и подключение проектов

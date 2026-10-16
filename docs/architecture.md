@@ -12,7 +12,7 @@ src/
 ├── app/                # Представление: страницы, layout, route handlers (тонкий слой)
 │   ├── (auth)/         # /login, /register
 │   ├── (app)/          # Защищённая зона: /, /admin (→ /admin/users), /workspaces/new,
-│   │                   # /w/[workspaceSlug] (+ /settings, /settings/members), /invite/[invitationId],
+│   │                   # /w/[workspaceSlug] (+ /settings, /settings/members, /settings/github), /invite/[invitationId],
 │   │                   # /w/[workspaceSlug]/projects/new, /projects/[projectId]/{board,settings},
 │   │                   # /w/[workspaceSlug]/tasks (+ /new, /[taskNumber]),
 │   │                   # /w/[workspaceSlug]/members/[userId] (публичный профиль),
@@ -25,6 +25,8 @@ src/
 │       ├── users/[userId]/avatar/      # GET — фото профиля (302 на presigned-ссылку)
 │       ├── w/[workspaceSlug]/members/[userId]/card/ # GET — карточка участника при наведении
 │       ├── notifications/  # GET — последние уведомления и счётчик (+ /unread-count)
+│       ├── webhooks/github/ # POST — вебхуки GitHub App (подпись X-Hub-Signature-256)
+│       ├── integrations/github/setup/ # GET — Setup URL: возврат с GitHub после установки приложения
 │       └── health/     # GET /api/health
 ├── modules/            # Доменные модули
 │   ├── auth/           # Вход, регистрация, выход
@@ -34,6 +36,8 @@ src/
 │   ├── profiles/       # Профиль пользователя: должность, описание, фото
 │   ├── notifications/  # Уведомления (в приложении и письмом) и настройки получателя
 │   ├── documents/      # Документы пространства: папки, Markdown-заметки, файлы, теги, связи с задачами
+│   ├── integrations/
+│   │   └── github/     # GitHub App: установки, репозитории, вебхуки, PR, ветки и коммиты задач, автосмена статуса
 │   └── admin/          # Администрирование ресурса: пользователи (блокировка, роли, удаление)
 ├── components/
 │   ├── layout/         # Каркас: PageContainer, разделы пространства в шапке, TabLink, тема, 404, nav-items (чистые функции навигации)
@@ -47,6 +51,7 @@ src/
 │   ├── profile/        # Свой профиль: вкладки, фото, форма «О себе», настройки уведомлений
 │   ├── notifications/  # Колокольчик в шапке, элемент и лента уведомлений
 │   ├── documents/      # Раздел «Документы»: дерево папок, список, загрузка, диалоги; markdown/ — безопасный рендер; note-editor/ — редактор заметки; viewers/ — просмотрщики файлов; task-documents/ — раздел в задаче
+│   ├── github/         # Раздел GitHub задачи, индикатор PR, настройки GitHub пространства и проекта, привязка аккаунта и кнопка входа
 │   └── ui/             # shadcn/ui (генерируется CLI)
 ├── lib/utils.ts        # cn()
 ├── generated/prisma/   # Prisma Client (генерируется, не коммитится)
@@ -58,13 +63,14 @@ src/
 │   ├── errors/         # AppError и преобразование ошибок
 │   ├── types/          # ActionResult<T>, FormState<T>
 │   ├── db/             # Prisma-клиент, isUniqueViolation()
+│   ├── text/           # transliterate() — транслитерация для slug, ключей задач и имён веток
 │   ├── storage/        # S3-клиенты, presigned POST/GET, удаление объектов
 │   ├── mail/           # SMTP (nodemailer): sendMail(), escapeHtml()
 │   └── health/         # Агрегированный health check
 └── test/               # Утилиты Vitest
 ```
 
-Модуль `integrations/github` появится на следующем этапе. Внутри модуля код делится на срезы: `slices/<entity>/<entity>.{actions,service,repository,schema,dto}.ts`, `models/`, `index.ts`.
+Вложенный модуль `integrations/github` устроен так же (правила ESLint для `slices/**` и `models/**` покрывают вложенность). Внутри модуля код делится на срезы: `slices/<entity>/<entity>.{actions,service,repository,schema,dto}.ts`, `models/`, `index.ts`.
 
 Публичный API модуля:
 
@@ -90,8 +96,9 @@ app/ → modules/<m>/index.ts → *.actions.ts → *.service.ts → models/, *.r
 | `profiles` | `workspaces` | Доступ к фото: есть ли общее пространство |
 | `admin` | `workspaces`, `profiles` | Число пространств, единоличное владение, удаление фото вместе с пользователем |
 | `documents` | `tasks` | Номер, название и поиск задач для связей документ ↔ задача (`getTaskSummaries`, `listTasks`) |
+| `integrations/github` | `tasks`, `projects`, `workspaces`, `notifications` | Задачи по ключу (`resolveTaskRefs`), системная смена статуса, статусы проекта для автоматизации, пространства по ключу (`findWorkspacesByTaskKeys`), уведомления о PR |
 
-`notifications` ни от кого не зависит: данные события (номер и название задачи, slug пространства, имя автора) приходят снимком от вызывающего модуля. Обратных зависимостей нет: страница доски сама собирает колонки из `projects` и карточки из `tasks`, страница профиля участника — данные из `workspaces`, `profiles` и `tasks`, раздел «Документы» в задаче — из `documents` (модуль `tasks` о документах не знает).
+`notifications` ни от кого не зависит: данные события (номер и название задачи, slug пространства, имя автора) приходят снимком от вызывающего модуля. Обратных зависимостей нет: страница доски сама собирает колонки из `projects` и карточки из `tasks`, страница профиля участника — данные из `workspaces`, `profiles` и `tasks`, раздел «Документы» в задаче — из `documents` (модуль `tasks` о документах не знает). Так же доска, список и задача берут индикаторы и раздел GitHub из `integrations/github`: ядро о GitHub не знает.
 
 ## Границы, которые проверяет ESLint
 
@@ -199,7 +206,7 @@ Guard-функции пространства возвращают `WorkspaceAcc
 - **Нет подтверждения email и сброса пароля.** Почтовый транспорт уже есть (`@/shared/mail`), сами сценарии — отдельный этап. Пока email не подтверждаются, приглашение может принять тот, кто зарегистрировался с адресом приглашённого **и** получил ссылку (id приглашения — случайная строка). Строгая проверка (`requireEmailVerificationOnInvitation`) включится вместе с подтверждением email.
 - **Последний владелец.** Проверка «останется ли владелец» и вызов плагина не атомарны: два одновременных понижения или выхода теоретически могут оставить пространство без владельца. Плагин частично проверяет то же самое.
 - **Лимит приглашений.** Server Actions обходят rate limit Better Auth. Количество ограничено `invitationLimit` (100 ожидающих приглашений на пространство).
-- **Вход через GitHub** появится вместе с интеграцией GitHub.
+- **Вход через GitHub** — без неявной привязки по email (`disableImplicitLinking`): GitHub привязывается только явно из профиля, см. [Интеграция с GitHub](github.md#вход-через-github-и-привязка-аккаунта).
 
 ## Проекты и статусы
 
@@ -233,7 +240,7 @@ Guard-функции пространства возвращают `WorkspaceAcc
 
 | Модель | Поля |
 |--------|------|
-| `Task` | `id` (UUID v7), `workspaceId`, `number` (сквозной в пространстве, `#42`), `title`, `description` (простой текст), `priority` (`none` / `low` / `medium` / `high` / `urgent`), `dueDate` (дата без времени), `assigneeId`, `createdById` |
+| `Task` | `id` (UUID v7), `workspaceId`, `number` (сквозной в пространстве; показывается с ключом пространства `TSK-42`, без ключа — `#42`), `title`, `description` (простой текст), `priority` (`none` / `low` / `medium` / `high` / `urgent`), `dueDate` (дата без времени), `assigneeId`, `createdById` |
 | `TaskPlacement` | Ключ `(taskId, projectId)`; `workspaceId`, `statusId`, `position` (дробный ключ) |
 | `WorkspaceTaskCounter` | `workspaceId`, `lastNumber`: счётчик номеров задач |
 | `TaskComment` | `id` (UUID v7), `workspaceId`, `taskId`, `authorId`, `body` (простой текст), `createdAt`, `editedAt` (см. [Комментарии](#комментарии)) |
@@ -455,6 +462,28 @@ Guard-функции пространства возвращают `WorkspaceAcc
 - **Логи.** `notifications`: `INFO` `[notification] created` (типы, число получателей, сколько в приложении и сколько писем), `[notification] read`; `notifications.preference`: `INFO` на изменение настройки; `ERROR` на сбой создания или отправки письма (без email адресата).
 - **Ограничения.** Без realtime: новые уведомления появляются при опросе. Старые уведомления не удаляются автоматически. Письма не группируются в дайджест.
 
+## Интеграция с GitHub
+
+Модуль `src/modules/integrations/github` (подробности для пользователя и настройка приложения — [Интеграция с GitHub](github.md)). Включается только переменными `GITHUB_*` (`isGithubEnabled()`); без них страницы и запросы модуля ничего не делают.
+
+| Срез | Что делает |
+|------|------------|
+| `identity` | Привязка GitHub к пользователю (`Account`, `providerId = 'github'`): `getGithubUserToken` через `auth.api.getAccessToken`, `findUsersByGithubIds` |
+| `installation` | Подключение установки (подписанный `state`, проверка `GET /user/installations`), синхронизация репозиториев, выбор репозиториев пространства |
+| `webhook` | Подпись, идемпотентность (`GithubWebhookDelivery`), реестр обработчиков по `X-GitHub-Event`, транзакция и действия после коммита |
+| `pull-request` | Сохранение PR (защита от устаревших событий по `updated_at`), итог ревью и CI, чтения для задачи и индикаторов |
+| `link` | Распознавание `KEY-N`, автосвязи PR, ветки и коммиты, ручная привязка по ссылке, «Отвязать» |
+| `automation` | Настройка проекта и автосмена статуса по переходу PR |
+| `notify` | Уведомления `pr_linked`, `pr_merged`, `pr_review` через `notify()` |
+
+`github-api.ts` — единственная точка работы с GitHub API (пакет `octokit`): ленивый `App` (кеш токенов установок), клиент пользователя, `callGithub()` переводит ошибки Octokit в доменные (404 → `NotFoundError`, 401/403 → `ForbiddenError`), тело ответа GitHub не логируется.
+
+- **Ключ задач** — поле `Workspace.taskKey` (плагин `organization`, `input: false`). Его ставит сервис пространств сразу после создания: при конфликте добавляется цифра, до 5 попыток. Если ключа нет, пространство работает, а задачи показываются как `#42`. Ключ выводит `formatTaskKey(number, taskKey)` в `tasks`; DTO получают `taskKey` через связь `workspace` в выборках.
+- **Системные функции без сессии** — только для вызывающих с проверенным источником (подписанный вебхук): `resolveTaskRefs` / `resolveTaskRefsByIds`, `listPlacementsForAutomation`, `changePlacementStatusBySystem` из `tasks` и `findWorkspacesByTaskKeys` из `workspaces`. Проверки «статус ∈ проект», «задача в проекте» и пространство в `where` остаются.
+- **Данные чужих репозиториев не хранятся.** События репозитория, который не выбран ни в одном пространстве (или установка приостановлена), отвечают `ignored` и ничего не пишут.
+- **Таблицы** (`GithubInstallation`, `GithubRepository`, `GithubPullRequest`, `TaskPullRequest`, `TaskGithubBranch`, `TaskGithubCommit` и др.) — в разделе `// ── GitHub ──` схемы. Id GitHub — `BigInt`, в DTO — строкой. Связи задач ссылаются на `Task(id, workspaceId)` с каскадом; удаление установки каскадом удаляет её репозитории, PR и связи.
+- **Порядок после коммита вебхука:** автосмена статусов → уведомления → `revalidatePath('/w/[workspaceSlug]', 'layout')`. Сбой любого шага логируется и не меняет ответ.
+
 ## Администрирование
 
 Раздел `/admin` доступен только глобальной роли `admin`. Первый администратор назначается через `ADMIN_EMAILS` при регистрации, остальных назначают в админке.
@@ -508,7 +537,7 @@ Guard-функции пространства возвращают `WorkspaceAcc
 
 ### `/api/auth/*`
 
-Обработчик Better Auth (`getAuth().handler`, методы `GET` и `POST`). UI использует Server Actions, а этот эндпоинт нужен для клиентских SDK и будущих OAuth-провайдеров. Ошибки отдаются в формате Better Auth, а не в едином формате `{ error: { code, message } }`.
+Обработчик Better Auth (`getAuth().handler`, методы `GET` и `POST`). UI использует Server Actions, а этот эндпоинт нужен для OAuth-колбэка GitHub (`/api/auth/callback/github`) и клиентских SDK. Ошибки отдаются в формате Better Auth, а не в едином формате `{ error: { code, message } }`.
 
 ### `GET /api/attachments/[attachmentId]`
 
@@ -530,6 +559,14 @@ Guard-функции пространства возвращают `WorkspaceAcc
 
 Последние 10 уведомлений текущего пользователя и число непрочитанных: `{ items, hasMore, unreadCount }`. Без сессии — `401`. `GET /api/notifications/unread-count` → `{ unreadCount }` для опроса счётчика. Ответы не кешируются.
 
+### `POST /api/webhooks/github`
+
+Вебхуки GitHub App. Сессии нет — доверие только подписи `X-Hub-Signature-256` по сырому телу. Интеграция не настроена — `404`, тело больше 10 МБ — `413`, неверная подпись — `401`, некорректные заголовки или JSON — `400`. Иначе `200 { "result": "handled" | "ignored" | "duplicate" }`; ошибка обработки — `500` в едином формате (доставку можно повторить из GitHub). Подробнее — [Интеграция с GitHub](github.md#вебхук).
+
+### `GET /api/integrations/github/setup`
+
+Setup URL GitHub App: `installation_id`, `setup_action`, `state`. Без сессии — `303` на `/login?returnTo=…`. Успех — `303` на `/w/<slug>/settings/github?connected=1`, ошибка — `?error=state|forbidden|failed` без деталей. Без `state` («Redirect on update») — `303` на `/`. Адреса редиректов строятся от `BETTER_AUTH_URL`: за прокси `request.url` указывает на внутренний хост.
+
 ### `GET /api/health`
 
 Проверяет БД (`SELECT 1`) и хранилище (`HeadBucket`, таймаут 3 с) параллельно. Ответ не кешируется.
@@ -547,4 +584,5 @@ Guard-функции пространства возвращают `WorkspaceAcc
 - [Логирование и ошибки](logging-and-errors.md): единый формат ответов
 - [Конфигурация](configuration.md): SMTP (письма-приглашения и уведомления), настройки плагина `organization`, хранилище и CORS для вложений и фото
 - [Разработка](development.md): линтеры, тесты, ручные правки миграций
+- [Интеграция с GitHub](github.md): GitHub App, вебхуки, связи с задачами
 - [`.ai-factory/ARCHITECTURE.md`](../.ai-factory/ARCHITECTURE.md): полные правила и примеры кода

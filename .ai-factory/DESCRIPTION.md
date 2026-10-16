@@ -52,7 +52,7 @@ Tasker — веб-приложение для управления задача�
 - **Почта:** SMTP через nodemailer (`src/shared/mail`); локально — Mailpit (SMTP 1025, UI 8025) в docker-compose. Используется для приглашений в пространство
 - **Инфраструктура разработки:** pnpm, docker-compose (Postgres 17 на порту 5433, MinIO, Mailpit), Prisma 7 с `@prisma/adapter-pg`, pino, Vitest, ESLint + Prettier, husky + lint-staged
 - **Развёртывание:** один VPS (`https://tracker.plwedding.ru`) с docker compose: Postgres и MinIO на том же сервере, общий edge-прокси Caddy (HTTPS, Let's Encrypt), образы в GHCR, CD из GitHub Actions по SSH; почта — SMTP ящика на домене (`docs/production.md`)
-- **Интеграции:** GitHub (Octokit, GitHub App, webhooks) — в будущем
+- **Интеграции:** GitHub — пакет `octokit` (GitHub App: токены установок, пользовательские токены), webhooks; включается переменными `GITHUB_*` (все или ни одной), модуль `src/modules/integrations/github`
 
 ## Архитектурные заметки
 

@@ -110,9 +110,16 @@ tasker/
 │   │   └── integrations/
 │   │       └── github/
 │   │           ├── slices/
-│   │           │   ├── webhook/      # проверка подписи, разбор событий
-│   │           │   └── pr-link/      # TaskPullRequest
-│   │           ├── models/
+│   │           │   ├── identity/     # GitHub-аккаунт пользователя (Account), токен пользователя
+│   │           │   ├── installation/ # подключение установки (state + /user/installations), выбор репозиториев
+│   │           │   ├── webhook/      # подпись, идемпотентность, реестр обработчиков (handlers/)
+│   │           │   ├── pull-request/ # PR, ревью, CI; эффекты после коммита
+│   │           │   ├── link/         # TaskPullRequest, ветки и коммиты задач, ручная привязка
+│   │           │   ├── automation/   # автосмена статуса проекта по PR
+│   │           │   └── notify/       # уведомления о PR через notifications
+│   │           ├── models/           # ссылки KEY-N, состояния PR/ревью/CI, правило «только вперёд»
+│   │           ├── github-api.ts     # octokit: App, клиенты установки и пользователя, маппинг ошибок
+│   │           ├── client.ts
 │   │           └── index.ts
 │   │
 │   ├── components/                   # ── ОБЩИЙ UI ──
@@ -147,7 +154,7 @@ tasker/
 - ✅ Модуль импортирует другой модуль только через его `index.ts`
 - ✅ Если модулю нужны клиентские компоненты, он дополнительно экспортирует `client.ts`: actions, Zod-схемы, чистые функции и типы без server-only кода. Клиентские компоненты импортируют `@/modules/<module>/client`, серверный код — `@/modules/<module>`
 - ✅ `tasks` зависит от `projects` и `workspaces` (через их `index.ts`), но не наоборот. Страница доски сама собирает колонки из `projects` и карточки из `tasks`
-- ✅ `integrations/github` зависит от `tasks`, но `tasks` не зависит от `integrations/github`
+- ✅ `integrations/github` зависит от `tasks`, `projects`, `workspaces` и `notifications`, но они не зависят от `integrations/github`; системные функции без сессии (`resolveTaskRefs`, `changePlacementStatusBySystem`, `findWorkspacesByTaskKeys`) вызываются только из обработчиков с проверенной подписью вебхука
 - ✅ `documents` зависит от `tasks` (краткие данные и поиск задач для связей), но `tasks` не зависит от `documents`: раздел «Документы» в задаче собирает компонент слоя UI (`components/documents/task-documents`)
 - ✅ `admin` зависит от `workspaces` (число пространств, единоличное владение), но не наоборот. Проверки администратора (`requireAdmin`) читают сессию в обход cookie-кеша (`getFreshSession`)
 - ❌ Компоненты и страницы не импортируют `prisma` и репозитории
