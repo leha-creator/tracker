@@ -16,7 +16,7 @@ Tasker — простой таск-трекер с рабочими простр
 - **UI:** Tailwind CSS v4 + shadcn/ui (radix)
 - **Хранилище файлов:** S3 API, локально MinIO (`pgsty/minio`)
 - **Почта:** SMTP через nodemailer, локально Mailpit (UI http://localhost:8025)
-- **GitHub:** пакет `octokit` (GitHub App, вебхуки); включается переменными `GITHUB_*`
+- **GitHub:** пакет `octokit` (GitHub App, вебхуки); включается из админки (манифест GitHub App) или переменными `GITHUB_*`
 - **Инфраструктура кода:** pino (логи), Zod (валидация), Vitest, ESLint + Prettier, husky + lint-staged
 - **Пакетный менеджер:** pnpm (через corepack)
 - **Контейнеры и CI:** Docker (multi-stage, standalone Next.js, `node:24-alpine`), GitHub Actions
@@ -29,7 +29,7 @@ tasker/
 ├── .claude/                  # Скиллы и субагенты
 ├── .github/workflows/ci.yml  # CI/CD: pnpm check + build, миграции на чистом Postgres, образ и smoke-тест; на main — GHCR и деплой
 ├── prisma/
-│   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …), пространств (Workspace, WorkspaceMember, WorkspaceInvitation), проектов (Project, ProjectStatus), задач (Task, TaskPlacement, WorkspaceTaskCounter, TaskComment, TaskAttachment), профилей (UserProfile), уведомлений (Notification, NotificationPreference), документов (DocumentFolder, Document, DocumentTag, DocumentTagAssignment, TaskDocumentLink), GitHub (GithubInstallation, GithubRepository, GithubPullRequest, TaskPullRequest, TaskGithubBranch, TaskGithubCommit, GithubWebhookDelivery, GithubProjectAutomation); Workspace.taskKey — ключ задач (TSK-42)
+│   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …), пространств (Workspace, WorkspaceMember, WorkspaceInvitation), проектов (Project, ProjectStatus), задач (Task, TaskPlacement, WorkspaceTaskCounter, TaskComment, TaskAttachment), профилей (UserProfile), уведомлений (Notification, NotificationPreference), документов (DocumentFolder, Document, DocumentTag, DocumentTagAssignment, TaskDocumentLink), GitHub (GithubInstallation, GithubRepository, GithubPullRequest, TaskPullRequest, TaskGithubBranch, TaskGithubCommit, GithubWebhookDelivery, GithubProjectAutomation, GithubAppConfig); Workspace.taskKey — ключ задач (TSK-42)
 │   └── migrations/
 ├── prisma.config.ts          # Подключение Prisma CLI (DATABASE_URL, миграции)
 ├── src/
@@ -37,7 +37,7 @@ tasker/
 │   ├── app/                  # Представление (Next.js): страницы, layout, route handlers
 │   │   ├── (auth)/           # /login, /register
 │   │   ├── not-found.tsx     # 404 для неизвестных адресов (+ w/[workspaceSlug]/not-found.tsx внутри пространства)
-│   │   ├── (app)/            # Защищённая зона: sticky-шапка (переключатель и разделы пространства, колокольчик уведомлений, меню пользователя, skip-link), /, /admin (→ /admin/users),
+│   │   ├── (app)/            # Защищённая зона: sticky-шапка (переключатель и разделы пространства, колокольчик уведомлений, меню пользователя, skip-link), /, /admin (→ /admin/users, + integrations — GitHub App),
 │   │   │                     # /workspaces/new, /w/[workspaceSlug] (+ settings, settings/members, settings/github), /invite/[invitationId],
 │   │   │                     # /w/[workspaceSlug]/projects/new, projects/[projectId]/{board,list,settings},
 │   │   │                     # /w/[workspaceSlug]/tasks (+ new, [taskNumber]), /w/[workspaceSlug]/members/[userId] (публичный профиль),
@@ -52,6 +52,7 @@ tasker/
 │   │       ├── notifications/ # GET — последние уведомления и счётчик (+ unread-count для опроса)
 │   │       ├── webhooks/github/ # POST — вебхуки GitHub App: подпись, идемпотентность, обработчики событий
 │   │       ├── integrations/github/setup/ # GET — Setup URL GitHub App: проверка state и доступа, подключение установки
+│   │       ├── integrations/github/manifest/ # GET — возврат после создания GitHub App из админки: обмен code на ключи
 │   │       └── health/       # GET /api/health — состояние БД и хранилища
 │   ├── modules/              # Доменные модули
 │   │   ├── auth/             # Вход, регистрация, выход: Zod-схемы, сервис, Server Actions
@@ -61,14 +62,14 @@ tasker/
 │   │   ├── profiles/         # Профиль: UserProfile (должность, описание, ключ фото), фото по presigned POST, имя и User.image через auth.api.updateUser; зависит от workspaces
 │   │   ├── notifications/    # Уведомления: notify/notifyByEmail для других модулей (никогда не бросают), настройки «тип × канал», письма через after(); ни от кого не зависит
 │   │   ├── documents/        # Документы пространства: папки (дерево), Markdown-заметки (версия), файлы (presigned POST, квота), теги, связи с задачами; зависит от tasks
-│   │   ├── integrations/github/ # GitHub App (пакет octokit): установки и репозитории, вебхуки, PR (ревью, CI), ветки и коммиты задач, ручная привязка, автосмена статуса, уведомления о PR, привязка GitHub-аккаунта; зависит от tasks, projects, workspaces, notifications
+│   │   ├── integrations/github/ # GitHub App (пакет octokit): установки и репозитории, вебхуки, PR (ревью, CI), ветки и коммиты задач, ручная привязка, автосмена статуса, уведомления о PR, привязка GitHub-аккаунта, создание GitHub App из админки по манифесту (app-setup); зависит от tasks, projects, workspaces, notifications
 │   │   └── admin/            # Администрирование ресурса: модели (правила над пользователями, запрос списка), срез user (чтение — репозиторий, изменения — плагин admin через callAdminApi); зависит от workspaces и profiles
 │   ├── components/
 │   │   ├── layout/           # Каркас: PageContainer (ширина страниц), WorkspaceSections и TabLink (навигация),
 │   │   │                     # nav-items.ts (чистые функции активного раздела), ThemeProvider (next-themes), NotFoundMessage
 │   │   ├── auth/             # Формы входа/регистрации, меню пользователя (аватар, тема, выход)
 │   │   ├── forms/            # FormField, FormError, ConfirmActionDialog (подтверждение; управляемый режим open/onOpenChange)
-│   │   ├── admin/            # Навигация админки; users/ — таблица пользователей, фильтры (URL), меню действий, диалоги блокировки и удаления
+│   │   ├── admin/            # Навигация админки; github-app-setup — мастер GitHub App; users/ — таблица пользователей, фильтры (URL), меню действий, диалоги блокировки и удаления
 │   │   ├── workspaces/       # Список, переключатель, участники, приглашения
 │   │   ├── projects/         # Список проектов, навигация проекта, настройки проекта и статусов
 │   │   ├── tasks/            # Канбан-доска (dnd-kit), карточка, быстрое создание, поля задачи (режим чтения), размещения;
@@ -93,6 +94,7 @@ tasker/
 │   │   ├── errors/           # AppError, доменные ошибки, toActionError, toErrorResponse
 │   │   ├── types/            # ActionResult<T>, FormState<T> для useActionState
 │   │   ├── db/               # Prisma singleton, checkDatabase(), isUniqueViolation()
+│   │   ├── github-app/       # Конфиг GitHub App: GITHUB_* или запись из админки (зашифрована), кеш процесса
 │   │   ├── text/             # transliterate() — для slug, ключей задач и имён веток
 │   │   ├── storage/          # S3-клиенты (сервер и подпись ссылок), presigned POST/GET, HeadObject, удаление пачками, checkStorage()
 │   │   ├── mail/             # sendMail() (nodemailer), escapeHtml()
@@ -134,7 +136,7 @@ tasker/
 | `src/modules/profiles/index.ts` | Профили: `getMyProfile`, `getProfileCards`, `getAvatarDownload`, `prepareAvatarCleanup`; actions профиля и фото (`client.ts` — в т.ч. `isAvatarUrl`) |
 | `src/modules/notifications/index.ts` | Уведомления: `notify`, `notifyByEmail` (для модулей), `listMyNotifications`, `countMyUnreadNotifications`, `getMyNotificationPreferences`; actions прочтения и настроек (`client.ts`) |
 | `src/modules/admin/index.ts` | Пользователи ресурса: `listAdminUsers`, `parseAdminUserListParams`; actions блокировки, роли, сессий и удаления (`client.ts` — для клиентских компонентов) |
-| `src/modules/integrations/github/index.ts` | GitHub: `isGithubEnabled`, `handleGithubWebhook`, `verifyGithubWebhookSignature`, `completeInstallation`, `getGithubSettings`, `listTaskPullRequests`, `listTaskBranchesAndCommits`, `getPullRequestBadges`, `getProjectAutomation`, `getMyGithubAccount` (`client.ts` — actions установки, привязки, автоматизации, типы DTO, `suggestBranchName`) |
+| `src/modules/integrations/github/index.ts` | GitHub: `isGithubEnabled`, `handleGithubWebhook`, `verifyGithubWebhookSignature`, `completeInstallation`, `getGithubSettings`, `listTaskPullRequests`, `listTaskBranchesAndCommits`, `getPullRequestBadges`, `getProjectAutomation`, `getMyGithubAccount`, `getGithubAppSetup`, `completeGithubAppManifest` (`client.ts` — actions установки, привязки, автоматизации, типы DTO, `suggestBranchName`) |
 | `src/app/api/webhooks/github/route.ts` | Вебхуки GitHub App |
 | `src/modules/auth/index.ts` | `signInAction`, `signUpAction`, `signOutAction`, Zod-схемы форм |
 | `src/proxy.ts` | Оптимистичный редирект неавторизованных на `/login` |

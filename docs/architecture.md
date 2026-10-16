@@ -464,7 +464,7 @@ Guard-функции пространства возвращают `WorkspaceAcc
 
 ## Интеграция с GitHub
 
-Модуль `src/modules/integrations/github` (подробности для пользователя и настройка приложения — [Интеграция с GitHub](github.md)). Включается только переменными `GITHUB_*` (`isGithubEnabled()`); без них страницы и запросы модуля ничего не делают.
+Модуль `src/modules/integrations/github` (подробности для пользователя и настройка приложения — [Интеграция с GitHub](github.md)). Включается переменными `GITHUB_*` или приложением, созданным в админке (`/admin/integrations`, срез `app-setup`, манифест GitHub App). Конфиг читает `@/shared/github-app`: сначала окружение, затем запись `GithubAppConfig` из БД (секреты — AES-256-GCM, ключ HKDF от `BETTER_AUTH_SECRET`) с кешем процесса на минуту. `isGithubEnabled()` асинхронная: загружает конфиг, без него страницы и запросы модуля ничего не делают. `getSession()` и `/api/auth/*` загружают конфиг до `getAuth()`, а `getAuth()` и клиент GitHub App пересоздаются, когда экземпляр конфига сменился, — так приложение, созданное или отключённое в админке, включается без перезапуска.
 
 | Срез | Что делает |
 |------|------------|
@@ -491,6 +491,7 @@ Guard-функции пространства возвращают `WorkspaceAcc
 | Путь | Что там |
 |------|---------|
 | `/admin` | Редирект на `/admin/users` |
+| `/admin/integrations` | GitHub App Tasker: создание по манифесту, сведения, отключение (если не задано переменными `GITHUB_*`) |
 | `/admin/users` | Все пользователи: поиск по имени и email, фильтры по роли и статусу, сортировка, пагинация по 50. Состояние — в URL (`?q=&role=&status=&sort=&dir=&page=`) |
 
 Колонки: имя и email, роль, статус (активен / заблокирован до … / бессрочно, с причиной), число пространств, дата регистрации. Действия — меню в строке:
@@ -566,6 +567,10 @@ Guard-функции пространства возвращают `WorkspaceAcc
 ### `GET /api/integrations/github/setup`
 
 Setup URL GitHub App: `installation_id`, `setup_action`, `state`. Без сессии — `303` на `/login?returnTo=…`. Успех — `303` на `/w/<slug>/settings/github?connected=1`, ошибка — `?error=state|forbidden|failed` без деталей. Без `state` («Redirect on update») — `303` на `/`. Адреса редиректов строятся от `BETTER_AUTH_URL`: за прокси `request.url` указывает на внутренний хост.
+
+### `GET /api/integrations/github/manifest`
+
+`redirect_url` манифеста GitHub App: `code`, `state`. Без сессии — `303` на `/login?returnTo=…`. Только администратор (state подписан, живёт час, привязан к начавшему администратору). Обмен `POST /app-manifests/{code}/conversions` → сохранение ключей → `303` на `/admin/integrations?created=1`; ошибка — `?error=state|forbidden|conflict|failed` без деталей.
 
 ### `GET /api/health`
 
