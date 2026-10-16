@@ -13,7 +13,7 @@ type Props = LayoutProps<'/w/[workspaceSlug]/docs'>;
  */
 export default function DocsLayout({ params, children }: Props) {
   return (
-    <div className="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8">
+    <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-8">
       <Suspense fallback={<NavSkeleton />}>
         <DocsNavSection params={params} />
       </Suspense>

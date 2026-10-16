@@ -41,7 +41,7 @@ export function DocumentsNav({ workspaceSlug, folders, footer }: DocumentsNavPro
 
   return (
     <>
-      <aside className="sticky top-20 hidden max-h-[calc(100dvh-6rem)] min-h-0 content-start gap-4 overflow-y-auto pr-1 lg:grid">
+      <aside className="sticky top-20 hidden max-h-[calc(100dvh-6rem)] min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-y-auto pr-1 lg:grid">
         <FolderTree
           workspaceSlug={workspaceSlug}
           folders={folders}

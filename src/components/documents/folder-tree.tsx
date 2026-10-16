@@ -116,7 +116,10 @@ export function FolderTree({
     const level = children.get(parentId);
     if (!level?.length) return null;
     return (
-      <ul className="grid gap-0.5" role={depth === 0 ? undefined : 'group'}>
+      <ul
+        className="grid grid-cols-[minmax(0,1fr)] gap-0.5"
+        role={depth === 0 ? undefined : 'group'}
+      >
         {level.map((folder) => {
           const hasChildren = (children.get(folder.id)?.length ?? 0) > 0;
           const isOpen = expanded.has(folder.id);
@@ -153,6 +156,7 @@ export function FolderTree({
                   href={folderHref(workspaceSlug, folder.id)}
                   onClick={onNavigate}
                   aria-current={isActive ? 'page' : undefined}
+                  title={folder.name}
                   className="flex min-w-0 flex-1 items-center gap-2 py-1.5 focus-visible:underline focus-visible:outline-none"
                 >
                   {isActive || isOpen ? (
@@ -177,8 +181,9 @@ export function FolderTree({
   }
 
   const rootActive = activeFolderId === null;
+  // minmax(0,1fr) у nav и ul: длинные имена обрезаются многоточием, а не растягивают колонку.
   return (
-    <nav aria-label="Папки документов" className="grid gap-1">
+    <nav aria-label="Папки документов" className="grid grid-cols-[minmax(0,1fr)] gap-1">
       <Link
         href={folderHref(workspaceSlug, null)}
         onClick={onNavigate}
