@@ -81,6 +81,8 @@
   --radius: 0.625rem;
   /* Высота шапки приложения на sm+ (h-14 и нижняя рамка). */
   --app-header-h: calc(3.5rem + 1px);
+  /* Ширина панели задачи справа на lg+ (task-panel-frame.tsx). */
+  --task-panel-w: min(42rem, 45vw);
   --sidebar: oklch(0.975 0.004 265);
   --sidebar-foreground: oklch(0.21 0.015 265);
   --sidebar-primary: oklch(0.5 0.13 270);
@@ -169,6 +171,25 @@
   [data-project-shell]:has([data-board]) {
     grid-template-rows: auto minmax(0, 1fr);
     min-height: 0;
+  }
+}
+
+/*
+ * Открыта панель задачи. На lg+ страница освобождает место справа: левый край остаётся там же,
+ * где у шапки (max-w-7xl по центру), правый — до панели. На меньших экранах панель поверх
+ * страницы, прокрутка страницы под ней отключена.
+ */
+@media (width >= 64rem) {
+  main:has([data-task-panel]) {
+    width: auto;
+    max-width: none;
+    margin-left: max(0px, calc((100% - 80rem) / 2));
+    margin-right: var(--task-panel-w);
+  }
+}
+@media (width < 64rem) {
+  html:has([data-task-panel]) {
+    overflow: hidden;
   }
 }
 

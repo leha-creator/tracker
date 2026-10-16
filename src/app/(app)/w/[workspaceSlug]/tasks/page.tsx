@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
+import { TaskPanel } from '@/components/tasks/task-panel/task-panel';
+import { taskPanelHref } from '@/components/tasks/task-panel/task-panel-href';
 import { TaskListEmpty } from '@/components/tasks/task-list/task-list-empty';
 import { TaskListPagination } from '@/components/tasks/task-list/task-list-pagination';
 import { TaskListShell } from '@/components/tasks/task-list/task-list-shell';
@@ -19,9 +21,26 @@ type Props = PageProps<'/w/[workspaceSlug]/tasks'>;
 
 export default function TasksPage({ params, searchParams }: Props) {
   return (
-    <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
-      <TasksSection params={params} searchParams={searchParams} />
-    </Suspense>
+    <>
+      <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
+        <TasksSection params={params} searchParams={searchParams} />
+      </Suspense>
+      {/* Панель задачи (`?task=`) — своя граница Suspense, список её не ждёт. */}
+      <Suspense fallback={null}>
+        <TasksPanel params={params} searchParams={searchParams} />
+      </Suspense>
+    </>
+  );
+}
+
+async function TasksPanel({ params, searchParams }: Props) {
+  const { workspaceSlug } = await params;
+  return (
+    <TaskPanel
+      workspaceSlug={workspaceSlug}
+      searchParams={searchParams}
+      basePath={`/w/${workspaceSlug}/tasks`}
+    />
   );
 }
 
@@ -46,7 +65,9 @@ async function TasksSection({ params, searchParams }: Props) {
           Задачи
         </h1>
         <Button asChild size="sm">
-          <Link href={`/w/${workspace.slug}/tasks/new`}>Новая задача</Link>
+          <Link href={taskPanelHref(basePath, raw, 'new')} scroll={false}>
+            Новая задача
+          </Link>
         </Button>
       </div>
       <TaskListShell query={shown} scope="workspace" basePath={basePath}>
@@ -68,7 +89,12 @@ async function TasksSection({ params, searchParams }: Props) {
           </TaskListEmpty>
         ) : (
           <>
-            <TaskListTable items={page.items} scope="workspace" workspaceSlug={workspace.slug} />
+            <TaskListTable
+              items={page.items}
+              scope="workspace"
+              basePath={basePath}
+              searchParams={raw}
+            />
             <TaskListPagination page={page} query={shown} scope="workspace" basePath={basePath} />
           </>
         )}

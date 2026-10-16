@@ -22,9 +22,9 @@ export async function TaskAttachmentsSection({
 
   return (
     <>
-      <h2 id="task-attachments-heading" className="font-medium">
+      <h3 id="task-attachments-heading" className="text-sm font-semibold">
         Вложения{attachments.length > 0 && ` (${attachments.length})`}
-      </h2>
+      </h3>
       <AttachmentDropzone
         workspaceId={workspaceId}
         taskId={taskId}
@@ -32,7 +32,7 @@ export async function TaskAttachmentsSection({
         existingCount={attachments.length}
       >
         {attachments.length > 0 && (
-          <ul className="grid gap-2 sm:grid-cols-2">
+          <ul className="grid gap-2 @lg:grid-cols-2">
             {attachments.map(({ createdAt, ...attachment }) => (
               <AttachmentItem
                 key={attachment.id}

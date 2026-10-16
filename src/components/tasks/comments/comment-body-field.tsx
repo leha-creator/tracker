@@ -12,6 +12,9 @@ interface CommentBodyFieldProps {
   errors?: string[];
   autoFocus?: boolean;
   onEscape?: () => void;
+  placeholder?: string;
+  /** Высота в покое; поле растёт по содержимому. */
+  rows?: number;
 }
 
 /** Текст комментария: Ctrl/⌘+Enter — отправить форму, Esc — `onEscape`. */
@@ -22,6 +25,8 @@ export function CommentBodyField({
   errors,
   autoFocus,
   onEscape,
+  placeholder,
+  rows = 3,
 }: CommentBodyFieldProps) {
   const errorId = `${id}-error`;
   const hasErrors = Boolean(errors?.length);
@@ -44,7 +49,8 @@ export function CommentBodyField({
       <Textarea
         id={id}
         name="body"
-        rows={3}
+        rows={rows}
+        placeholder={placeholder}
         maxLength={TASK_COMMENT_MAX_LENGTH}
         defaultValue={defaultValue}
         autoFocus={autoFocus}

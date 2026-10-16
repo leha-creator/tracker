@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
 import { KanbanBoard } from '@/components/tasks/kanban-board';
+import { TaskPanel } from '@/components/tasks/task-panel/task-panel';
 import { listStatuses } from '@/modules/projects';
 import { getBoardCards } from '@/modules/tasks';
 
@@ -11,11 +12,29 @@ export const metadata: Metadata = { title: 'Доска проекта — Tasker
 
 type Props = PageProps<'/w/[workspaceSlug]/projects/[projectId]/board'>;
 
-export default function ProjectBoardPage({ params }: Props) {
+export default function ProjectBoardPage({ params, searchParams }: Props) {
   return (
-    <Suspense fallback={<BoardSkeleton />}>
-      <BoardSection params={params} />
-    </Suspense>
+    <>
+      <Suspense fallback={<BoardSkeleton />}>
+        <BoardSection params={params} />
+      </Suspense>
+      {/* Панель задачи (`?task=`) — своя граница Suspense, доска её не ждёт. */}
+      <Suspense fallback={null}>
+        <BoardTaskPanel params={params} searchParams={searchParams} />
+      </Suspense>
+    </>
+  );
+}
+
+async function BoardTaskPanel({ params, searchParams }: Props) {
+  const { workspaceSlug, projectId } = await params;
+  return (
+    <TaskPanel
+      workspaceSlug={workspaceSlug}
+      searchParams={searchParams}
+      basePath={`/w/${workspaceSlug}/projects/${projectId}/board`}
+      defaultProjectId={projectId}
+    />
   );
 }
 
@@ -50,7 +69,6 @@ async function BoardSection({ params }: Pick<Props, 'params'>) {
   return (
     <KanbanBoard
       workspaceId={workspace.id}
-      workspaceSlug={workspace.slug}
       projectId={project.id}
       statuses={statuses}
       cards={cards}

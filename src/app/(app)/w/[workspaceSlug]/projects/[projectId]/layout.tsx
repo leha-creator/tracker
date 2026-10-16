@@ -25,7 +25,6 @@ async function ProjectHeader({ params }: Pick<Props, 'params'>) {
     <ProjectNav
       basePath={`/w/${workspace.slug}/projects/${project.id}`}
       projectsHref={`/w/${workspace.slug}`}
-      newTaskHref={`/w/${workspace.slug}/tasks/new?projectId=${project.id}`}
       name={project.name}
       description={project.description}
       canManage={access.permissions.manageProjects}

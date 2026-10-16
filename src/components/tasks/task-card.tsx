@@ -11,19 +11,25 @@ import { PriorityBadge } from './priority-badge';
 type TaskCardProps = Omit<ComponentProps<typeof Link>, 'href' | 'children'> & {
   card: BoardCardDto;
   href: string;
+  /** Задача открыта в панели справа — карточка подсвечена. */
+  active?: boolean;
 };
 
-/** Карточка задачи на доске: ссылка на страницу задачи (доп. пропсы — для перетаскивания). */
-export function TaskCard({ card, href, className, ...props }: TaskCardProps) {
+/** Карточка задачи на доске: открывает задачу в панели (доп. пропсы — для перетаскивания). */
+export function TaskCard({ card, href, active, className, ...props }: TaskCardProps) {
   return (
     <Link
       href={href}
+      // Открытие панели не прокручивает доску к началу.
+      scroll={false}
+      aria-current={active || undefined}
       {...props}
       className={cn(
         // relative — чтобы sr-only подписи внутри не позиционировались относительно страницы.
         'relative grid gap-2 rounded-lg bg-card p-3 text-sm shadow-card transition-[box-shadow,translate,scale,opacity] duration-200 ease-out hover:shadow-card-hover',
         'motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0 motion-safe:active:scale-[0.99]',
         'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        active && 'ring-2 ring-primary/50',
         className,
       )}
     >

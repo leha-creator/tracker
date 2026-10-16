@@ -1,18 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { getProjectTabs } from '@/components/layout/nav-items';
 import { TabLink } from '@/components/layout/tab-link';
+import { taskPanelHref } from '@/components/tasks/task-panel/task-panel-href';
 import { Button } from '@/components/ui/button';
 
 interface ProjectNavProps {
   basePath: string;
   /** Список проектов пространства — первый шаг хлебных крошек. */
   projectsHref: string;
-  /** Ссылка «Новая задача» с выбранным проектом. */
-  newTaskHref: string;
   name: string;
   description: string | null;
   canManage: boolean;
@@ -22,12 +21,17 @@ interface ProjectNavProps {
 export function ProjectNav({
   basePath,
   projectsHref,
-  newTaskHref,
   name,
   description,
   canManage,
 }: ProjectNavProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // «Новая задача» открывает панель создания на доске или в списке; из настроек — на доске.
+  const onTaskView = pathname === basePath + '/board' || pathname === basePath + '/list';
+  const newTaskHref = onTaskView
+    ? taskPanelHref(pathname, searchParams.toString(), 'new')
+    : taskPanelHref(basePath + '/board', '', 'new');
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-3 border-b">
@@ -52,7 +56,9 @@ export function ProjectNav({
           )}
         </div>
         <Button asChild size="sm">
-          <Link href={newTaskHref}>Новая задача</Link>
+          <Link href={newTaskHref} scroll={false}>
+            Новая задача
+          </Link>
         </Button>
       </div>
       <nav

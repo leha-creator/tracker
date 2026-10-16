@@ -19,18 +19,33 @@ import {
 import { AssigneeAvatar } from '../assignee-avatar';
 import { DueDate } from '../due-date';
 import { PriorityBadge } from '../priority-badge';
+import {
+  parseTaskPanelParam,
+  TASK_PANEL_PARAM,
+  taskPanelHref,
+} from '../task-panel/task-panel-href';
 import { SortHeader } from './sort-header';
 
 interface TaskListTableProps {
   items: TaskListItemDto[];
   scope: TaskListScope;
-  workspaceSlug: string;
+  /** Путь страницы списка и её параметры: строка открывает задачу в панели, фильтры остаются. */
+  basePath: string;
+  searchParams: Record<string, string | string[] | undefined>;
   /** Проект вкладки «Список»: колонка «Статус» показывает статус в нём. */
   projectId?: string;
 }
 
 /** Таблица задач. Сортируемые заголовки — клиентские, строки рендерятся на сервере. */
-export function TaskListTable({ items, scope, workspaceSlug, projectId }: TaskListTableProps) {
+export function TaskListTable({
+  items,
+  scope,
+  basePath,
+  searchParams,
+  projectId,
+}: TaskListTableProps) {
+  const panel = parseTaskPanelParam(searchParams[TASK_PANEL_PARAM]);
+  const openNumber = panel.mode === 'view' ? panel.number : null;
   return (
     <div className="overflow-x-auto rounded-lg border transition-opacity group-data-pending/list:opacity-60">
       <Table>
@@ -50,11 +65,16 @@ export function TaskListTable({ items, scope, workspaceSlug, projectId }: TaskLi
         </TableHeader>
         <TableBody>
           {items.map((task) => (
-            <TableRow key={task.id}>
+            <TableRow
+              key={task.id}
+              data-state={task.number === openNumber ? 'selected' : undefined}
+            >
               <TableCell className="text-muted-foreground tabular-nums">{task.key}</TableCell>
               <TableCell className="max-w-80">
                 <Link
-                  href={`/w/${workspaceSlug}/tasks/${task.number}`}
+                  href={taskPanelHref(basePath, searchParams, task.number)}
+                  scroll={false}
+                  aria-current={task.number === openNumber || undefined}
                   className="line-clamp-2 font-medium whitespace-normal hover:underline"
                 >
                   {task.title}

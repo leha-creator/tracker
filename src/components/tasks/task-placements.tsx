@@ -1,11 +1,11 @@
 'use client';
 
+import { X } from 'lucide-react';
 import Link from 'next/link';
 import { startTransition, useActionState, useEffect, useOptimistic } from 'react';
 import { toast } from 'sonner';
 
 import { ConfirmActionDialog } from '@/components/forms/confirm-action-dialog';
-import { Button } from '@/components/ui/button';
 import type { ProjectStatusDto } from '@/modules/projects/client';
 import {
   changeStatusAction,
@@ -24,7 +24,10 @@ interface PlacementRowProps {
   statuses: ProjectStatusDto[];
 }
 
-/** Размещение: проект → статус (смена сразу по выбору) и «Убрать из проекта». */
+/**
+ * Размещение: проект → статус (смена сразу по выбору) и «×» — убрать из проекта.
+ * В покое строка читается как текст; «×» и стрелка статуса появляются при наведении и фокусе.
+ */
 function PlacementRow({
   workspaceId,
   workspaceSlug,
@@ -52,14 +55,15 @@ function PlacementRow({
   }
 
   return (
-    <li className="flex flex-wrap items-center gap-2 rounded-lg border p-2">
+    <li className="group/placement flex min-h-8 min-w-0 flex-wrap items-center gap-x-1">
       <Link
         href={`/w/${workspaceSlug}/projects/${placement.projectId}/board`}
-        className="min-w-0 flex-1 truncate text-sm font-medium hover:underline"
+        className="min-w-0 shrink truncate rounded-sm text-sm font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         {placement.projectName}
       </Link>
       <StatusSelect
+        quiet
         statuses={statuses}
         value={statusId}
         onValueChange={change}
@@ -70,9 +74,14 @@ function PlacementRow({
         action={removeFromProjectAction}
         fields={ids}
         trigger={
-          <Button type="button" size="sm" variant="ghost">
-            Убрать
-          </Button>
+          <button
+            type="button"
+            aria-label={`Убрать из проекта «${placement.projectName}»`}
+            title="Убрать из проекта"
+            className="ml-auto grid size-7 shrink-0 cursor-pointer place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity outline-none group-focus-within/placement:opacity-100 group-hover/placement:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 pointer-coarse:opacity-100"
+          >
+            <X className="size-4" />
+          </button>
         }
         title={`Убрать задачу из проекта «${placement.projectName}»?`}
         description="Карточка исчезнет с доски проекта. Задача останется в пространстве."
@@ -98,12 +107,10 @@ export function TaskPlacements({
   statusesByProject,
 }: TaskPlacementsProps) {
   if (placements.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">Задача пока не добавлена ни в один проект.</p>
-    );
+    return <p className="py-1.5 text-sm text-muted-foreground">Не добавлена в проекты</p>;
   }
   return (
-    <ul className="grid gap-2">
+    <ul className="grid min-w-0">
       {placements.map((placement) => (
         <PlacementRow
           // key со статусом: после revalidate строка пересоздаётся с актуальным статусом.

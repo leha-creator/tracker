@@ -1,10 +1,10 @@
 'use client';
 
+import { Plus } from 'lucide-react';
 import { useActionState, useState } from 'react';
 
 import { FormError } from '@/components/forms/form-field';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -27,8 +27,9 @@ interface AddToProjectFormProps {
 }
 
 /**
- * Добавление задачи в проект: проект → статус (по умолчанию первый статус проекта).
- * После успеха список проектов меняется — родитель пересоздаёт форму по key.
+ * «+ Добавить в проект»: по нажатию — проект и статус (по умолчанию первый статус проекта).
+ * Раскрытые поля — в обычном виде: это активный ввод. После успеха список проектов меняется —
+ * родитель пересоздаёт форму по key, и она снова свёрнута.
  */
 export function AddToProjectForm({
   workspaceId,
@@ -40,6 +41,7 @@ export function AddToProjectForm({
     addToProjectAction,
     null,
   );
+  const [open, setOpen] = useState(false);
   const [projectId, setProjectId] = useState('');
   const [statusId, setStatusId] = useState('');
   const failure = state && !state.ok ? state : null;
@@ -47,8 +49,19 @@ export function AddToProjectForm({
   const error =
     fieldErrors?.projectId?.join(' ') ?? fieldErrors?.statusId?.join(' ') ?? failure?.error.message;
 
-  if (projects.length === 0) {
-    return <p className="text-sm text-muted-foreground">Задача уже во всех проектах.</p>;
+  if (projects.length === 0) return null;
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="-ml-2 inline-flex h-8 cursor-pointer items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        <Plus aria-hidden className="size-4" />
+        Добавить в проект
+      </button>
+    );
   }
 
   function selectProject(next: string) {
@@ -57,13 +70,12 @@ export function AddToProjectForm({
   }
 
   return (
-    <form action={formAction} className="grid gap-2" noValidate>
+    <form action={formAction} className="grid gap-2 py-1" noValidate>
       <input type="hidden" name="workspaceId" value={workspaceId} />
       <input type="hidden" name="taskId" value={taskId} />
-      <Label htmlFor="add-project">Добавить в проект</Label>
       <div className="flex flex-wrap items-center gap-2">
         <Select name="projectId" value={projectId} onValueChange={selectProject}>
-          <SelectTrigger id="add-project" size="sm" className="w-44">
+          <SelectTrigger size="sm" className="w-44" aria-label="Проект">
             <SelectValue placeholder="Проект" />
           </SelectTrigger>
           <SelectContent>
@@ -81,8 +93,11 @@ export function AddToProjectForm({
           disabled={!projectId}
           label="Статус в новом проекте"
         />
-        <Button type="submit" size="sm" variant="secondary" disabled={pending || !statusId}>
+        <Button type="submit" size="sm" disabled={pending || !statusId}>
           {pending ? 'Добавляем…' : 'Добавить'}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          Отмена
         </Button>
       </div>
       <FormError message={error} />

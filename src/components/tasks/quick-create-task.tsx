@@ -73,7 +73,11 @@ export function QuickCreateTask({
         defaultValue={failure?.values.title}
         disabled={pending}
         onKeyDown={(event) => {
-          if (event.key === 'Escape') setOpen(false);
+          if (event.key === 'Escape') {
+            // Esc закрывает только поле, не панель задачи.
+            event.preventDefault();
+            setOpen(false);
+          }
         }}
         className="h-8 bg-background"
       />

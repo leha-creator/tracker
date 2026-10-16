@@ -1,21 +1,22 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
-import { CreateTaskForm } from '@/components/tasks/create-task-form';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { listProjects, listWorkspaceStatuses } from '@/modules/projects';
-import { listMembers } from '@/modules/workspaces';
+import { TaskPanelSkeleton } from '@/components/tasks/task-panel/task-panel-frame';
+import { TaskCreateView } from '@/components/tasks/task-panel/task-create-view';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
 
 export const metadata: Metadata = { title: 'Новая задача — Tasker' };
 
 type Props = PageProps<'/w/[workspaceSlug]/tasks/new'>;
 
+/** Отдельная страница создания: та же компоновка, что в панели; после создания — на страницу задачи. */
 export default function NewTaskPage({ params, searchParams }: Props) {
   return (
-    <Suspense fallback={<div className="h-96 max-w-2xl animate-pulse rounded-xl bg-muted" />}>
-      <NewTaskSection params={params} searchParams={searchParams} />
-    </Suspense>
+    <div className="mx-auto w-full max-w-3xl overflow-clip rounded-xl border bg-background">
+      <Suspense fallback={<TaskPanelSkeleton />}>
+        <NewTaskSection params={params} searchParams={searchParams} />
+      </Suspense>
+    </div>
   );
 }
 
@@ -23,29 +24,14 @@ async function NewTaskSection({ params, searchParams }: Props) {
   const { workspaceSlug } = await params;
   const { projectId } = await searchParams;
   const { session, workspace } = await requireWorkspaceAccessBySlug(workspaceSlug);
-  const [members, projects, statusesByProject] = await Promise.all([
-    listMembers(session, workspace.id),
-    listProjects(session, workspace.id),
-    listWorkspaceStatuses(session, workspace.id),
-  ]);
 
   return (
-    <Card className="w-full max-w-2xl">
-      <CardHeader>
-        <CardTitle role="heading" aria-level={1}>
-          Новая задача
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <CreateTaskForm
-          workspaceId={workspace.id}
-          members={members.map((member) => ({ userId: member.userId, name: member.name }))}
-          projects={projects.map(({ id, name }) => ({ id, name }))}
-          statusesByProject={statusesByProject}
-          // Неизвестный проект просто не выбирается: форма проверяет его по списку статусов.
-          defaultProjectId={typeof projectId === 'string' ? projectId : undefined}
-        />
-      </CardContent>
-    </Card>
+    <TaskCreateView
+      session={session}
+      workspaceId={workspace.id}
+      variant="page"
+      closeHref={`/w/${workspace.slug}/tasks`}
+      defaultProjectId={typeof projectId === 'string' ? projectId : undefined}
+    />
   );
 }

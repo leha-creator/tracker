@@ -1,7 +1,7 @@
 'use client';
 
 import { Paperclip } from 'lucide-react';
-import { useActionState, useRef, type FormEvent } from 'react';
+import { useActionState, useRef, useState, type FocusEvent, type FormEvent } from 'react';
 import { toast } from 'sonner';
 
 import { FormError } from '@/components/forms/form-field';
@@ -23,13 +23,19 @@ import { CommentBodyField } from './comment-body-field';
 interface CommentFormProps {
   workspaceId: string;
   taskId: string;
+  /**
+   * Форма закреплена внизу панели задачи: в покое — только поле, кнопки появляются при фокусе,
+   * тексте или файлах.
+   */
+  docked?: boolean;
 }
 
 /**
  * Новый комментарий с файлами. Файлы загружаются сразу (черновики), при отправке привязываются к
  * комментарию. После успеха React сбрасывает поле, черновики очищаются; при ошибке всё остаётся.
  */
-export function CommentForm({ workspaceId, taskId }: CommentFormProps) {
+export function CommentForm({ workspaceId, taskId, docked = false }: CommentFormProps) {
+  const [active, setActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useAttachmentUpload({ workspaceId, taskId, target: 'comment' });
   const [state, formAction, pending] = useActionState<FormState, FormData>(
@@ -62,6 +68,16 @@ export function CommentForm({ workspaceId, taskId }: CommentFormProps) {
     });
   }
 
+  // Свёрнуть кнопки, когда фокус ушёл из формы и поле пустое.
+  function handleBlur(event: FocusEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
+    if (form.contains(event.relatedTarget)) return;
+    const body = form.elements.namedItem('body');
+    if (body instanceof HTMLTextAreaElement && body.value.trim() === '') setActive(false);
+  }
+
+  const expanded = !docked || active || upload.items.length > 0;
+
   // Ctrl+Enter во время загрузки не должен отправить комментарий без файлов.
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     if (upload.busy) event.preventDefault();
@@ -71,6 +87,8 @@ export function CommentForm({ workspaceId, taskId }: CommentFormProps) {
     <form
       action={formAction}
       onSubmit={handleSubmit}
+      onFocus={docked ? () => setActive(true) : undefined}
+      onBlur={docked ? handleBlur : undefined}
       {...handlers}
       className={cn(
         'grid gap-2 rounded-xl border border-transparent transition-colors',
@@ -89,15 +107,17 @@ export function CommentForm({ workspaceId, taskId }: CommentFormProps) {
         label="Новый комментарий"
         defaultValue={failure?.values.body ?? ''}
         errors={fieldErrors?.body}
+        placeholder={docked ? 'Написать комментарий…' : undefined}
+        rows={docked ? 1 : 3}
       />
       {upload.items.length > 0 && (
-        <ul className="grid gap-2 sm:grid-cols-2" aria-label="Файлы комментария">
+        <ul className="grid gap-2 @lg:grid-cols-2" aria-label="Файлы комментария">
           {upload.items.map((item) => (
             <UploadRow key={item.localId} item={item} onCancel={removeItem} />
           ))}
         </ul>
       )}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className={cn('flex flex-wrap items-center gap-3', !expanded && 'hidden')}>
         <Button type="submit" size="sm" disabled={pending || upload.busy}>
           {pending ? 'Отправляем…' : upload.busy ? 'Загружаем файлы…' : 'Отправить'}
         </Button>

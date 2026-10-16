@@ -135,7 +135,7 @@ export function CommentItem({
         comment.body && <p className="text-sm break-words whitespace-pre-wrap">{comment.body}</p>
       )}
       {comment.attachments.length > 0 && (
-        <ul className="grid gap-2 sm:grid-cols-2" aria-label="Файлы комментария">
+        <ul className="grid gap-2 @lg:grid-cols-2" aria-label="Файлы комментария">
           {comment.attachments.map((attachment) => (
             <AttachmentItem
               key={attachment.id}

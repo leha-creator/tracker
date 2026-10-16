@@ -14,12 +14,12 @@ interface CommentListProps {
   workspaceId: string;
   taskId: string;
   comments: TaskCommentsDto;
-  /** Адрес страницы задачи — для ссылки «Показать все». */
-  taskHref: string;
+  /** Адрес «Показать все» — текущая страница или панель с `comments=all`. */
+  showAllHref: string;
 }
 
 /** Лента комментариев (от старых к новым). Даты форматируются здесь, на сервере. */
-export function CommentList({ workspaceId, taskId, comments, taskHref }: CommentListProps) {
+export function CommentList({ workspaceId, taskId, comments, showAllHref }: CommentListProps) {
   if (comments.total === 0) {
     return <p className="text-sm text-muted-foreground">Комментариев пока нет.</p>;
   }
@@ -28,7 +28,7 @@ export function CommentList({ workspaceId, taskId, comments, taskHref }: Comment
       {comments.truncated && (
         <p className="text-sm text-muted-foreground">
           Показаны последние {comments.items.length} из {comments.total}.{' '}
-          <Link href={`${taskHref}?comments=all`} scroll={false} className="underline">
+          <Link href={showAllHref} scroll={false} className="underline">
             Показать все ({comments.total})
           </Link>
         </p>

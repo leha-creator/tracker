@@ -13,6 +13,8 @@ interface SortableTaskCardProps {
   card: BoardCardDto;
   statusId: string;
   href: string;
+  /** Задача открыта в панели. */
+  active?: boolean;
   /** true сразу после перетаскивания: клик, завершивший перенос, не должен открывать задачу. */
   shouldSuppressClick: () => boolean;
   reduceMotion: boolean;
@@ -26,6 +28,7 @@ export function SortableTaskCard({
   card,
   statusId,
   href,
+  active,
   shouldSuppressClick,
   reduceMotion,
 }: SortableTaskCardProps) {
@@ -42,6 +45,7 @@ export function SortableTaskCard({
       ref={setNodeRef}
       card={card}
       href={href}
+      active={active}
       {...listeners}
       aria-describedby={describedBy}
       aria-roledescription="перетаскиваемая карточка"

@@ -21,7 +21,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useId, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
@@ -41,6 +41,7 @@ import { createBoardAnnouncements, SCREEN_READER_INSTRUCTIONS } from './board-an
 import { QuickCreateTask } from './quick-create-task';
 import { SortableTaskCard } from './sortable-task-card';
 import { TaskCard } from './task-card';
+import { parseTaskPanelParam, TASK_PANEL_PARAM, taskPanelHref } from './task-panel/task-panel-href';
 import { usePrefersReducedMotion } from './use-prefers-reduced-motion';
 
 const COLUMN_PREFIX = 'column:';
@@ -51,7 +52,6 @@ const columnId = (statusId: string) => `${COLUMN_PREFIX}${statusId}`;
 
 interface KanbanBoardProps {
   workspaceId: string;
-  workspaceSlug: string;
   projectId: string;
   statuses: ProjectStatusDto[];
   cards: BoardCardsDto;
@@ -66,15 +66,15 @@ interface DragOrigin {
  * Канбан-доска проекта: колонки — статусы, карточки перетаскиваются внутри колонки и между
  * колонками. Состояние оптимистичное; при ошибке сервера доска возвращается к данным сервера.
  */
-export function KanbanBoard({
-  workspaceId,
-  workspaceSlug,
-  projectId,
-  statuses,
-  cards,
-}: KanbanBoardProps) {
+export function KanbanBoard({ workspaceId, projectId, statuses, cards }: KanbanBoardProps) {
   const dndId = useId();
   const router = useRouter();
+  // Карточка открывает задачу в панели справа (`?task=<номер>`) на этой же странице.
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const panel = parseTaskPanelParam(searchParams.get(TASK_PANEL_PARAM) ?? undefined);
+  const openNumber = panel.mode === 'view' ? panel.number : null;
+  const cardHref = (number: number) => taskPanelHref(pathname, searchParams.toString(), number);
   const reduceMotion = usePrefersReducedMotion();
   const [, startTransition] = useTransition();
 
@@ -244,7 +244,8 @@ export function KanbanBoard({
               status={status}
               cards={columns[status.id] ?? []}
               workspaceId={workspaceId}
-              workspaceSlug={workspaceSlug}
+              cardHref={cardHref}
+              openNumber={openNumber}
               projectId={projectId}
               shouldSuppressClick={() => Date.now() - droppedAt.current < CLICK_SUPPRESS_MS}
               reduceMotion={reduceMotion}
@@ -256,7 +257,7 @@ export function KanbanBoard({
         {activeCard && (
           <TaskCard
             card={activeCard}
-            href={`/w/${workspaceSlug}/tasks/${activeCard.number}`}
+            href={cardHref(activeCard.number)}
             tabIndex={-1}
             className="cursor-grabbing shadow-card-hover ring-2 ring-primary/40"
           />
@@ -270,7 +271,9 @@ interface BoardColumnProps {
   status: ProjectStatusDto;
   cards: BoardCardDto[];
   workspaceId: string;
-  workspaceSlug: string;
+  cardHref: (number: number) => string;
+  /** Номер задачи, открытой в панели, — её карточка подсвечена. */
+  openNumber: number | null;
   projectId: string;
   shouldSuppressClick: () => boolean;
   reduceMotion: boolean;
@@ -281,7 +284,8 @@ function BoardColumn({
   status,
   cards,
   workspaceId,
-  workspaceSlug,
+  cardHref,
+  openNumber,
   projectId,
   shouldSuppressClick,
   reduceMotion,
@@ -319,7 +323,8 @@ function BoardColumn({
               <SortableTaskCard
                 card={card}
                 statusId={status.id}
-                href={`/w/${workspaceSlug}/tasks/${card.number}`}
+                href={cardHref(card.number)}
+                active={card.number === openNumber}
                 shouldSuppressClick={shouldSuppressClick}
                 reduceMotion={reduceMotion}
               />

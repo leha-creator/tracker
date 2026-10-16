@@ -17,10 +17,11 @@ interface PriorityBadgeProps {
   priority: TaskPriority;
   /** Компактно (карточка доски): подпись видна только у высокого и срочного, у остальных — sr-only. */
   compact?: boolean;
+  className?: string;
 }
 
 /** Индикатор приоритета: три деления и подпись. «Без приоритета» не показывается. */
-export function PriorityBadge({ priority, compact = false }: PriorityBadgeProps) {
+export function PriorityBadge({ priority, compact = false, className }: PriorityBadgeProps) {
   if (priority === 'none') return null;
   const level = priorityLevel(priority);
   const label = TASK_PRIORITY_LABELS[priority];
@@ -29,7 +30,11 @@ export function PriorityBadge({ priority, compact = false }: PriorityBadgeProps)
   return (
     <span
       title={`Приоритет: ${label}`}
-      className={cn('inline-flex items-center gap-1 text-xs font-medium', PRIORITY_TONES[priority])}
+      className={cn(
+        'inline-flex items-center gap-1 text-xs font-medium',
+        PRIORITY_TONES[priority],
+        className,
+      )}
     >
       <svg aria-hidden viewBox="0 0 12 12" className="size-3 shrink-0" fill="currentColor">
         {BARS.map((bar) => (
