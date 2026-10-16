@@ -29,7 +29,7 @@ tasker/
 │   │   │   │   ├── tasks/[taskId]/page.tsx
 │   │   │   │   ├── docs/[[...docPath]]/page.tsx          # Документация
 │   │   │   │   └── settings/members/page.tsx
-│   │   │   └── admin/                # Глобальная админка (роль ADMIN)
+│   │   │   └── admin/                # Глобальная админка (роль ADMIN): users/ — пользователи ресурса
 │   │   └── api/
 │   │       ├── auth/[...all]/route.ts         # Better Auth handler
 │   │       └── webhooks/github/route.ts       # GitHub webhooks
@@ -66,6 +66,14 @@ tasker/
 │   │   │   │   ├── attachment/
 │   │   │   │   └── views/            # запросы для канбана и списка (read-модели); фильтры/сортировка списка — task-list.prisma.ts
 │   │   │   ├── models/               # правила задачи, TaskPlacement, позиции (fractional-indexing), Priority
+│   │   │   ├── client.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── admin/                    # Администрирование ресурса (роль ADMIN)
+│   │   │   ├── slices/
+│   │   │   │   └── user/             # список пользователей; блокировка, роль, сессии, удаление через плагин admin
+│   │   │   ├── models/               # правила над пользователями (не над собой, администратора — сначала снять роль, единственный владелец), запрос списка
+│   │   │   ├── admin-api.ts          # callAdminApi: вызов API плагина admin + маппинг ошибок
 │   │   │   ├── client.ts
 │   │   │   └── index.ts
 │   │   │
@@ -117,6 +125,7 @@ tasker/
 - ✅ Если модулю нужны клиентские компоненты, он дополнительно экспортирует `client.ts`: actions, Zod-схемы, чистые функции и типы без server-only кода. Клиентские компоненты импортируют `@/modules/<module>/client`, серверный код — `@/modules/<module>`
 - ✅ `tasks` зависит от `projects` и `workspaces` (через их `index.ts`), но не наоборот. Страница доски сама собирает колонки из `projects` и карточки из `tasks`
 - ✅ `integrations/github` зависит от `tasks`, но `tasks` не зависит от `integrations/github`
+- ✅ `admin` зависит от `workspaces` (число пространств, единоличное владение), но не наоборот. Проверки администратора (`requireAdmin`) читают сессию в обход cookie-кеша (`getFreshSession`)
 - ❌ Компоненты и страницы не импортируют `prisma` и репозитории
 - ❌ Actions не вызывают репозитории в обход сервиса
 - ❌ Модели не импортируют сервисы, репозитории и `@prisma/client`

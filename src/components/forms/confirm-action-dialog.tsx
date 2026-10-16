@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, type ReactNode } from 'react';
+import { useActionState, useEffect, type ReactNode } from 'react';
 
 import { FormError } from '@/components/forms/form-field';
 import {
@@ -20,10 +20,16 @@ interface ConfirmActionDialogProps {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   /** Скрытые поля формы (id пространства, участника и т.п.). */
   fields: Record<string, string>;
-  trigger: ReactNode;
+  /** Кнопка-триггер. Без неё диалог управляется снаружи через `open` / `onOpenChange`. */
+  trigger?: ReactNode;
   title: string;
-  description: string;
+  description: ReactNode;
   confirmLabel: string;
+  /** Обычное (не разрушительное) действие — кнопка без красного цвета. */
+  confirmVariant?: 'destructive' | 'default';
+  open?: boolean;
+  /** Вызывается и при закрытии после успешного ответа сервера. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** Подтверждение необратимого действия; ошибка сервера показывается внутри диалога. */
@@ -34,13 +40,21 @@ export function ConfirmActionDialog({
   title,
   description,
   confirmLabel,
+  confirmVariant = 'destructive',
+  open,
+  onOpenChange,
 }: ConfirmActionDialogProps) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, null);
   const failure = state && !state.ok ? state : null;
 
+  // Управляемый диалог закрывается после успеха; неуправляемый закроет сама перерисовка списка.
+  useEffect(() => {
+    if (state?.ok) onOpenChange?.(false);
+  }, [state, onOpenChange]);
+
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      {trigger && <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>}
       <AlertDialogContent>
         <form action={formAction} className="grid gap-4">
           <AlertDialogHeader>
@@ -54,7 +68,7 @@ export function ConfirmActionDialog({
           <AlertDialogFooter>
             <AlertDialogCancel type="button">Отмена</AlertDialogCancel>
             {/* Обычная кнопка submit: AlertDialogAction закрыл бы диалог до ответа сервера. */}
-            <Button type="submit" variant="destructive" disabled={pending}>
+            <Button type="submit" variant={confirmVariant} disabled={pending}>
               {pending ? 'Подождите…' : confirmLabel}
             </Button>
           </AlertDialogFooter>

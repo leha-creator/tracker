@@ -2,7 +2,7 @@ import 'server-only';
 
 import { notFound, redirect } from 'next/navigation';
 
-import { getSession, type AuthSession } from '@/shared/auth';
+import { getFreshSession, getSession, type AuthSession } from '@/shared/auth';
 import { ForbiddenError, UnauthorizedError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
@@ -11,24 +11,48 @@ import { safeRedirectPath } from './safe-redirect';
 
 const log = createLogger('access');
 
-/** Требует вход. Для сервисов и Server Actions: бросает доменные ошибки. */
-export async function requireUser(): Promise<AuthSession> {
-  const session = await getSession();
+type ReadSession = () => Promise<AuthSession | null>;
+
+async function requireActiveSession(read: ReadSession, scope: string): Promise<AuthSession> {
+  const session = await read();
   if (!session) {
-    log.warn('[access.requireUser] unauthenticated');
+    log.warn(`[${scope}] unauthenticated`);
     throw new UnauthorizedError();
   }
   if (session.user.banned) {
-    log.warn({ userId: session.user.id }, '[access.requireUser] banned user');
+    log.warn({ userId: session.user.id }, `[${scope}] banned user`);
     throw new ForbiddenError('Учётная запись заблокирована');
   }
+  return session;
+}
+
+async function requireSessionOrRedirect(
+  read: ReadSession,
+  scope: string,
+  returnTo?: string,
+): Promise<AuthSession> {
+  const session = await read();
+  if (!session || session.user.banned) {
+    const target = safeRedirectPath(returnTo, '');
+    log.debug({ returnTo: target }, `[${scope}] redirect to login`);
+    redirect(target ? `/login?returnTo=${encodeURIComponent(target)}` : '/login');
+  }
+  return session;
+}
+
+/** Требует вход. Для сервисов и Server Actions: бросает доменные ошибки. */
+export async function requireUser(): Promise<AuthSession> {
+  const session = await requireActiveSession(getSession, 'access.requireUser');
   log.debug({ userId: session.user.id }, '[access.requireUser]');
   return session;
 }
 
-/** Требует глобальную роль admin. */
+/**
+ * Требует глобальную роль admin. Сессия читается в обход cookie-кеша: снятая роль
+ * или блокировка действуют сразу.
+ */
 export async function requireAdmin(): Promise<AuthSession> {
-  const session = await requireUser();
+  const session = await requireActiveSession(getFreshSession, 'access.requireAdmin');
   if (!isAdmin(session.user)) {
     log.warn(
       { userId: session.user.id, role: session.user.role },
@@ -42,18 +66,19 @@ export async function requireAdmin(): Promise<AuthSession> {
 
 /** Для страниц: без сессии — редирект на вход с возвратом на исходный путь. */
 export async function requireUserOrRedirect(returnTo?: string): Promise<AuthSession> {
-  const session = await getSession();
-  if (!session || session.user.banned) {
-    const target = safeRedirectPath(returnTo, '');
-    log.debug({ returnTo: target }, '[access.requireUserOrRedirect] redirect to login');
-    redirect(target ? `/login?returnTo=${encodeURIComponent(target)}` : '/login');
-  }
-  return session;
+  return requireSessionOrRedirect(getSession, 'access.requireUserOrRedirect', returnTo);
 }
 
-/** Для страниц админки: не-администратору отдаём 404, не раскрывая существование раздела. */
-export async function requireAdminOrNotFound(): Promise<AuthSession> {
-  const session = await requireUserOrRedirect();
+/**
+ * Для страниц админки: не-администратору отдаём 404, не раскрывая существование раздела.
+ * Сессия — в обход cookie-кеша, как в requireAdmin.
+ */
+export async function requireAdminOrNotFound(returnTo?: string): Promise<AuthSession> {
+  const session = await requireSessionOrRedirect(
+    getFreshSession,
+    'access.requireAdminOrNotFound',
+    returnTo,
+  );
   if (!isAdmin(session.user)) {
     log.warn(
       { userId: session.user.id, role: session.user.role },

@@ -139,7 +139,8 @@ function createAuth() {
     },
     // nextCookies() — последним: выставляет cookie из Server Actions.
     plugins: [
-      admin({ defaultRole: 'user', adminRoles: ['admin'] }),
+      // Без причины плагин записал бы «No reason»; причину показывает админка.
+      admin({ defaultRole: 'user', adminRoles: ['admin'], defaultBanReason: 'Причина не указана' }),
       workspacesPlugin(),
       nextCookies(),
     ],

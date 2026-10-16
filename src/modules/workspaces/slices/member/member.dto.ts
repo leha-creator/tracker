@@ -12,3 +12,10 @@ export interface MemberDto {
   joinedAt: Date;
   isCurrentUser: boolean;
 }
+
+/** Пространство, где пользователь — единственный владелец. */
+export interface SoleOwnedWorkspaceDto {
+  id: string;
+  name: string;
+  slug: string;
+}

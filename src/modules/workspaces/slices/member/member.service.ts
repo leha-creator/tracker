@@ -12,7 +12,7 @@ import { createLogger } from '@/shared/logger';
 
 import { Membership } from '../../models';
 import { callOrganizationApi } from '../../organization-api';
-import type { MemberDto } from './member.dto';
+import type { MemberDto, SoleOwnedWorkspaceDto } from './member.dto';
 import { memberRepository } from './member.repository';
 
 const log = createLogger('workspaces.member');
@@ -63,6 +63,27 @@ export async function isWorkspaceMember(workspaceId: string, userId: string): Pr
   const result = await memberRepository.isMember(workspaceId, userId);
   log.debug({ workspaceId, userId, result }, '[member.isWorkspaceMember]');
   return result;
+}
+
+/**
+ * Число пространств каждого из пользователей (нет записи — 0). Без проверки сессии: только для
+ * серверных модулей, которые уже проверили права (например, админка ресурса).
+ */
+export async function countWorkspacesByUsers(userIds: string[]): Promise<Map<string, number>> {
+  if (userIds.length === 0) return new Map();
+  const result = await memberRepository.countByUsers(userIds);
+  log.debug({ usersCount: userIds.length }, '[member.countWorkspacesByUsers]');
+  return result;
+}
+
+/**
+ * Пространства, где пользователь — единственный владелец. Без проверки сессии: только для
+ * серверных модулей, которые уже проверили права (например, удаление пользователя в админке).
+ */
+export async function listSoleOwnedWorkspaces(userId: string): Promise<SoleOwnedWorkspaceDto[]> {
+  const rows = await memberRepository.listSoleOwnedWorkspaces(userId);
+  log.debug({ userId, count: rows.length }, '[member.listSoleOwnedWorkspaces]');
+  return rows;
 }
 
 export async function changeMemberRole(

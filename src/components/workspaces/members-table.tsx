@@ -30,7 +30,7 @@ import {
 } from '@/modules/workspaces/client';
 import { WORKSPACE_ROLES, type WorkspaceRole } from '@/shared/access/workspace-role';
 
-import { ConfirmActionDialog } from './confirm-action-dialog';
+import { ConfirmActionDialog } from '@/components/forms/confirm-action-dialog';
 import { WORKSPACE_ROLE_LABELS } from './role-label';
 
 interface MembersTableProps {

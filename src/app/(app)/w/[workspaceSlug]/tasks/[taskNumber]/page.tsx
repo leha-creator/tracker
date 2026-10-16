@@ -9,7 +9,7 @@ import { AddToProjectForm } from '@/components/tasks/add-to-project-form';
 import { TaskDetailsForm } from '@/components/tasks/task-details-form';
 import { TaskPlacements } from '@/components/tasks/task-placements';
 import { Button } from '@/components/ui/button';
-import { ConfirmActionDialog } from '@/components/workspaces/confirm-action-dialog';
+import { ConfirmActionDialog } from '@/components/forms/confirm-action-dialog';
 import { listProjects, listWorkspaceStatuses } from '@/modules/projects';
 import {
   deleteTaskAction,

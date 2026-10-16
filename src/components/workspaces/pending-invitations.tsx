@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/table';
 import { cancelInvitationAction, type PendingInvitationDto } from '@/modules/workspaces/client';
 
-import { ConfirmActionDialog } from './confirm-action-dialog';
+import { ConfirmActionDialog } from '@/components/forms/confirm-action-dialog';
 import { CopyLinkButton } from './copy-link-button';
 import { WORKSPACE_ROLE_LABELS } from './role-label';
 

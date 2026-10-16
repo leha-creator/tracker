@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { startTransition, useActionState, useEffect, useOptimistic } from 'react';
 import { toast } from 'sonner';
 
-import { ConfirmActionDialog } from '@/components/workspaces/confirm-action-dialog';
+import { ConfirmActionDialog } from '@/components/forms/confirm-action-dialog';
 import { Button } from '@/components/ui/button';
 import type { ProjectStatusDto } from '@/modules/projects/client';
 import {

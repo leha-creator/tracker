@@ -25,6 +25,30 @@ export const memberRepository = {
     return row !== null;
   },
 
+  /** Число пространств каждого пользователя: один groupBy на страницу списка. */
+  async countByUsers(userIds: string[]): Promise<Map<string, number>> {
+    const rows = await prisma.workspaceMember.groupBy({
+      by: ['userId'],
+      where: { userId: { in: userIds } },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((row) => [row.userId, row._count._all]));
+  },
+
+  /** Пространства, где пользователь — владелец и других владельцев нет. */
+  listSoleOwnedWorkspaces(userId: string) {
+    return prisma.workspace.findMany({
+      where: {
+        members: {
+          some: { userId, role: 'owner' },
+          none: { role: 'owner', userId: { not: userId } },
+        },
+      },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, slug: true },
+    });
+  },
+
   countOwners(workspaceId: string) {
     return prisma.workspaceMember.count({ where: { workspaceId, role: 'owner' } });
   },

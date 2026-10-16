@@ -3,5 +3,10 @@
 export * from './client';
 
 export { getInvitationForRecipient, listInvitations } from './slices/invitation/invitation.service';
-export { isWorkspaceMember, listMembers } from './slices/member/member.service';
+export {
+  countWorkspacesByUsers,
+  isWorkspaceMember,
+  listMembers,
+  listSoleOwnedWorkspaces,
+} from './slices/member/member.service';
 export { listMyWorkspaces } from './slices/workspace/workspace.service';

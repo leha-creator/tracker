@@ -14,6 +14,9 @@ const countOwners = vi.fn<() => Promise<number>>();
 const setCanManageProjects =
   vi.fn<(ws: string, memberId: string, value: boolean) => Promise<number>>();
 const isMember = vi.fn<(ws: string, userId: string) => Promise<boolean>>();
+const countByUsers = vi.fn<(userIds: string[]) => Promise<Map<string, number>>>();
+const listSoleOwned =
+  vi.fn<(userId: string) => Promise<{ id: string; name: string; slug: string }[]>>();
 const updateMemberRole = vi.fn();
 const removeMember = vi.fn();
 const leaveOrganization = vi.fn();
@@ -31,6 +34,8 @@ vi.mock('./member.repository', () => ({
       setCanManageProjects(...args),
     listByWorkspace: vi.fn(),
     isMember: (...args: Parameters<typeof isMember>) => isMember(...args),
+    countByUsers: (...args: Parameters<typeof countByUsers>) => countByUsers(...args),
+    listSoleOwnedWorkspaces: (...args: Parameters<typeof listSoleOwned>) => listSoleOwned(...args),
   },
 }));
 vi.mock('../../organization-api', () => ({
@@ -40,7 +45,9 @@ vi.mock('../../organization-api', () => ({
 
 const {
   changeMemberRole,
+  countWorkspacesByUsers,
   isWorkspaceMember,
+  listSoleOwnedWorkspaces,
   leaveWorkspace,
   removeMember: removeMemberService,
   setMemberPermission,
@@ -202,5 +209,30 @@ describe('isWorkspaceMember', () => {
 
     isMember.mockResolvedValue(false);
     await expect(isWorkspaceMember('ws-1', 'stranger')).resolves.toBe(false);
+  });
+});
+
+describe('countWorkspacesByUsers', () => {
+  it('skips the query for an empty list', async () => {
+    await expect(countWorkspacesByUsers([])).resolves.toEqual(new Map());
+    expect(countByUsers).not.toHaveBeenCalled();
+  });
+
+  it('returns counts from the repository', async () => {
+    countByUsers.mockResolvedValue(new Map([['user-1', 3]]));
+    const result = await countWorkspacesByUsers(['user-1', 'user-2']);
+    expect(countByUsers).toHaveBeenCalledWith(['user-1', 'user-2']);
+    expect(result.get('user-1')).toBe(3);
+    expect(result.get('user-2')).toBeUndefined();
+  });
+});
+
+describe('listSoleOwnedWorkspaces', () => {
+  it('returns workspaces where the user is the only owner', async () => {
+    listSoleOwned.mockResolvedValue([{ id: 'ws-1', name: 'Альфа', slug: 'alfa' }]);
+    await expect(listSoleOwnedWorkspaces('user-1')).resolves.toEqual([
+      { id: 'ws-1', name: 'Альфа', slug: 'alfa' },
+    ]);
+    expect(listSoleOwned).toHaveBeenCalledWith('user-1');
   });
 });

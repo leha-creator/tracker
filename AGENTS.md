@@ -35,7 +35,7 @@ tasker/
 │   ├── proxy.ts              # Оптимистичный редирект на /login по session-cookie (не авторизация)
 │   ├── app/                  # Представление (Next.js): страницы, layout, route handlers
 │   │   ├── (auth)/           # /login, /register
-│   │   ├── (app)/            # Защищённая зона: шапка (переключатель пространств, меню), /, /admin,
+│   │   ├── (app)/            # Защищённая зона: шапка (переключатель пространств, меню), /, /admin (→ /admin/users),
 │   │   │                     # /workspaces/new, /w/[workspaceSlug] (+ settings, settings/members), /invite/[invitationId],
 │   │   │                     # /w/[workspaceSlug]/projects/new, projects/[projectId]/{board,list,settings},
 │   │   │                     # /w/[workspaceSlug]/tasks (+ new, [taskNumber])
@@ -46,10 +46,12 @@ tasker/
 │   │   ├── auth/             # Вход, регистрация, выход: Zod-схемы, сервис, Server Actions
 │   │   ├── workspaces/       # Пространства, участники (+ право «Управление проектами»), приглашения (index.ts — сервер, client.ts — клиент)
 │   │   ├── projects/         # Проекты и статусы-колонки: модели (StatusSet), срезы project/status
-│   │   └── tasks/            # Задачи: модели (TaskPlacement, позиции, запрос списка TaskListQuery, права на комментарии), срезы task/placement/comment/views; зависит от projects и workspaces
+│   │   ├── tasks/            # Задачи: модели (TaskPlacement, позиции, запрос списка TaskListQuery, права на комментарии), срезы task/placement/comment/views; зависит от projects и workspaces
+│   │   └── admin/            # Администрирование ресурса: модели (правила над пользователями, запрос списка), срез user (чтение — репозиторий, изменения — плагин admin через callAdminApi); зависит от workspaces
 │   ├── components/
 │   │   ├── auth/             # Формы входа/регистрации, меню пользователя
-│   │   ├── forms/            # FormField, FormError
+│   │   ├── forms/            # FormField, FormError, ConfirmActionDialog (подтверждение; управляемый режим open/onOpenChange)
+│   │   ├── admin/            # Навигация админки; users/ — таблица пользователей, фильтры (URL), меню действий, диалоги блокировки и удаления
 │   │   ├── workspaces/       # Список, переключатель, участники, приглашения
 │   │   ├── projects/         # Список проектов, навигация проекта, настройки проекта и статусов
 │   │   ├── tasks/            # Канбан-доска (dnd-kit), карточка, быстрое создание, страница задачи, размещения;
@@ -59,7 +61,7 @@ tasker/
 │   ├── lib/utils.ts          # cn() для shadcn
 │   ├── generated/prisma/     # Сгенерированный Prisma Client (в .gitignore)
 │   ├── shared/               # Сквозная инфраструктура
-│   │   ├── auth/             # Конфиг Better Auth (getAuth), getSession() → DTO
+│   │   ├── auth/             # Конфиг Better Auth (getAuth), getSession() → DTO, getFreshSession() (в обход cookie-кеша)
 │   │   ├── access/           # Глобальные роли, роли и права пространства, requireUser/requireAdmin, requireWorkspaceAccess(BySlug), requireWorkspacePermission
 │   │   ├── env/              # Валидация переменных окружения (Zod, ленивая)
 │   │   ├── logger/           # pino: createLogger(scope), redact секретов, maskEmail()
@@ -97,6 +99,7 @@ tasker/
 | `src/modules/workspaces/index.ts` | Пространства, участники, приглашения: actions и read-функции (`client.ts` — для клиентских компонентов) |
 | `src/modules/projects/index.ts` | Проекты и статусы: actions и read-функции (`listProjects`, `getProject`, `listStatuses`, `listWorkspaceStatuses`; `client.ts` — для клиентских компонентов) |
 | `src/modules/tasks/index.ts` | Задачи, размещения и комментарии: actions и read-функции (`getTaskByNumber`, `listTaskComments`, `listTasks`, `listProjectTasks`, `getBoardCards`, `parseTaskListParams`; `client.ts` — для клиентских компонентов, в т.ч. `movePlacementAction` и чистые функции переноса карточек) |
+| `src/modules/admin/index.ts` | Пользователи ресурса: `listAdminUsers`, `parseAdminUserListParams`; actions блокировки, роли, сессий и удаления (`client.ts` — для клиентских компонентов) |
 | `src/modules/auth/index.ts` | `signInAction`, `signUpAction`, `signOutAction`, Zod-схемы форм |
 | `src/proxy.ts` | Оптимистичный редирект неавторизованных на `/login` |
 | `src/app/api/health/route.ts` | Health check инфраструктуры |
@@ -123,7 +126,7 @@ tasker/
 | README | `README.md` | Лендинг: быстрый старт, возможности |
 | Начало работы | `docs/getting-started.md` | Установка, миграции, первый вход и администратор |
 | Конфигурация | `docs/configuration.md` | Переменные окружения, docker-compose, порты |
-| Архитектура | `docs/architecture.md` | Слои, границы ESLint, аутентификация, пространства, проекты, задачи, доска, список и комментарии, доступ, `/api/health` |
+| Архитектура | `docs/architecture.md` | Слои, границы ESLint, аутентификация, пространства, проекты, задачи, доска, список и комментарии, администрирование, доступ, `/api/health` |
 | Логирование и ошибки | `docs/logging-and-errors.md` | `createLogger`, `AppError`, `ActionResult` |
 | Разработка | `docs/development.md` | Команды, линтеры, тесты, Prisma |
 | Docker-образ и CI | `docs/deployment.md` | Dockerfile, `compose.app.yml`, миграции, smoke-скрипт, GitHub Actions |

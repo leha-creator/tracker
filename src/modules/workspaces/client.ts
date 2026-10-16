@@ -20,7 +20,7 @@ export {
   removeMemberAction,
   setMemberPermissionAction,
 } from './slices/member/member.actions';
-export type { MemberDto } from './slices/member/member.dto';
+export type { MemberDto, SoleOwnedWorkspaceDto } from './slices/member/member.dto';
 export {
   createWorkspaceAction,
   deleteWorkspaceAction,

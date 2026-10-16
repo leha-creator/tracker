@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthSession } from '@/shared/auth';
 
 const getSession = vi.fn<() => Promise<AuthSession | null>>();
+const getFreshSession = vi.fn<() => Promise<AuthSession | null>>();
 const redirect = vi.fn((url: string) => {
   throw new Error(`NEXT_REDIRECT:${url}`);
 });
@@ -10,7 +11,10 @@ const notFound = vi.fn(() => {
   throw new Error('NEXT_NOT_FOUND');
 });
 
-vi.mock('@/shared/auth', () => ({ getSession: () => getSession() }));
+vi.mock('@/shared/auth', () => ({
+  getSession: () => getSession(),
+  getFreshSession: () => getFreshSession(),
+}));
 vi.mock('next/navigation', () => ({
   redirect: (url: string) => redirect(url),
   notFound: () => notFound(),
@@ -57,13 +61,30 @@ describe('requireUser', () => {
 });
 
 describe('requireAdmin', () => {
+  it('reads fresh session, not the cookie-cached one', async () => {
+    getSession.mockResolvedValue(sessionOf({ role: 'admin' }));
+    getFreshSession.mockResolvedValue(sessionOf());
+    await expect(requireAdmin()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(getSession).not.toHaveBeenCalled();
+  });
+
+  it('throws UNAUTHORIZED without session', async () => {
+    getFreshSession.mockResolvedValue(null);
+    await expect(requireAdmin()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+
+  it('throws FORBIDDEN for banned admin', async () => {
+    getFreshSession.mockResolvedValue(sessionOf({ role: 'admin', banned: true }));
+    await expect(requireAdmin()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
   it('throws FORBIDDEN for regular user', async () => {
-    getSession.mockResolvedValue(sessionOf());
+    getFreshSession.mockResolvedValue(sessionOf());
     await expect(requireAdmin()).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('passes for admin', async () => {
-    getSession.mockResolvedValue(sessionOf({ role: 'admin' }));
+    getFreshSession.mockResolvedValue(sessionOf({ role: 'admin' }));
     await expect(requireAdmin()).resolves.toMatchObject({ user: { role: 'admin' } });
   });
 });
@@ -84,13 +105,21 @@ describe('requireUserOrRedirect', () => {
 });
 
 describe('requireAdminOrNotFound', () => {
+  it('redirects to login without fresh session', async () => {
+    getFreshSession.mockResolvedValue(null);
+    await expect(requireAdminOrNotFound('/admin/users')).rejects.toThrow(
+      'NEXT_REDIRECT:/login?returnTo=%2Fadmin%2Fusers',
+    );
+  });
+
   it('responds 404 for regular user', async () => {
-    getSession.mockResolvedValue(sessionOf());
+    getFreshSession.mockResolvedValue(sessionOf());
     await expect(requireAdminOrNotFound()).rejects.toThrow('NEXT_NOT_FOUND');
   });
 
   it('passes for admin', async () => {
-    getSession.mockResolvedValue(sessionOf({ role: 'admin' }));
+    getFreshSession.mockResolvedValue(sessionOf({ role: 'admin' }));
     await expect(requireAdminOrNotFound()).resolves.toMatchObject({ user: { role: 'admin' } });
+    expect(getSession).not.toHaveBeenCalled();
   });
 });
