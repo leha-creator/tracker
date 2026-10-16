@@ -12,7 +12,8 @@
 #   - создаёт docker-сеть edge;
 #   - добавляет ключ деплоя Tasker в authorized_keys пользователя deploy;
 #   - создаёт /opt/tasker/.env со сгенерированными секретами, если его ещё нет (существующий не трогает);
-#   - ставит backup.sh и systemd-таймеры резервных копий.
+#   - ставит backup.sh и systemd-таймеры резервных копий;
+#   - включает MSS clamping для трафика контейнеров (deploy/host/docker-mss-clamp.service).
 # Секреты в вывод не печатаются.
 set -eu
 
@@ -107,6 +108,17 @@ if [ -d "$SRC/tasker/systemd" ] && command -v systemctl > /dev/null 2>&1; then
   log "backup timers: ok ($(systemctl list-timers 'tasker-backup-*' --no-legend | wc -l) active)"
 else
   log "backup timers: skip (no systemd units or systemctl)"
+fi
+
+# --- MSS clamping для контейнеров (MTU сервера меньше, чем у сетей Docker) -------------
+if [ -f "$SRC/host/docker-mss-clamp.service" ] && command -v systemctl > /dev/null 2>&1; then
+  install -o root -g root -m 644 "$SRC/host/docker-mss-clamp.service" /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable docker-mss-clamp.service > /dev/null
+  systemctl restart docker-mss-clamp.service
+  log "docker MSS clamping: ok ($(iptables -t mangle -S FORWARD | grep -c TCPMSS) rule)"
+else
+  log "docker MSS clamping: skip (no unit file or systemctl)"
 fi
 
 # --- проверки SSH ----------------------------------------------------------------

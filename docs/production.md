@@ -24,6 +24,7 @@ push в main ──► CI: check, migrations, docker ──► publish (GHCR) �
 | `/opt/tasker/release.env` | `TASKER_TAG=sha-xxxxxxx` — текущий релиз | CI при каждом деплое |
 | `/opt/tasker/backup.sh`, `/opt/tasker/backups/` | Скрипт и резервные копии | CI (скрипт), таймеры (копии) |
 | `/etc/systemd/system/tasker-backup*` | Таймеры резервных копий | `bootstrap-server.sh` |
+| `/etc/systemd/system/docker-mss-clamp.service` | MSS clamping для контейнеров (см. «Почта») | `bootstrap-server.sh` |
 
 Файлы, которые копирует CI, руками не правятся: следующий деплой их перезапишет.
 
@@ -129,23 +130,26 @@ $C up -d minio
 
 Письма отправляются только для приглашений в пространство. Пока SMTP не настроен, приглашение всё равно создаётся: письмо не уходит (в логах `[invitation] email failed`), а владелец получает ссылку и передаёт её вручную.
 
-Подключение ящика на домене (Yandex 360 или Mail.ru для бизнеса):
+Почта домена — у reg.ru (ящик `no-reply@plwedding.ru`). DNS уже настроен через reg.ru: MX `mxs1.reg.ru` / `mxs2.reg.ru`, SPF (`include:_spf.hosting.reg.ru`), DKIM (селектор `dkim`), DMARC `p=none`. A-запись `plwedding.ru` не трогать.
 
-1. Подключить `plwedding.ru` у провайдера и создать ящик `no-reply@plwedding.ru`.
-2. В DNS у reg.ru добавить записи, которые выдаст провайдер: MX, SPF (`v=spf1 include:<провайдер> ~all`), DKIM и DMARC (`v=DMARC1; p=none; rua=mailto:<ваш адрес>`). A-запись `plwedding.ru` не трогать.
-3. В настройках ящика создать пароль приложения.
-4. В `/opt/tasker/.env`:
+Настройки в `/opt/tasker/.env` (логин — полный адрес ящика, пароль — от ящика):
 
-   ```
-   SMTP_HOST=smtp.yandex.ru        # или smtp.mail.ru
-   SMTP_PORT=465
-   SMTP_SECURE=true
-   SMTP_USER=no-reply@plwedding.ru
-   SMTP_PASSWORD=<пароль приложения>
-   MAIL_FROM="Tasker <no-reply@plwedding.ru>"
-   ```
+```
+SMTP_HOST=mail.hosting.reg.ru
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=no-reply@plwedding.ru
+SMTP_PASSWORD='<пароль ящика>'
+MAIL_FROM="Tasker <no-reply@plwedding.ru>"
+```
 
-5. `$C up -d app`, отправить тестовое приглашение и проверить в заголовках письма `spf=pass` и `dkim=pass`.
+Пароль — в одинарных кавычках, чтобы `$`, `#` и пробелы не ломали файл. Затем `$C up -d app`, отправить тестовое приглашение и проверить в заголовках письма `spf=pass`, `dkim=pass`, `dmarc=pass`.
+
+### Таймауты SMTP из контейнера (MTU)
+
+У внешнего интерфейса сервера MTU 1450 (облако OpenStack), у сетей Docker — 1500. Без MSS clamping удалённый сервер шлёт контейнеру слишком большие TCP-сегменты, и TLS-рукопожатие зависает. Симптом: первое подключение к SMTP после паузы падает с `Connection timeout` (в UI — «Письмо отправить не удалось»), следующие проходят. С самого сервера (`openssl s_client`) всё работает, потому что его MSS уже правильный.
+
+Лечится правилом `iptables -t mangle ... -j TCPMSS --clamp-mss-to-pmtu` для трафика контейнеров. Его ставит `bootstrap-server.sh` как юнит `docker-mss-clamp.service` (`deploy/host/`). Проверка: `iptables -t mangle -S FORWARD | grep TCPMSS`.
 
 ## Новый сервер
 
