@@ -9,9 +9,9 @@ import { formValues, type FormState } from '@/shared/types';
 import { createCommentSchema, deleteCommentSchema, updateCommentSchema } from './comment.schema';
 import { createComment, deleteComment, updateComment } from './comment.service';
 
-/** Комментарии видны только на странице задачи. */
+/** Комментарии видны на странице задачи и в панели задачи поверх доски и списков — под layout пространства. */
 function revalidateTaskPage() {
-  revalidatePath('/w/[workspaceSlug]/tasks/[taskNumber]', 'page');
+  revalidatePath('/w/[workspaceSlug]', 'layout');
 }
 
 export async function createCommentAction(

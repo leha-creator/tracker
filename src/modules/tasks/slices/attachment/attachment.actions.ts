@@ -15,9 +15,9 @@ import {
 } from './attachment.schema';
 import { completeUpload, deleteAttachment, requestUpload } from './attachment.service';
 
-/** Вложения видны только на странице задачи. */
+/** Вложения видны на странице задачи и в панели задачи поверх доски и списков — под layout пространства. */
 function revalidateTaskPage() {
-  revalidatePath('/w/[workspaceSlug]/tasks/[taskNumber]', 'page');
+  revalidatePath('/w/[workspaceSlug]', 'layout');
 }
 
 /** Слот загрузки; вызывается из клиентского кода без формы. */
