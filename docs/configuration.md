@@ -20,6 +20,7 @@
 | `S3_BUCKET` | да | — | Бакет для вложений (мин. 3 символа) |
 | `S3_FORCE_PATH_STYLE` | нет | `true` | Path-style адресация, нужна для MinIO |
 | `S3_PUBLIC_ENDPOINT` | нет | `S3_ENDPOINT` | Адрес хранилища, который видит браузер. На него подписываются ссылки загрузки и скачивания вложений. Задайте, если сервер ходит в хранилище по внутреннему адресу (в Docker — `http://minio:9000`) |
+| `DOCUMENTS_WORKSPACE_QUOTA_MB` | нет | `1024` | Квота файлового хранилища одного пространства (раздел «Документы»), МБ. Учитываются загруженные файлы и незавершённые загрузки; заметки и вложения задач в квоту не входят. Один файл — до 50 МБ |
 | `BETTER_AUTH_SECRET` | да | — | Секрет Better Auth для подписи cookie и токенов, минимум 32 символа. Сгенерировать: `openssl rand -base64 32` |
 | `BETTER_AUTH_URL` | да | — | Публичный URL приложения, локально `http://localhost:3000` |
 | `ADMIN_EMAILS` | нет | пусто | Email через запятую. Пользователь с таким email при регистрации получает глобальную роль `admin`. Регистр и пробелы не важны |
@@ -67,9 +68,9 @@ env.S3_BUCKET; // типизировано
 | `minio-init` | `pgsty/mc` (закреплён по digest) | Создаёт приватный бакет и завершается |
 | `mailpit` | `axllent/mailpit:v1.31.5` | SMTP-ловушка для писем, UI на порту 8025 |
 
-## Хранилище для вложений
+## Хранилище для вложений и документов
 
-Браузер загружает файлы прямо в хранилище (presigned POST) и скачивает их оттуда же (presigned GET). Поэтому нужны два условия:
+Вложения задач, фото профилей и файлы раздела «Документы» лежат в одном бакете под разными префиксами (`ws/<workspaceId>/tasks/…`, `users/<userId>/avatar/…`, `ws/<workspaceId>/docs/…`). Браузер загружает файлы прямо в хранилище (presigned POST) и скачивает их оттуда же (presigned GET). Поэтому нужны два условия:
 
 - **Адрес хранилища доступен браузеру.** Ссылки подписываются на `S3_PUBLIC_ENDPOINT`. Локально это `http://localhost:9000`, в контейнерном стеке — `http://localhost:9002`, в продакшене — домен приложения: бакет проксируется на том же адресе ([Продакшен](production.md#вложения-через-тот-же-домен)).
 - **CORS разрешает origin приложения.** MinIO настраивается переменной `MINIO_API_CORS_ALLOW_ORIGIN` (в `compose.yml` — через `MINIO_CORS_ALLOW_ORIGIN`). Если запускаете dev-сервер на другом порту, добавьте его адрес в список. Для AWS S3 и других S3-совместимых сервисов задайте CORS-правило бакета:
@@ -87,6 +88,8 @@ env.S3_BUCKET; // типизировано
 
 Бакет остаётся приватным (`minio-init` выполняет `mc anonymous set none`): все ссылки подписанные и короткоживущие.
 
+PDF в разделе «Документы» показывается во `<iframe>` по ссылке хранилища, поэтому хранилище и прокси перед ним не должны отдавать `X-Frame-Options: DENY` или `Content-Security-Policy: frame-ancestors 'none'` для бакета. MinIO и прод-конфиг Caddy (`deploy/tasker/tracker.caddy`) таких заголовков не ставят. Если встраивание всё же запрещено, на странице документа остаётся ссылка «Откройте его в новой вкладке».
+
 > Официальные образы `minio/minio` больше не публикуются, поэтому используется сборка MinIO из исходников от Pigsty. Приложение работает с хранилищем только через S3 API, так что MinIO можно заменить любым S3-совместимым сервисом.
 
 ## Конфигурационные файлы
@@ -95,8 +98,8 @@ env.S3_BUCKET; // типизировано
 |------|------------|
 | `next.config.ts` | `output: 'standalone'` для Docker-образа, Cache Components, `serverExternalPackages` для pino, редирект `/w/:slug/projects/:projectId` → `/board` |
 | `prisma.config.ts` | Путь к схеме, миграции, `DATABASE_URL` для Prisma CLI |
-| `prisma/schema.prisma` | Схема БД (генератор `prisma-client` → `src/generated/prisma`). Модели Better Auth (`User`, `Session`, `Account`, `Verification`) пространств (`Workspace`, `WorkspaceMember`, `WorkspaceInvitation`), проектов (`Project`, `ProjectStatus`, enum `StatusCategory`) |
-| `src/shared/auth/auth.ts` | Настройки Better Auth: срок сессии (7 дней), длина пароля (8–128), плагины `admin` и `organization` (роли `owner`/`member`, приглашение действует 7 дней, до 50 пространств на пользователя, до 100 ожидающих приглашений на пространство, переименование моделей, поле участника `canManageProjects`) |
+| `prisma/schema.prisma` | Схема БД (генератор `prisma-client` → `src/generated/prisma`). Модели Better Auth (`User`, `Session`, `Account`, `Verification`) пространств (`Workspace`, `WorkspaceMember`, `WorkspaceInvitation`), проектов (`Project`, `ProjectStatus`, enum `StatusCategory`), задач, профилей, уведомлений и документов (`DocumentFolder`, `Document`, `DocumentTag`, `DocumentTagAssignment`, `TaskDocumentLink`) |
+| `src/shared/auth/auth.ts` | Настройки Better Auth: срок сессии (7 дней), длина пароля (8–128), плагины `admin` и `organization` (роли `owner`/`member`, приглашение действует 7 дней, до 50 пространств на пользователя, до 100 ожидающих приглашений на пространство, переименование моделей, поля участника `canManageProjects` и `canManageDocuments`) |
 | `components.json` | Настройки shadcn/ui CLI |
 | `eslint.config.mjs` / `.prettierrc` | Линтер и форматирование |
 | `vitest.config.ts` | Тесты и тестовые переменные окружения |
