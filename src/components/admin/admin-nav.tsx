@@ -5,7 +5,10 @@ import { usePathname } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
 
-const LINKS = [{ href: '/admin/users', label: 'Пользователи' }] as const;
+const LINKS = [
+  { href: '/admin/users', label: 'Пользователи' },
+  { href: '/admin/integrations', label: 'Интеграции' },
+] as const;
 
 /** Вкладки админки. Раздел «Пространства» появится следующим планом этапа. */
 export function AdminNav() {

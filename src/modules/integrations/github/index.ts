@@ -27,3 +27,9 @@ export {
 export { listTaskBranchesAndCommits } from './slices/link/link.service';
 export { getProjectAutomation } from './slices/automation/automation.service';
 export type { ProjectAutomationDto } from './slices/automation/automation.service';
+export { manifestCallbackSchema } from './slices/app-setup/app-setup.schema';
+export {
+  completeGithubAppManifest,
+  getGithubAppSetup,
+  INVALID_MANIFEST_STATE,
+} from './slices/app-setup/app-setup.service';

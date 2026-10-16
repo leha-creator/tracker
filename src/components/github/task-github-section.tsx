@@ -25,7 +25,7 @@ interface TaskGithubSectionProps {
  * Без настроенного GitHub App раздела нет. Тексты из GitHub выводятся только как текст.
  */
 export async function TaskGithubSection({ session, workspace, task }: TaskGithubSectionProps) {
-  if (!isGithubEnabled()) return null;
+  if (!(await isGithubEnabled())) return null;
   const [pullRequests, { branches, commits, commitsTotal }] = await Promise.all([
     listTaskPullRequests(session, workspace.id, task.id),
     listTaskBranchesAndCommits(session, workspace.id, task.id),

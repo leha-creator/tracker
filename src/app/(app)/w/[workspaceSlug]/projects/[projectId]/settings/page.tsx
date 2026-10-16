@@ -45,7 +45,7 @@ async function SettingsSection({ params }: Pick<Props, 'params'>) {
   const { session, workspace, project, access } = await loadProjectPage(workspaceSlug, projectId);
   // Без права управления проектами — 404; сервер всё равно проверяет право в каждом action.
   if (!access.permissions.manageProjects) notFound();
-  const githubEnabled = isGithubEnabled();
+  const githubEnabled = await isGithubEnabled();
   const [statuses, automation] = await Promise.all([
     listStatuses(session, workspace.id, project.id),
     githubEnabled ? getProjectAutomation(session, workspace.id, project.id) : null,

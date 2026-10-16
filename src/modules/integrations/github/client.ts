@@ -34,3 +34,8 @@ export { dismissPullRequestAction, linkPullRequestByUrlAction } from './slices/l
 export { suggestBranchName } from './models';
 export { updateProjectAutomationAction } from './slices/automation/automation.actions';
 export { KEEP_STATUS } from './slices/automation/automation.schema';
+export {
+  deleteGithubAppAction,
+  startGithubAppManifestAction,
+} from './slices/app-setup/app-setup.actions';
+export type { GithubAppSetupDto } from './slices/app-setup/app-setup.dto';

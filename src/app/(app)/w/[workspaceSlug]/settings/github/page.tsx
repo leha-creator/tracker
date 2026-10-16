@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
+import { GithubNotConfigured } from '@/components/github/github-not-configured';
 import { GithubSettings } from '@/components/github/github-settings';
 import { getGithubSettings, isGithubEnabled } from '@/modules/integrations/github';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
@@ -21,9 +21,29 @@ export default function WorkspaceGithubSettingsPage({ params, searchParams }: Pr
 
 async function GithubSection({ params, searchParams }: Props) {
   const { workspaceSlug } = await params;
-  // Только владелец; остальным — 404. Без настроенного GitHub App страницы нет.
+  // Только владелец; остальным — 404.
   const { session, workspace } = await requireWorkspaceAccessBySlug(workspaceSlug, 'owner');
-  if (!isGithubEnabled()) notFound();
+  const header = (
+    <div className="grid gap-1">
+      <Link
+        href={`/w/${workspace.slug}/settings`}
+        className="text-sm text-muted-foreground hover:text-foreground"
+      >
+        ← Настройки пространства
+      </Link>
+      <h1 className="text-2xl font-semibold tracking-tight">GitHub</h1>
+    </div>
+  );
+
+  if (!(await isGithubEnabled())) {
+    return (
+      <div className="grid w-full max-w-3xl gap-6">
+        {header}
+        <GithubNotConfigured isAdmin={session.user.role === 'admin'} />
+      </div>
+    );
+  }
+
   const [settings, query] = await Promise.all([
     getGithubSettings(session, workspace.id),
     searchParams,
@@ -31,15 +51,7 @@ async function GithubSection({ params, searchParams }: Props) {
 
   return (
     <div className="grid w-full max-w-3xl gap-6">
-      <div className="grid gap-1">
-        <Link
-          href={`/w/${workspace.slug}/settings`}
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
-          ← Настройки пространства
-        </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">GitHub</h1>
-      </div>
+      {header}
       <GithubSettings
         workspace={workspace}
         settings={settings}

@@ -845,3 +845,24 @@ model GithubProjectAutomation {
   @@index([prOpenedStatusId])
   @@index([prMergedStatusId])
 }
+
+/// GitHub App, созданное из админки по манифесту (одна строка, id = "default").
+/// Переменные GITHUB_* в окружении важнее этой записи. Секреты — AES-256-GCM (ключ из BETTER_AUTH_SECRET).
+model GithubAppConfig {
+  id            String   @id @default("default")
+  appId         Int
+  slug          String
+  name          String
+  htmlUrl       String
+  /// Владелец приложения на GitHub (пользователь или организация).
+  ownerLogin    String?
+  clientId      String
+  clientSecret  String
+  privateKey    String
+  webhookSecret String
+  /// Вебхук включён при создании (для localhost GitHub его не принимает).
+  webhookActive Boolean
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

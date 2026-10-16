@@ -20,8 +20,9 @@ const webhookRepo = {
 };
 const transaction = vi.fn((run: (tx: unknown) => Promise<unknown>) => run({ tx: true }));
 
-vi.mock('@/shared/env', () => ({
-  getEnv: () => ({ LOG_LEVEL: 'silent', GITHUB_WEBHOOK_SECRET: 'webhook-secret-value' }),
+vi.mock('@/shared/env', () => ({ getEnv: () => ({ LOG_LEVEL: 'silent' }) }));
+vi.mock('@/shared/github-app', () => ({
+  getGithubAppConfig: () => ({ webhookSecret: 'webhook-secret-value' }),
 }));
 vi.mock('@/shared/db', () => ({
   prisma: { $transaction: (run: (tx: unknown) => Promise<unknown>) => transaction(run) },

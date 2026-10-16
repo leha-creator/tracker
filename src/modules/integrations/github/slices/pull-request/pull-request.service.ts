@@ -142,7 +142,7 @@ export async function getPullRequestBadges(
   taskIds: readonly string[],
 ): Promise<PullRequestBadgesDto> {
   // Без настроенного GitHub App PR нет — страницы вызывают функцию без проверок.
-  if (!isGithubEnabled()) return {};
+  if (!(await isGithubEnabled())) return {};
   await requireWorkspaceAccess(session, workspaceId);
   const ids = [...new Set(taskIds)].filter(isEntityId).slice(0, BADGES_TASKS_LIMIT);
   if (ids.length === 0) return {};

@@ -27,6 +27,7 @@ async function SettingsSection({
   const { workspaceSlug } = await params;
   // Только владелец; остальным — 404.
   const { workspace } = await requireWorkspaceAccessBySlug(workspaceSlug, 'owner');
+  const githubEnabled = await isGithubEnabled();
 
   return (
     <div className="grid w-full max-w-3xl gap-6">
@@ -51,24 +52,22 @@ async function SettingsSection({
           <TaskKeyForm workspaceId={workspace.id} taskKey={workspace.taskKey} />
         </CardContent>
       </Card>
-      {isGithubEnabled() && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Интеграция с GitHub</CardTitle>
-            <CardDescription>
-              Репозитории пространства: PR, ветки и коммиты привязываются к задачам по ключу.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link
-              href={`/w/${workspace.slug}/settings/github`}
-              className="text-sm text-primary hover:underline"
-            >
-              Настроить GitHub
-            </Link>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle>Интеграция с GitHub</CardTitle>
+          <CardDescription>
+            Подключите свои репозитории: PR, ветки и коммиты привязываются к задачам по ключу.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link
+            href={`/w/${workspace.slug}/settings/github`}
+            className="text-sm text-primary hover:underline"
+          >
+            {githubEnabled ? 'Подключить репозитории' : 'Подробнее'}
+          </Link>
+        </CardContent>
+      </Card>
       <Card className="border-destructive/40">
         <CardHeader>
           <CardTitle>Опасная зона</CardTitle>

@@ -14,8 +14,8 @@ import { linkRepository } from './link.repository';
 
 const log = createLogger('github.link');
 
-function requireEnabled(): void {
-  if (!isGithubEnabled()) throw new NotFoundError('Интеграция с GitHub не настроена');
+async function requireEnabled(): Promise<void> {
+  if (!(await isGithubEnabled())) throw new NotFoundError('Интеграция с GitHub не настроена');
 }
 
 async function requireTask(workspaceId: string, taskId: string): Promise<void> {
@@ -35,7 +35,7 @@ export async function linkPullRequestByUrl(
     url: { owner: string; repo: string; number: number };
   },
 ): Promise<void> {
-  requireEnabled();
+  await requireEnabled();
   const { workspaceId, taskId } = input;
   await requireWorkspaceAccess(session, workspaceId);
   await requireTask(workspaceId, taskId);

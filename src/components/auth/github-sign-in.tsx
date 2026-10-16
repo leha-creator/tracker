@@ -4,7 +4,7 @@ import { isGithubEnabled } from '@/modules/integrations/github';
 import { GithubSignInButton } from './github-sign-in-button';
 
 /** Блок «или войдите через GitHub» под формой; без настроенного GitHub App — ничего. */
-export function GithubSignIn({
+export async function GithubSignIn({
   returnTo,
   errorCode,
   label,
@@ -13,7 +13,7 @@ export function GithubSignIn({
   errorCode?: string;
   label?: string;
 }) {
-  if (!isGithubEnabled()) return null;
+  if (!(await isGithubEnabled())) return null;
   return (
     <div className="grid gap-4">
       <div className="flex items-center gap-3 text-xs text-muted-foreground">

@@ -2,7 +2,7 @@ import 'server-only';
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import { getEnv } from '@/shared/env';
+import { getGithubAppConfig } from '@/shared/github-app';
 
 const SIGNATURE_PREFIX = 'sha256=';
 
@@ -22,8 +22,11 @@ export function verifyWebhookSignature(
   return received.length === expected.length && timingSafeEqual(received, expected);
 }
 
-/** Подпись вебхука на секрете из GITHUB_WEBHOOK_SECRET; без настройки — всегда false. */
+/**
+ * Подпись вебхука на секрете GitHub App (GITHUB_WEBHOOK_SECRET или из админки); без настройки —
+ * всегда false. Конфиг загружает isGithubEnabled() раньше в этом запросе.
+ */
 export function verifyGithubWebhookSignature(body: string, header: string | null): boolean {
-  const secret = getEnv().GITHUB_WEBHOOK_SECRET;
+  const secret = getGithubAppConfig()?.webhookSecret;
   return secret !== undefined && verifyWebhookSignature(body, header, secret);
 }

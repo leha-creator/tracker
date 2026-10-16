@@ -38,7 +38,7 @@ function settingsPath(slug: string | null, query: string): string {
 export async function GET(request: NextRequest): Promise<Response> {
   // Только во время запроса: без этого Next пререндерит GET при сборке и читает окружение (Cache Components).
   await connection();
-  if (!isGithubEnabled()) return new Response('Not Found', { status: 404 });
+  if (!(await isGithubEnabled())) return new Response('Not Found', { status: 404 });
 
   const session = await getSession();
   if (!session) {

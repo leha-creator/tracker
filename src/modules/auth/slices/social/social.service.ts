@@ -4,17 +4,17 @@ import { headers } from 'next/headers';
 
 import { safeRedirectPath } from '@/shared/access';
 import { getAuth } from '@/shared/auth';
-import { getEnv } from '@/shared/env';
 import { InternalError, NotFoundError } from '@/shared/errors';
+import { loadGithubAppConfig } from '@/shared/github-app';
 import { createLogger } from '@/shared/logger';
 
 import { mapAuthError } from '../credentials/credentials.errors';
 
 const log = createLogger('auth.social');
 
-/** Настроен ли вход через GitHub (все переменные GITHUB_*). */
-export function isGithubSignInEnabled(): boolean {
-  return getEnv().GITHUB_ENABLED;
+/** Настроен ли вход через GitHub (GitHub App из GITHUB_* или созданное в админке). */
+export async function isGithubSignInEnabled(): Promise<boolean> {
+  return (await loadGithubAppConfig()) !== null;
 }
 
 /**
@@ -22,7 +22,7 @@ export function isGithubSignInEnabled(): boolean {
  * авторизации. Ошибки колбэка вернутся на /login?error=<код> (см. githubSignInErrorMessage).
  */
 export async function startGithubSignIn(returnTo: string): Promise<string> {
-  if (!isGithubSignInEnabled()) throw new NotFoundError('Вход через GitHub не настроен');
+  if (!(await isGithubSignInEnabled())) throw new NotFoundError('Вход через GitHub не настроен');
   const callbackURL = safeRedirectPath(returnTo);
   const errorCallbackURL =
     callbackURL === '/' ? '/login' : `/login?returnTo=${encodeURIComponent(callbackURL)}`;

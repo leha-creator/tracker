@@ -8,7 +8,8 @@ import { organization } from 'better-auth/plugins/organization';
 import { memberAc, ownerAc } from 'better-auth/plugins/organization/access';
 
 import { prisma } from '@/shared/db';
-import { getEnv, type Env } from '@/shared/env';
+import { getEnv } from '@/shared/env';
+import { getGithubAppConfig, type GithubAppConfig } from '@/shared/github-app';
 import { createLogger } from '@/shared/logger';
 
 const log = createLogger('auth');
@@ -104,16 +105,12 @@ function workspacesPlugin() {
 }
 
 /** Провайдер GitHub (OAuth GitHub App) или ничего, если интеграция не настроена. */
-function githubProvider(env: Env) {
-  if (!env.GITHUB_ENABLED || !env.GITHUB_APP_CLIENT_ID || !env.GITHUB_APP_CLIENT_SECRET) {
-    return {};
-  }
-  return {
-    github: { clientId: env.GITHUB_APP_CLIENT_ID, clientSecret: env.GITHUB_APP_CLIENT_SECRET },
-  };
+function githubProvider(github: GithubAppConfig | null) {
+  if (!github) return {};
+  return { github: { clientId: github.clientId, clientSecret: github.clientSecret } };
 }
 
-function createAuth() {
+function createAuth(github: GithubAppConfig | null) {
   const env = getEnv();
 
   const auth = betterAuth({
@@ -127,10 +124,10 @@ function createAuth() {
       maxPasswordLength: PASSWORD_MAX_LENGTH,
       autoSignIn: true,
     },
-    // Вход через GitHub — только если настроено GitHub App (все GITHUB_*; см. docs/github.md).
+    // Вход через GitHub — только если настроено GitHub App (GITHUB_* или админка; см. docs/github.md).
     // Токены пользователя нужны интеграции (проверка доступа к установке), поэтому хранятся
     // зашифрованными; истёкший токен GitHub App обновляет getAccessToken.
-    socialProviders: githubProvider(env),
+    socialProviders: githubProvider(github),
     account: {
       encryptOAuthTokens: true,
       accountLinking: {
@@ -186,7 +183,11 @@ function createAuth() {
   });
 
   log.info(
-    { plugins: ['admin', 'organization', 'next-cookies'], sessionTtlSeconds: SESSION_TTL_SECONDS },
+    {
+      plugins: ['admin', 'organization', 'next-cookies'],
+      sessionTtlSeconds: SESSION_TTL_SECONDS,
+      github: github?.source ?? null,
+    },
     '[auth] better-auth initialized',
   );
   return auth;
@@ -195,10 +196,21 @@ function createAuth() {
 export type Auth = ReturnType<typeof createAuth>;
 
 // Singleton через globalThis: HMR в dev не пересоздаёт экземпляр.
-const globalForAuth = globalThis as unknown as { auth?: Auth };
+const globalForAuth = globalThis as unknown as {
+  auth?: Auth;
+  authGithub?: GithubAppConfig | null;
+};
 
-/** Экземпляр Better Auth (ленивый): создаётся при первом обращении, а не при импорте. */
+/**
+ * Экземпляр Better Auth (ленивый): создаётся при первом обращении, а не при импорте.
+ * Пересоздаётся, когда сменился конфиг GitHub App (создан или удалён в админке):
+ * провайдер входа через GitHub задаётся только при создании.
+ */
 export function getAuth(): Auth {
-  globalForAuth.auth ??= createAuth();
+  const github = getGithubAppConfig();
+  if (!globalForAuth.auth || globalForAuth.authGithub !== github) {
+    globalForAuth.auth = createAuth(github);
+    globalForAuth.authGithub = github;
+  }
   return globalForAuth.auth;
 }

@@ -39,8 +39,8 @@ interface UserInstallation {
   account: { id: number; login?: string; slug?: string; type?: string } | null;
 }
 
-function requireEnabled(): void {
-  if (!isGithubEnabled()) throw new NotFoundError('Интеграция с GitHub не настроена');
+async function requireEnabled(): Promise<void> {
+  if (!(await isGithubEnabled())) throw new NotFoundError('Интеграция с GitHub не настроена');
 }
 
 function toInstallationData(installation: UserInstallation): InstallationData {
@@ -96,7 +96,7 @@ export async function getGithubSettings(
   session: AuthSession,
   workspaceId: string,
 ): Promise<GithubSettingsDto> {
-  requireEnabled();
+  await requireEnabled();
   await requireWorkspaceAccess(session, workspaceId, 'owner');
   const userId = session.user.id;
 
@@ -151,7 +151,7 @@ export async function startInstallation(
   session: AuthSession,
   input: { workspaceId: string; workspaceSlug: string },
 ): Promise<string> {
-  requireEnabled();
+  await requireEnabled();
   await requireWorkspaceAccess(session, input.workspaceId, 'owner');
   if (!(await getGithubIdentity(session.user.id))) {
     throw new ForbiddenError('Сначала привяжите GitHub в профиле');
@@ -175,7 +175,7 @@ export async function connectInstallation(
   session: AuthSession,
   input: { workspaceId: string; installationId: string },
 ): Promise<void> {
-  requireEnabled();
+  await requireEnabled();
   const { workspaceId } = input;
   const userId = session.user.id;
   await requireWorkspaceAccess(session, workspaceId, 'owner');
@@ -223,7 +223,7 @@ export async function completeInstallation(
   session: AuthSession,
   input: { installationId: string; setupAction?: string; state: string },
 ): Promise<{ workspaceSlug: string }> {
-  requireEnabled();
+  await requireEnabled();
   const verified = verifyInstallState(input.state, session.user.id, getEnv().BETTER_AUTH_SECRET);
   log.debug(
     {

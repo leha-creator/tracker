@@ -2,7 +2,6 @@ import 'server-only';
 
 import { App, Octokit, RequestError } from 'octokit';
 
-import { getEnv } from '@/shared/env';
 import {
   AppError,
   ForbiddenError,
@@ -10,6 +9,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '@/shared/errors';
+import { getGithubAppConfig, loadGithubAppConfig, type GithubAppConfig } from '@/shared/github-app';
 import { createLogger } from '@/shared/logger';
 
 const log = createLogger('github.api');
@@ -17,41 +17,40 @@ const log = createLogger('github.api');
 export type GithubApp = InstanceType<typeof App>;
 export type GithubClient = InstanceType<typeof Octokit>;
 
-/** Заданы ли все переменные GITHUB_* (иначе интеграция и вход через GitHub выключены). */
-export function isGithubEnabled(): boolean {
-  return getEnv().GITHUB_ENABLED;
+/**
+ * Настроено ли GitHub App: переменные GITHUB_* или приложение, созданное в админке.
+ * Без него интеграция и вход через GitHub выключены. Загружает конфиг из БД (кеш на минуту).
+ */
+export async function isGithubEnabled(): Promise<boolean> {
+  return (await loadGithubAppConfig()) !== null;
 }
 
-function requireGithubConfig() {
-  const env = getEnv();
-  const {
-    GITHUB_APP_ID: appId,
-    GITHUB_APP_SLUG: slug,
-    GITHUB_APP_PRIVATE_KEY: privateKey,
-    GITHUB_APP_CLIENT_ID: clientId,
-    GITHUB_APP_CLIENT_SECRET: clientSecret,
-    GITHUB_WEBHOOK_SECRET: webhookSecret,
-  } = env;
-  if (!appId || !slug || !privateKey || !clientId || !clientSecret || !webhookSecret) {
-    throw new NotFoundError('Интеграция с GitHub не настроена');
-  }
-  return { appId, slug, privateKey, clientId, clientSecret, webhookSecret };
+/** Конфиг, загруженный {@link isGithubEnabled} раньше в этом запросе; без него — «не настроена». */
+function requireGithubConfig(): GithubAppConfig {
+  const config = getGithubAppConfig();
+  if (!config) throw new NotFoundError('Интеграция с GitHub не настроена');
+  return config;
 }
 
 // Singleton через globalThis: HMR в dev не пересоздаёт экземпляр (и кеш токенов установок).
-const globalForGithub = globalThis as unknown as { githubApp?: GithubApp };
+// Пересоздаётся, когда сменился конфиг (приложение создано заново в админке).
+const globalForGithub = globalThis as unknown as {
+  githubApp?: GithubApp;
+  githubAppConfig?: GithubAppConfig;
+};
 
 /** GitHub App (ленивый): JWT приложения и кеш токенов установок — внутри Octokit. */
 export function getGithubApp(): GithubApp {
-  if (!globalForGithub.githubApp) {
-    const config = requireGithubConfig();
+  const config = requireGithubConfig();
+  if (!globalForGithub.githubApp || globalForGithub.githubAppConfig !== config) {
     globalForGithub.githubApp = new App({
       appId: config.appId,
       privateKey: config.privateKey,
       oauth: { clientId: config.clientId, clientSecret: config.clientSecret },
       webhooks: { secret: config.webhookSecret },
     });
-    log.info({ appId: config.appId }, '[github] app initialized');
+    globalForGithub.githubAppConfig = config;
+    log.info({ appId: config.appId, source: config.source }, '[github] app initialized');
   }
   return globalForGithub.githubApp;
 }

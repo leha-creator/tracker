@@ -6,6 +6,7 @@ import { cache } from 'react';
 
 import { parseGlobalRole, type GlobalRole } from '@/shared/access/global-role';
 import { InternalError } from '@/shared/errors';
+import { loadGithubAppConfig } from '@/shared/github-app';
 import { createLogger } from '@/shared/logger';
 
 import { getAuth } from './auth';
@@ -50,7 +51,8 @@ async function readSession(
   // connection() — потому что Better Auth сравнивает срок сессии с Date.now(), а это
   // запрещено в статическом пререндере Cache Components.
   await connection();
-  const requestHeaders = await headers();
+  // Конфиг GitHub App из БД — до getAuth(): от него зависит провайдер входа через GitHub.
+  const [requestHeaders] = await Promise.all([headers(), loadGithubAppConfig()]);
   let result: SessionResult;
   try {
     result = await getAuth().api.getSession({

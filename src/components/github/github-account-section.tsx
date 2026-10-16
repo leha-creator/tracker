@@ -20,7 +20,7 @@ export async function GithubAccountSection({
   /** `?error=` после неудачной привязки. */
   errorCode?: string;
 }) {
-  if (!isGithubEnabled()) return null;
+  if (!(await isGithubEnabled())) return null;
   const account = await getMyGithubAccount(session);
   const error = errorCode ? githubSignInErrorMessage(errorCode) : null;
 

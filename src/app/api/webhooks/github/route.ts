@@ -25,7 +25,7 @@ function json(status: number, body: Record<string, unknown>): Response {
  * заголовки → JSON → обработка. proxy `/api` не трогает; сессии здесь нет — доверие только подписи.
  */
 export async function POST(request: NextRequest): Promise<Response> {
-  if (!isGithubEnabled()) return new Response('Not Found', { status: 404 });
+  if (!(await isGithubEnabled())) return new Response('Not Found', { status: 404 });
 
   const declared = Number(request.headers.get('content-length') ?? 0);
   if (declared > MAX_BODY_BYTES) return json(413, { error: 'payload too large' });

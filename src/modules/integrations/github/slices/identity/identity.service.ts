@@ -12,8 +12,8 @@ import { identityRepository } from './identity.repository';
 
 const log = createLogger('github.identity');
 
-function requireEnabled(): void {
-  if (!isGithubEnabled()) throw new NotFoundError('Интеграция с GitHub не настроена');
+async function requireEnabled(): Promise<void> {
+  if (!(await isGithubEnabled())) throw new NotFoundError('Интеграция с GitHub не настроена');
 }
 
 /** Привязанный GitHub-аккаунт пользователя (id GitHub) или null. */
@@ -39,7 +39,7 @@ export async function findUsersByGithubIds(
  * при отозванном доступе — ForbiddenError: пользователь должен привязать GitHub заново.
  */
 export async function getGithubUserToken(userId: string): Promise<string> {
-  requireEnabled();
+  await requireEnabled();
   const row = await identityRepository.findByUser(userId);
   if (!row) throw new ForbiddenError('Сначала привяжите GitHub в профиле');
   try {
@@ -80,7 +80,7 @@ export async function getMyGithubAccount(session: AuthSession): Promise<MyGithub
 
 /** Адрес привязки GitHub к текущему пользователю (state — в cookie, через nextCookies). */
 export async function startGithubLink(session: AuthSession): Promise<string> {
-  requireEnabled();
+  await requireEnabled();
   log.debug({ userId: session.user.id }, '[github.identity] link start');
   const result = await getAuth().api.linkSocialAccount({
     body: {
