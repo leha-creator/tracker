@@ -1,3 +1,4 @@
+import type * as NextServer from 'next/server';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +8,11 @@ const getSession = vi.fn<() => Promise<unknown>>();
 const completeInstallation = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 let enabled = true;
 
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof NextServer>()),
+  // Вне запроса Next бросает: в тесте request scope нет.
+  connection: () => Promise.resolve(),
+}));
 vi.mock('@/shared/auth', () => ({ getSession: () => getSession() }));
 vi.mock('@/shared/env', () => ({
   getEnv: () => ({ BETTER_AUTH_URL: 'https://tracker.example.com', LOG_LEVEL: 'silent' }),

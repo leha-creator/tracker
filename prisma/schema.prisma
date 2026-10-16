@@ -506,6 +506,9 @@ model DocumentFolder {
   documents Document[]
 
   @@unique([id, workspaceId])
+  /// Имя папки уникально в родителе. В БД индекс создан вручную с NULLS NOT DISTINCT (миграция
+  /// add_documents): Prisma так не умеет, но объявление нужно, чтобы migrate diff не требовал его удалить.
+  @@unique([workspaceId, parentId, nameKey])
   @@index([workspaceId, parentId])
   @@index([createdById])
 }
