@@ -70,7 +70,7 @@ export function FolderRowMenu({
             <MoreHorizontalIcon />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="w-auto min-w-44">
           <DropdownMenuItem onSelect={() => setDialog('rename')}>
             <PencilIcon aria-hidden />
             Переименовать
@@ -144,7 +144,7 @@ export function DocumentRowMenu({
             <MoreHorizontalIcon />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="w-auto min-w-44">
           <DropdownMenuItem asChild>
             <a href={documentFileHref(document.id)} download>
               <DownloadIcon aria-hidden />

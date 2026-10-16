@@ -86,7 +86,7 @@ export function DocumentActions({
                 <MoreHorizontalIcon />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-auto min-w-44">
               <DropdownMenuItem onSelect={() => setDialog('rename')}>
                 <PencilIcon aria-hidden />
                 Переименовать

@@ -59,7 +59,7 @@ export function DocumentsActions({
             <ChevronDownIcon aria-hidden />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="w-auto min-w-44">
           <DropdownMenuItem asChild>
             <Link href={newNoteHref(workspaceSlug, { folderId })}>
               <FilePlusIcon aria-hidden />
