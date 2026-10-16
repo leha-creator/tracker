@@ -3,6 +3,7 @@ import 'server-only';
 import { parseWorkspaceRole, requireWorkspaceAccess } from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
 import { isUniqueViolation } from '@/shared/db';
+import { resolveEntityIcon, type EntityIcon } from '@/shared/entity-icon';
 import { ConflictError, InternalError, NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
@@ -41,6 +42,7 @@ export async function listMyWorkspaces(session: AuthSession): Promise<WorkspaceL
         id: workspace.id,
         slug: workspace.slug,
         name: workspace.name,
+        icon: resolveEntityIcon(workspace.icon, workspace.id),
         role: parsed,
         membersCount: workspace._count.members,
       },
@@ -84,9 +86,19 @@ async function assignTaskKey(workspaceId: string, base: string): Promise<string 
   return null;
 }
 
+/** Иконка нового пространства. Не бросает: без неё показывается иконка по id. */
+async function assignIcon(workspaceId: string, icon: EntityIcon): Promise<void> {
+  try {
+    await workspaceRepository.setIcon(workspaceId, icon);
+    log.info({ workspaceId, icon }, '[workspace] icon set');
+  } catch (error) {
+    log.error({ err: error, workspaceId, icon }, '[workspace.icon] assign failed');
+  }
+}
+
 export async function createWorkspace(
   session: AuthSession,
-  input: { name: string; slug?: string; taskKey?: string },
+  input: { name: string; slug?: string; taskKey?: string; icon?: EntityIcon },
 ): Promise<WorkspaceSummaryDto> {
   const userId = session.user.id;
   const slug = resolveSlug(input.name, input.slug);
@@ -111,6 +123,7 @@ export async function createWorkspace(
 
   log.info({ workspaceId: created.id, slug: created.slug, userId }, '[workspace] created');
   await assignTaskKey(created.id, taskKey);
+  if (input.icon) await assignIcon(created.id, input.icon);
   return { id: created.id, slug: created.slug, name: created.name };
 }
 
@@ -162,7 +175,7 @@ export async function findWorkspacesByTaskKeys(
 
 export async function renameWorkspace(
   session: AuthSession,
-  input: { workspaceId: string; name: string },
+  input: { workspaceId: string; name: string; icon?: EntityIcon },
 ): Promise<WorkspaceSummaryDto> {
   await requireWorkspaceAccess(session, input.workspaceId, 'owner');
   log.debug(
@@ -177,8 +190,13 @@ export async function renameWorkspace(
     }),
   );
   if (!updated) throw new NotFoundError('Пространство не найдено');
+  // Иконка — не поле плагина: пишем сами, право владельца уже проверено.
+  if (input.icon) await workspaceRepository.setIcon(input.workspaceId, input.icon);
 
-  log.info({ workspaceId: updated.id, userId: session.user.id }, '[workspace] renamed');
+  log.info(
+    { workspaceId: updated.id, userId: session.user.id, icon: input.icon },
+    '[workspace] renamed',
+  );
   return { id: updated.id, slug: updated.slug, name: updated.name };
 }
 

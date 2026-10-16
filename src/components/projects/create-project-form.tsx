@@ -2,9 +2,11 @@
 
 import { useActionState } from 'react';
 
+import { EntityIconPicker } from '@/components/entity-icon/entity-icon-picker';
 import { FormError, FormField } from '@/components/forms/form-field';
 import { Button } from '@/components/ui/button';
 import { createProjectAction, PROJECT_NAME_MAX_LENGTH } from '@/modules/projects/client';
+import { parseEntityIcon } from '@/shared/entity-icon';
 import type { FormState } from '@/shared/types';
 
 import { DescriptionField } from './description-field';
@@ -28,6 +30,10 @@ export function CreateProjectForm({ workspaceId }: { workspaceId: string }) {
         maxLength={PROJECT_NAME_MAX_LENGTH}
         defaultValue={failure?.values.name}
         errors={fieldErrors?.name}
+      />
+      <EntityIconPicker
+        defaultValue={parseEntityIcon(failure?.values.icon) ?? 'rocket'}
+        errors={fieldErrors?.icon}
       />
       <DescriptionField
         defaultValue={failure?.values.description}

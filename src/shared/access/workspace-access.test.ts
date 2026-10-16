@@ -115,7 +115,7 @@ describe('requireWorkspaceAccess', () => {
 });
 
 describe('requireWorkspaceAccessBySlug', () => {
-  const workspace = { id: 'ws-1', slug: 'team', name: 'Team' };
+  const workspace = { id: 'ws-1', slug: 'team', name: 'Team', icon: 'camera' };
 
   it('redirects to login without session', async () => {
     getSession.mockResolvedValue(null);

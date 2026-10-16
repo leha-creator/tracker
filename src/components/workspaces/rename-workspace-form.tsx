@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react';
 
+import { EntityIconPicker } from '@/components/entity-icon/entity-icon-picker';
 import { FormError, FormField } from '@/components/forms/form-field';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,8 +11,15 @@ import {
   type FormState,
   type WorkspaceSummaryDto,
 } from '@/modules/workspaces/client';
+import { parseEntityIcon, type EntityIcon } from '@/shared/entity-icon';
 
-export function RenameWorkspaceForm({ workspaceId, name }: { workspaceId: string; name: string }) {
+interface RenameWorkspaceFormProps {
+  workspaceId: string;
+  name: string;
+  icon: EntityIcon;
+}
+
+export function RenameWorkspaceForm({ workspaceId, name, icon }: RenameWorkspaceFormProps) {
   const [state, formAction, pending] = useActionState<FormState<WorkspaceSummaryDto>, FormData>(
     renameWorkspaceAction,
     null,
@@ -30,6 +38,10 @@ export function RenameWorkspaceForm({ workspaceId, name }: { workspaceId: string
         maxLength={WORKSPACE_NAME_MAX_LENGTH}
         defaultValue={failure?.values.name ?? (state?.ok ? state.data.name : name)}
         errors={fieldErrors?.name}
+      />
+      <EntityIconPicker
+        defaultValue={parseEntityIcon(failure?.values.icon) ?? icon}
+        errors={fieldErrors?.icon}
       />
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={pending}>

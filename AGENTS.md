@@ -39,8 +39,8 @@ tasker/
 │   │   ├── (auth)/           # /login, /register
 │   │   ├── not-found.tsx     # 404 для неизвестных адресов (+ w/[workspaceSlug]/not-found.tsx внутри пространства)
 │   │   ├── (app)/            # Защищённая зона: sticky-шапка (переключатель и разделы пространства, колокольчик уведомлений, меню пользователя, skip-link), /, /admin (→ /admin/users, + integrations — GitHub App),
-│   │   │                     # /workspaces/new, /w/[workspaceSlug] (+ settings, settings/members, settings/github, settings/agents, settings/agents/[agentId]), /invite/[invitationId],
-│   │   │                     # /w/[workspaceSlug]/projects/new, projects/[projectId]/{board,list,settings},
+│   │   │                     # / (+ ?create=workspace — панель «Новое пространство»), /w/[workspaceSlug] (+ ?create=project — панель «Новый проект»; settings, settings/members, settings/github, settings/agents, settings/agents/[agentId]), /invite/[invitationId],
+│   │   │                     # /w/[workspaceSlug]/projects/[projectId]/{board,list,settings} (/workspaces/new и projects/new — редиректы на панели),
 │   │   │                     # /w/[workspaceSlug]/tasks (+ new, [taskNumber]), /w/[workspaceSlug]/members/[userId] (публичный профиль),
 │   │   │                     # /w/[workspaceSlug]/docs (+ new, [documentId], [documentId]/edit) — документы пространства,
 │   │   │                     # /profile (+ notifications, account, tokens, tokens/[tokenId] — журнал токена), /notifications
@@ -71,18 +71,19 @@ tasker/
 │   │   └── admin/            # Администрирование ресурса: модели (правила над пользователями, запрос списка), срез user (чтение — репозиторий, изменения — плагин admin через callAdminApi); зависит от workspaces и profiles
 │   ├── components/
 │   │   ├── layout/           # Каркас: PageContainer (ширина страниц), WorkspaceSections и TabLink (навигация),
-│   │   │                     # nav-items.ts (чистые функции активного раздела), ThemeProvider (next-themes), NotFoundMessage
+│   │   │                     # nav-items.ts (чистые функции активного раздела), ThemeProvider (next-themes), NotFoundMessage, SettingsSection (секция настроек без карточки: заголовок слева, поля справа, разделитель), SidePanel (модальная панель справа) и create-panel-href (адреса панелей создания)
 │   │   ├── auth/             # Формы входа/регистрации, меню пользователя (аватар, тема, выход)
 │   │   ├── forms/            # FormField, FormError, ConfirmActionDialog (подтверждение; управляемый режим open/onOpenChange)
 │   │   ├── admin/            # Навигация админки; github-app-setup — мастер GitHub App; users/ — таблица пользователей, фильтры (URL), меню действий, диалоги блокировки и удаления
 │   │   ├── workspaces/       # Список, переключатель, участники, приглашения
-│   │   ├── projects/         # Список проектов, навигация проекта, настройки проекта и статусов
+│   │   ├── projects/         # Список проектов, навигация проекта, настройки проекта и статусов (settings-draft — общее сохранение настроек плавающей панелью снизу)
 │   │   ├── tasks/            # Канбан-доска (dnd-kit), карточка, быстрое создание, поля задачи (режим чтения), размещения;
 │   │                         # task-panel/ — панель задачи справа (?task=<номер> / ?task=new): оболочка, просмотр и создание (общие с /tasks/[n] и /tasks/new), адреса панели;
 │   │                         # task-list/ — список задач: фильтры, сортировка, пагинация (состояние в URL);
 │   │                         # comments/ — комментарии на странице задачи: лента, добавление, правка, удаление, файлы, подсказка @ и подсветка упоминаний;
 │   │                         # attachments/ — вложения: очередь загрузки (presigned POST), зона перетаскивания, список, миниатюры;
 │   │                         # subtasks/ — подзадачи: раздел в задаче, строка (вывести на доску, отвязать), быстрое добавление, выбор родителя, хлебные крошки
+│   │   ├── entity-icon/      # EntityIconTile (иконка пространства или проекта на цветной плитке), EntityIconPicker (выбор в формах)
 │   │   ├── users/            # UserAvatar (фото или инициалы), UserHoverCard (карточка участника при наведении, данные — по запросу)
 │   │   ├── profile/          # Свой профиль: вкладки, фото, форма «О себе», матрица настроек уведомлений
 │   │   ├── api-tokens/       # Токены доступа (профиль и страница агента): таблица, выпуск с областями и командами подключения, отзыв, лента журнала
@@ -92,7 +93,7 @@ tasker/
 │   │   ├── documents/        # Раздел «Документы»: дерево папок, список и фильтры (URL), загрузка, диалоги; markdown/ — безопасный рендер;
 │   │   │                     # note-editor/ — редактор заметки; viewers/ — просмотр картинок, PDF, текста, CSV, JSON, медиа; task-documents/ — раздел в задаче
 │   │   └── ui/               # shadcn/ui (генерируется CLI, вручную не править)
-│   ├── lib/                  # utils.ts — cn() для shadcn; use-prefers-reduced-motion.ts — общий хук (доска, статусы)
+│   ├── lib/                  # utils.ts — cn() для shadcn; use-prefers-reduced-motion.ts — общий хук (доска, статусы); format-relative-time.ts — «2 часа назад» (уведомления, карточки проектов)
 │   ├── generated/prisma/     # Сгенерированный Prisma Client (в .gitignore)
 │   ├── shared/               # Сквозная инфраструктура
 │   │   ├── auth/             # Конфиг Better Auth (getAuth), getSession() → DTO, getFreshSession() (в обход cookie-кеша)
@@ -103,6 +104,7 @@ tasker/
 │   │   ├── types/            # ActionResult<T>, FormState<T> для useActionState
 │   │   ├── db/               # Prisma singleton, checkDatabase(), isUniqueViolation()
 │   │   ├── github-app/       # Конфиг GitHub App: GITHUB_* или запись из админки (зашифрована), кеш процесса
+│   │   ├── entity-icon/      # Каталог предустановленных иконок пространств и проектов: ключи, подписи, resolveEntityIcon (иконка по id, если не выбрана)
 │   │   ├── text/             # transliterate() — для slug, ключей задач и имён веток
 │   │   ├── storage/          # S3-клиенты (сервер и подпись ссылок), presigned POST/GET, HeadObject, удаление пачками, checkStorage()
 │   │   ├── mail/             # sendMail() (nodemailer), escapeHtml()

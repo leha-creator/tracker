@@ -43,7 +43,13 @@ export function DeleteProjectDialog({
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="destructive">Удалить проект</Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+        >
+          Удалить проект
+        </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <form action={formAction} className="grid gap-4" noValidate>

@@ -36,7 +36,7 @@ export async function createWorkspaceAction(
   } catch (error) {
     return {
       ...toActionError(error, { action: 'createWorkspace' }),
-      values: formValues(formData, ['name', 'slug', 'taskKey']),
+      values: formValues(formData, ['name', 'slug', 'taskKey', 'icon']),
     };
   }
   revalidatePath('/', 'layout');
@@ -58,7 +58,7 @@ export async function renameWorkspaceAction(
   } catch (error) {
     return {
       ...toActionError(error, { action: 'renameWorkspace' }),
-      values: formValues(formData, ['name']),
+      values: formValues(formData, ['name', 'icon']),
     };
   }
 }

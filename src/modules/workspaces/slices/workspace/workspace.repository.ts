@@ -15,6 +15,7 @@ export const workspaceRepository = {
             id: true,
             slug: true,
             name: true,
+            icon: true,
             // Агенты — служебные участники, в счётчик не входят.
             _count: { select: { members: { where: { user: { isAgent: false } } } } },
           },
@@ -39,6 +40,10 @@ export const workspaceRepository = {
   /** Бросает P2002, если ключ занят (см. isUniqueViolation). */
   async setTaskKey(workspaceId: string, taskKey: string): Promise<void> {
     await prisma.workspace.update({ where: { id: workspaceId }, data: { taskKey } });
+  },
+
+  async setIcon(workspaceId: string, icon: string): Promise<void> {
+    await prisma.workspace.update({ where: { id: workspaceId }, data: { icon } });
   },
 
   findByTaskKeys(taskKeys: readonly string[]) {

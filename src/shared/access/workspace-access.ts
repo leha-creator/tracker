@@ -5,6 +5,7 @@ import { cache } from 'react';
 
 import type { AuthSession } from '@/shared/auth';
 import { prisma } from '@/shared/db';
+import { resolveEntityIcon, type EntityIcon } from '@/shared/entity-icon';
 import { ForbiddenError, NotFoundError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
@@ -31,7 +32,13 @@ export interface WorkspaceAccess {
 
 export interface WorkspaceContext {
   session: AuthSession;
-  workspace: { id: string; slug: string; name: string; taskKey: string | null };
+  workspace: {
+    id: string;
+    slug: string;
+    name: string;
+    taskKey: string | null;
+    icon: EntityIcon;
+  };
   access: WorkspaceAccess;
 }
 
@@ -51,6 +58,7 @@ const findWorkspaceBySlug = cache((slug: string, userId: string) =>
       slug: true,
       name: true,
       taskKey: true,
+      icon: true,
       members: {
         where: { userId },
         select: { id: true, role: true, canManageProjects: true, canManageDocuments: true },
@@ -163,6 +171,7 @@ export async function requireWorkspaceAccessBySlug(
       slug: workspace.slug,
       name: workspace.name,
       taskKey: workspace.taskKey,
+      icon: resolveEntityIcon(workspace.icon, workspace.id),
     },
     access: {
       userId,

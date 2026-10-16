@@ -3,10 +3,11 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { ProjectAutomationForm } from '@/components/github/project-automation-form';
+import { SettingsSection, SettingsSections } from '@/components/layout/settings-section';
 import { DeleteProjectDialog } from '@/components/projects/delete-project-dialog';
 import { ProjectSettingsForm } from '@/components/projects/project-settings-form';
+import { SettingsDraftProvider } from '@/components/projects/settings-draft';
 import { StatusList } from '@/components/projects/status-list';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { getProjectAutomation, isGithubEnabled } from '@/modules/integrations/github';
 import { listStatuses } from '@/modules/projects';
 
@@ -19,28 +20,33 @@ type Props = PageProps<'/w/[workspaceSlug]/projects/[projectId]/settings'>;
 export default function ProjectSettingsPage({ params }: Props) {
   return (
     <Suspense fallback={<SettingsSkeleton />}>
-      <SettingsSection params={params} />
+      <SettingsContent params={params} />
     </Suspense>
   );
 }
 
-/** Три карточки: основное, статусы, опасная зона. */
+/** Три секции: основное, статусы, удаление. */
 function SettingsSkeleton() {
   return (
-    <div aria-hidden className="grid w-full max-w-4xl gap-6">
-      {[2, 4, 1].map((rows, card) => (
-        <div key={card} className="grid gap-3 rounded-xl p-4 ring-1 ring-foreground/10">
-          <div className="h-5 w-32 animate-pulse rounded bg-muted" />
-          {Array.from({ length: rows }, (_, row) => (
-            <div key={row} className="h-9 animate-pulse rounded-md bg-muted" />
-          ))}
+    <div aria-hidden className="grid divide-y divide-foreground/[0.07]">
+      {[3, 4, 1].map((rows, section) => (
+        <div
+          key={section}
+          className="grid gap-x-10 gap-y-4 py-6 first:pt-2 lg:grid-cols-[15rem_minmax(0,48rem)]"
+        >
+          <div className="h-5 w-28 animate-pulse rounded bg-muted" />
+          <div className="grid gap-3">
+            {Array.from({ length: rows }, (_, row) => (
+              <div key={row} className="h-9 animate-pulse rounded-md bg-muted" />
+            ))}
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-async function SettingsSection({ params }: Pick<Props, 'params'>) {
+async function SettingsContent({ params }: Pick<Props, 'params'>) {
   const { workspaceSlug, projectId } = await params;
   const { session, workspace, project, access } = await loadProjectPage(workspaceSlug, projectId);
   // Без права управления проектами — 404; сервер всё равно проверяет право в каждом action.
@@ -52,37 +58,22 @@ async function SettingsSection({ params }: Pick<Props, 'params'>) {
   ]);
 
   return (
-    <div className="grid w-full max-w-4xl gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Основное</CardTitle>
-        </CardHeader>
-        <CardContent>
+    <SettingsDraftProvider>
+      <SettingsSections>
+        <SettingsSection title="Основное" description="Название, иконка и описание проекта.">
           <ProjectSettingsForm project={project} />
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Статусы</CardTitle>
-          <CardDescription>
-            Колонки доски слева направо — перетащите статус за ручку, чтобы изменить порядок.
-            Категория определяет, считается ли задача в статусе выполненной.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        </SettingsSection>
+        <SettingsSection
+          title="Статусы"
+          description="Колонки доски слева направо: порядок меняется перетаскиванием за ручку. Категория определяет, считается ли задача выполненной."
+        >
           <StatusList workspaceId={workspace.id} projectId={project.id} statuses={statuses} />
-        </CardContent>
-      </Card>
-      {automation && (
-        <Card>
-          <CardHeader>
-            <CardTitle>GitHub</CardTitle>
-            <CardDescription>
-              Задачи с привязанным PR переходят в выбранный статус этого проекта. Задача в
-              нескольких проектах меняет статус в каждом по его настройке.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        </SettingsSection>
+        {automation && (
+          <SettingsSection
+            title="GitHub"
+            description="Задачи с привязанным PR переходят в выбранный статус этого проекта. Задача в нескольких проектах меняет статус в каждом по его настройке."
+          >
             <ProjectAutomationForm
               workspaceId={workspace.id}
               projectId={project.id}
@@ -90,26 +81,23 @@ async function SettingsSection({ params }: Pick<Props, 'params'>) {
               prOpenedStatusId={automation.prOpenedStatusId}
               prMergedStatusId={automation.prMergedStatusId}
             />
-          </CardContent>
-        </Card>
-      )}
-      {/* У Card обводка — ring, а не border. */}
-      <Card className="ring-destructive/30">
-        <CardHeader>
-          <CardTitle>Опасная зона</CardTitle>
-          <CardDescription>
-            Удаление проекта нельзя отменить: вместе с ним удаляются его статусы.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DeleteProjectDialog
-            workspaceId={workspace.id}
-            projectId={project.id}
-            name={project.name}
-            tasksCount={project.tasksCount}
-          />
-        </CardContent>
-      </Card>
-    </div>
+          </SettingsSection>
+        )}
+        <SettingsSection title="Удаление проекта">
+          {/* Пояснение над кнопкой, а не под заголовком: колонки секции одной высоты. */}
+          <div className="grid justify-items-start gap-3">
+            <p className="text-sm text-muted-foreground">
+              Нельзя отменить: проект удалится вместе со статусами, задачи останутся в пространстве.
+            </p>
+            <DeleteProjectDialog
+              workspaceId={workspace.id}
+              projectId={project.id}
+              name={project.name}
+              tasksCount={project.tasksCount}
+            />
+          </div>
+        </SettingsSection>
+      </SettingsSections>
+    </SettingsDraftProvider>
   );
 }

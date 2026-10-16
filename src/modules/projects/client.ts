@@ -27,8 +27,12 @@ export {
   PROJECT_NAME_MAX_LENGTH,
   PROJECT_NAME_MIN_LENGTH,
 } from './models/project';
-export { STATUS_CATEGORIES, STATUS_CATEGORY_LABELS } from './models/status-category';
-export type { StatusCategory } from './models/status-category';
+export {
+  completionPercent,
+  STATUS_CATEGORIES,
+  STATUS_CATEGORY_LABELS,
+} from './models/status-category';
+export type { StatusCategory, TasksByCategory } from './models/status-category';
 export { parseStatusColor, STATUS_COLOR_LABELS, STATUS_COLORS } from './models/status-color';
 export type { StatusColor } from './models/status-color';
 export { reorderStatuses } from './models/status-order';

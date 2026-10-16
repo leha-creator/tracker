@@ -9,6 +9,7 @@ const PROJECT_SELECT = {
   workspaceId: true,
   name: true,
   description: true,
+  icon: true,
   createdAt: true,
   workspace: { select: { slug: true } },
   _count: { select: { placements: true } },
@@ -24,9 +25,39 @@ export const projectRepository = {
         id: true,
         name: true,
         description: true,
-        _count: { select: { statuses: true, placements: true } },
+        icon: true,
+        updatedAt: true,
+        _count: { select: { placements: true } },
+        // Задачи по категориям — через число размещений в каждом статусе.
+        statuses: { select: { category: true, _count: { select: { placements: true } } } },
       },
     });
+  },
+
+  /**
+   * Сводка по задачам проектов пространства одним запросом: открытые просроченные (срок раньше
+   * `today`, статус в проекте не «Готово» — как фильтр «Просрочено» в проекте), открытые задачи
+   * пользователя и время последнего изменения задачи или её размещения.
+   */
+  async taskStatsByWorkspace(workspaceId: string, userId: string, today: string) {
+    const rows = await prisma.$queryRaw<
+      { projectId: string; overdue: bigint; mine: bigint; lastActivityAt: Date | null }[]
+    >`
+      SELECT p."projectId"::text AS "projectId",
+        COUNT(*) FILTER (WHERE s."category" <> 'done' AND t."dueDate" < ${today}::date) AS "overdue",
+        COUNT(*) FILTER (WHERE s."category" <> 'done' AND t."assigneeId" = ${userId}) AS "mine",
+        GREATEST(MAX(p."updatedAt"), MAX(t."updatedAt")) AS "lastActivityAt"
+      FROM "TaskPlacement" p
+      JOIN "ProjectStatus" s ON s."id" = p."statusId"
+      JOIN "Task" t ON t."id" = p."taskId"
+      WHERE p."workspaceId" = ${workspaceId}
+      GROUP BY p."projectId"`;
+    return rows.map((row) => ({
+      projectId: row.projectId,
+      overdue: Number(row.overdue),
+      mine: Number(row.mine),
+      lastActivityAt: row.lastActivityAt,
+    }));
   },
 
   findInWorkspace(workspaceId: string, projectId: string) {
@@ -57,7 +88,13 @@ export const projectRepository = {
   /** Создаёт проект вместе с начальным набором статусов (workspaceId статусов — из FK проекта). */
   createWithStatuses(
     tx: TransactionClient,
-    data: { workspaceId: string; name: string; description: string | null; createdById: string },
+    data: {
+      workspaceId: string;
+      name: string;
+      description: string | null;
+      icon: string | null;
+      createdById: string;
+    },
     statuses: readonly PositionedStatus[],
   ) {
     return tx.project.create({
@@ -80,7 +117,7 @@ export const projectRepository = {
   async update(
     workspaceId: string,
     projectId: string,
-    data: { name: string; description: string | null },
+    data: { name: string; description: string | null; icon?: string },
   ): Promise<number> {
     const { count } = await prisma.project.updateMany({
       where: { id: projectId, workspaceId },

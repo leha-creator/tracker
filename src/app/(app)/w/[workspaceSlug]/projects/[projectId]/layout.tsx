@@ -26,6 +26,7 @@ async function ProjectHeader({ params }: Pick<Props, 'params'>) {
       basePath={`/w/${workspace.slug}/projects/${project.id}`}
       projectsHref={`/w/${workspace.slug}`}
       name={project.name}
+      icon={project.icon}
       description={project.description}
       canManage={access.permissions.manageProjects}
     />

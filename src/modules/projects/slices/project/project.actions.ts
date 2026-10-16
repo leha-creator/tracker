@@ -32,7 +32,7 @@ export async function createProjectAction(
   } catch (error) {
     return {
       ...toActionError(error, { action: 'createProject' }),
-      values: formValues(formData, ['name', 'description']),
+      values: formValues(formData, ['name', 'description', 'icon']),
     };
   }
   revalidateWorkspace();
@@ -54,7 +54,7 @@ export async function updateProjectAction(
   } catch (error) {
     return {
       ...toActionError(error, { action: 'updateProject' }),
-      values: formValues(formData, ['name', 'description']),
+      values: formValues(formData, ['name', 'description', 'icon']),
     };
   }
 }

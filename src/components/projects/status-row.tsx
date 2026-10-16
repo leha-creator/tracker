@@ -1,7 +1,7 @@
 'use client';
 
 import { Trash2 } from 'lucide-react';
-import { useActionState, useState, type CSSProperties, type ReactNode, type Ref } from 'react';
+import { useState, type CSSProperties, type ReactNode, type Ref } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,10 +11,9 @@ import {
   updateStatusAction,
   type ProjectStatusDto,
 } from '@/modules/projects/client';
-import type { FormState } from '@/shared/types';
 
 import { DeleteStatusDialog } from './delete-status-dialog';
-import { StatusDot } from './status-badge';
+import { useSettingsDraft } from './settings-draft';
 import { CategorySelect, ColorSelect } from './status-selects';
 import { tasksLabel } from './tasks-label';
 
@@ -34,8 +33,8 @@ interface StatusRowProps {
 /**
  * Статус в настройках: название, категория, цвет, удаление.
  * Узкий список (меньше `@3xl` у контейнера): строка 1 — ручка, название, счётчик, удаление;
- * строка 2 — категория и цвет; «Сохранить» появляется, только когда есть изменения.
- * Широкий — всё в одну строку.
+ * строка 2 — категория и цвет. Широкий — всё в одну строку. Своей кнопки сохранения нет —
+ * правки сохраняет общая панель страницы (`SettingsDraftProvider`).
  */
 export function StatusRow({
   workspaceId,
@@ -48,11 +47,6 @@ export function StatusRow({
   style,
   isDragging,
 }: StatusRowProps) {
-  const [updateState, updateAction, updatePending] = useActionState<FormState, FormData>(
-    updateStatusAction,
-    null,
-  );
-  const updateFailure = updateState && !updateState.ok ? updateState : null;
   // Ключ строки меняется вместе с данными сервера — после сохранения состояние сбрасывается.
   const [name, setName] = useState(status.name);
   const [category, setCategory] = useState(status.category);
@@ -60,31 +54,54 @@ export function StatusRow({
 
   const dirty =
     name.trim() !== status.name || category !== status.category || color !== status.color;
-  const error = updateFailure?.error.fieldErrors?.name?.join(' ') ?? updateFailure?.error.message;
+  const [error, setError] = useState<string | null>(null);
   const nameId = `status-${status.id}-name`;
   const errorId = `status-${status.id}-error`;
   const ids = { workspaceId, projectId, statusId: status.id };
+
+  const requestSave = useSettingsDraft(`status:${status.id}`, dirty, {
+    save: async () => {
+      const formData = new FormData();
+      for (const [key, value] of Object.entries({ ...ids, name, category, color })) {
+        formData.set(key, value);
+      }
+      const result = await updateStatusAction(null, formData);
+      if (result && !result.ok) {
+        setError(result.error.fieldErrors?.name?.join(' ') ?? result.error.message);
+        return false;
+      }
+      // Новые данные сервера меняют ключ строки — она пересоздаётся с сохранёнными значениями.
+      setError(null);
+      return true;
+    },
+    reset: () => {
+      setName(status.name);
+      setCategory(status.category);
+      setColor(status.color);
+      setError(null);
+    },
+  });
 
   return (
     <li
       ref={ref}
       style={style}
       className={cn(
-        'grid gap-2 rounded-lg border bg-card p-2 @3xl:p-3',
-        isDragging && 'relative z-10 shadow-card-hover ring-2 ring-primary/40',
+        'grid gap-2 py-2',
+        isDragging &&
+          'relative z-10 rounded-lg bg-card px-2 shadow-card-hover ring-2 ring-primary/40',
       )}
     >
       <form
-        action={updateAction}
+        onSubmit={(event) => {
+          event.preventDefault();
+          requestSave();
+        }}
         className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 @3xl:flex"
         noValidate
       >
-        {Object.entries(ids).map(([key, value]) => (
-          <input key={key} type="hidden" name={key} value={value} />
-        ))}
         <div className="flex size-7 items-center justify-center">{handle}</div>
         <div className="flex min-w-0 items-center gap-2 @3xl:flex-1">
-          <StatusDot color={color} />
           <label htmlFor={nameId} className="sr-only">
             Название статуса
           </label>
@@ -139,18 +156,6 @@ export function StatusRow({
             />
           )}
         </div>
-        <Button
-          type="submit"
-          size="sm"
-          variant="secondary"
-          disabled={!dirty || updatePending}
-          className={cn(
-            'col-span-2 col-start-2 row-start-3 justify-self-end',
-            !dirty && !updatePending && '@max-3xl:hidden',
-          )}
-        >
-          {updatePending ? 'Сохраняем…' : 'Сохранить'}
-        </Button>
       </form>
       {error && (
         <p id={errorId} role="alert" className="text-sm text-destructive @3xl:pl-9">

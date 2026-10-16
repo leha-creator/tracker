@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import { EntityIconTile } from '@/components/entity-icon/entity-icon';
+import { NEW_WORKSPACE_HREF } from '@/components/layout/create-panel-href';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,7 +27,9 @@ export function WorkspaceList({ items }: { items: WorkspaceListItemDto[] }) {
             Создайте пространство для команды или примите приглашение по ссылке из письма.
           </CardDescription>
           <Button asChild className="mt-2 justify-self-center">
-            <Link href="/workspaces/new">Создать пространство</Link>
+            <Link href={NEW_WORKSPACE_HREF} scroll={false}>
+              Создать пространство
+            </Link>
           </Button>
         </CardHeader>
       </Card>
@@ -41,16 +45,19 @@ export function WorkspaceList({ items }: { items: WorkspaceListItemDto[] }) {
             className="block rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             <Card className="transition-colors hover:bg-muted/50">
-              <CardHeader>
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="truncate">{workspace.name}</CardTitle>
-                  <Badge variant={workspace.role === 'owner' ? 'default' : 'secondary'}>
-                    {WORKSPACE_ROLE_LABELS[workspace.role]}
-                  </Badge>
+              <CardHeader className="flex items-center gap-3">
+                <EntityIconTile icon={workspace.icon} size="lg" />
+                <div className="grid min-w-0 flex-1 gap-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="truncate">{workspace.name}</CardTitle>
+                    <Badge variant={workspace.role === 'owner' ? 'default' : 'secondary'}>
+                      {WORKSPACE_ROLE_LABELS[workspace.role]}
+                    </Badge>
+                  </div>
+                  <CardDescription className="truncate">
+                    /w/{workspace.slug} · {membersLabel(workspace.membersCount)}
+                  </CardDescription>
                 </div>
-                <CardDescription>
-                  /w/{workspace.slug} · {membersLabel(workspace.membersCount)}
-                </CardDescription>
               </CardHeader>
             </Card>
           </Link>

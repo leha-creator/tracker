@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from 'react';
 
+import { EntityIconPicker } from '@/components/entity-icon/entity-icon-picker';
 import { FormError, FormField } from '@/components/forms/form-field';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,6 +14,7 @@ import {
   WORKSPACE_NAME_MAX_LENGTH,
   type FormState,
 } from '@/modules/workspaces/client';
+import { parseEntityIcon } from '@/shared/entity-icon';
 
 export function CreateWorkspaceForm() {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
@@ -36,6 +38,10 @@ export function CreateWorkspaceForm() {
         defaultValue={failure?.values.name}
         onChange={(event) => setName(event.target.value)}
         errors={fieldErrors?.name}
+      />
+      <EntityIconPicker
+        defaultValue={parseEntityIcon(failure?.values.icon) ?? 'briefcase'}
+        errors={fieldErrors?.icon}
       />
       <div className="grid gap-1">
         <FormField

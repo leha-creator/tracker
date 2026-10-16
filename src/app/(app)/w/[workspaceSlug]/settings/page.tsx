@@ -38,7 +38,11 @@ async function SettingsSection({
           <CardDescription>Адрес пространства: /w/{workspace.slug}</CardDescription>
         </CardHeader>
         <CardContent>
-          <RenameWorkspaceForm workspaceId={workspace.id} name={workspace.name} />
+          <RenameWorkspaceForm
+            workspaceId={workspace.id}
+            name={workspace.name}
+            icon={workspace.icon}
+          />
         </CardContent>
       </Card>
       <Card>

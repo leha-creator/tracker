@@ -30,6 +30,8 @@ const countInWorkspace = vi.fn<() => Promise<number>>();
 const isNameTaken = vi.fn<() => Promise<boolean>>();
 const createWithStatuses = vi.fn<(...args: unknown[]) => Promise<ProjectRow>>();
 const deleteProject = vi.fn<() => Promise<number>>();
+const listByWorkspace = vi.fn<() => Promise<unknown[]>>();
+const taskStatsByWorkspace = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
@@ -48,7 +50,8 @@ vi.mock('./project.repository', () => ({
     isNameTaken: () => isNameTaken(),
     createWithStatuses: (...args: unknown[]) => createWithStatuses(...args),
     delete: () => deleteProject(),
-    listByWorkspace: vi.fn(),
+    listByWorkspace: () => listByWorkspace(),
+    taskStatsByWorkspace: (...args: unknown[]) => taskStatsByWorkspace(...args),
     update: vi.fn(),
   },
 }));
@@ -57,6 +60,7 @@ const {
   createProject,
   deleteProject: deleteProjectService,
   getProject,
+  listProjects,
 } = await import('./project.service');
 
 const session: AuthSession = {
@@ -207,5 +211,62 @@ describe('deleteProject', () => {
         confirmName: 'Сайт',
       }),
     ).resolves.toEqual({ workspaceSlug: 'team' });
+  });
+});
+
+describe('listProjects', () => {
+  const listRow = {
+    id: PROJECT_ID,
+    name: 'Сайт',
+    description: null,
+    icon: 'rocket',
+    updatedAt: new Date('2026-10-10T10:00:00Z'),
+    _count: { placements: 5 },
+    statuses: [
+      { category: 'todo', _count: { placements: 2 } },
+      { category: 'in_progress', _count: { placements: 1 } },
+      { category: 'done', _count: { placements: 2 } },
+    ],
+  };
+
+  it('merges task stats and takes the latest activity', async () => {
+    listByWorkspace.mockResolvedValue([listRow]);
+    taskStatsByWorkspace.mockResolvedValue([
+      {
+        projectId: PROJECT_ID,
+        overdue: 2,
+        mine: 3,
+        lastActivityAt: new Date('2026-10-16T08:00:00Z'),
+      },
+    ]);
+
+    const [project] = await listProjects(session, 'ws-1');
+
+    expect(taskStatsByWorkspace).toHaveBeenCalledWith(
+      'ws-1',
+      'user-1',
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+    );
+    expect(project).toMatchObject({
+      icon: 'rocket',
+      tasksByCategory: { todo: 2, in_progress: 1, done: 2 },
+      overdueCount: 2,
+      myOpenCount: 3,
+      lastActivityAt: new Date('2026-10-16T08:00:00Z'),
+    });
+  });
+
+  it('falls back to zeros and project update time without tasks', async () => {
+    listByWorkspace.mockResolvedValue([{ ...listRow, _count: { placements: 0 }, statuses: [] }]);
+    taskStatsByWorkspace.mockResolvedValue([]);
+
+    const [project] = await listProjects(session, 'ws-1');
+
+    expect(project).toMatchObject({
+      tasksByCategory: { todo: 0, in_progress: 0, done: 0 },
+      overdueCount: 0,
+      myOpenCount: 0,
+      lastActivityAt: listRow.updatedAt,
+    });
   });
 });

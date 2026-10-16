@@ -3,16 +3,19 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import { EntityIconTile } from '@/components/entity-icon/entity-icon';
 import { getProjectTabs } from '@/components/layout/nav-items';
 import { TabLink } from '@/components/layout/tab-link';
 import { taskPanelHref } from '@/components/tasks/task-panel/task-panel-href';
 import { Button } from '@/components/ui/button';
+import type { EntityIcon } from '@/shared/entity-icon';
 
 interface ProjectNavProps {
   basePath: string;
   /** Список проектов пространства — первый шаг хлебных крошек. */
   projectsHref: string;
   name: string;
+  icon: EntityIcon;
   description: string | null;
   canManage: boolean;
 }
@@ -22,6 +25,7 @@ export function ProjectNav({
   basePath,
   projectsHref,
   name,
+  icon,
   description,
   canManage,
 }: ProjectNavProps) {
@@ -48,7 +52,12 @@ export function ProjectNav({
               /
             </span>
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight break-words sm:truncate">{name}</h1>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <EntityIconTile icon={icon} />
+            <h1 className="min-w-0 text-2xl font-semibold tracking-tight break-words sm:truncate">
+              {name}
+            </h1>
+          </div>
           {description && (
             <p className="mt-0.5 truncate text-sm text-muted-foreground" title={description}>
               {description}

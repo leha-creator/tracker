@@ -3,6 +3,7 @@
 import Link from 'next/link';
 
 import { UserAvatar } from '@/components/users/user-avatar';
+import { formatRelativeTime } from '@/lib/format-relative-time';
 import { cn } from '@/lib/utils';
 import type { NotificationDto } from '@/modules/notifications/client';
 
@@ -11,22 +12,6 @@ export type NotificationItemData = Omit<NotificationDto, 'createdAt' | 'readAt'>
   createdAt: string | Date;
   readAt: string | Date | null;
 };
-
-const RELATIVE = new Intl.RelativeTimeFormat('ru', { numeric: 'auto' });
-const DATE = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short' });
-
-/** «5 минут назад», «вчера», дальше недели — дата. */
-export function formatNotificationTime(value: string | Date, now = Date.now()): string {
-  const date = new Date(value);
-  const minutes = Math.round((date.getTime() - now) / 60_000);
-  if (Math.abs(minutes) < 1) return 'только что';
-  if (Math.abs(minutes) < 60) return RELATIVE.format(minutes, 'minute');
-  const hours = Math.round(minutes / 60);
-  if (Math.abs(hours) < 24) return RELATIVE.format(hours, 'hour');
-  const days = Math.round(hours / 24);
-  if (Math.abs(days) < 7) return RELATIVE.format(days, 'day');
-  return DATE.format(date);
-}
 
 interface NotificationItemProps {
   notification: NotificationItemData;
@@ -64,7 +49,7 @@ export function NotificationItem({ notification, onOpen, compact = false }: Noti
             // Относительное время зависит от часов браузера — расхождение с сервером ожидаемо.
             suppressHydrationWarning
           >
-            {formatNotificationTime(createdAt)}
+            {formatRelativeTime(createdAt)}
           </time>
         </span>
         <span className="truncate text-muted-foreground">

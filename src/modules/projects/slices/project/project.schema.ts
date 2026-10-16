@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { ENTITY_ICONS } from '@/shared/entity-icon';
+
 import {
   normalizeProjectName,
   PROJECT_DESCRIPTION_MAX_LENGTH,
@@ -39,10 +41,17 @@ const descriptionField = z
   .optional()
   .transform((value) => (value ? value : undefined));
 
+/** Ключ иконки; пусто → undefined (при создании — иконка по id, при правке — без изменений). */
+const iconField = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.enum(ENTITY_ICONS, { error: 'Выберите иконку из списка' }).optional(),
+);
+
 export const createProjectSchema = z.object({
   workspaceId: workspaceIdField,
   name: nameField,
   description: descriptionField,
+  icon: iconField,
 });
 
 export const updateProjectSchema = createProjectSchema.extend({ projectId: entityIdField });

@@ -1,10 +1,12 @@
 import type { WorkspaceRole } from '@/shared/access/workspace-role';
+import type { EntityIcon } from '@/shared/entity-icon';
 
 export interface WorkspaceListItemDto {
   id: string;
   slug: string;
   name: string;
   role: WorkspaceRole;
+  icon: EntityIcon;
   membersCount: number;
 }
 

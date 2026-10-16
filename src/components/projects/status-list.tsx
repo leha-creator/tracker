@@ -115,7 +115,10 @@ export function StatusList({ workspaceId, projectId, statuses }: StatusListProps
         }}
       >
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
-          <ol className="grid gap-2" aria-label="Статусы проекта">
+          <ol
+            className="grid divide-y divide-foreground/[0.07] border-y border-foreground/[0.07]"
+            aria-label="Статусы проекта"
+          >
             {order.map((status) => (
               <SortableStatusRow
                 // Ключ меняется вместе с данными: после сохранения строка берёт значения с сервера.

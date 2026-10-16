@@ -9,6 +9,13 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['pino', 'pino-pretty'],
   redirects() {
     return Promise.resolve([
+      // Создание пространства и проекта — панели справа на страницах списков.
+      { source: '/workspaces/new', destination: '/?create=workspace', permanent: false },
+      {
+        source: '/w/:workspaceSlug/projects/new',
+        destination: '/w/:workspaceSlug?create=project',
+        permanent: false,
+      },
       // Корень проекта открывает доску. Ограничение UUID не задевает /projects/new.
       {
         source: '/w/:workspaceSlug/projects/:projectId([0-9a-fA-F-]{36})',

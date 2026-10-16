@@ -4,11 +4,13 @@ import { requireWorkspaceAccess, requireWorkspacePermission } from '@/shared/acc
 import type { AuthSession } from '@/shared/auth';
 import { isUniqueViolation, prisma } from '@/shared/db';
 import { ConflictError, NotFoundError } from '@/shared/errors';
+import { resolveEntityIcon, type EntityIcon } from '@/shared/entity-icon';
 import { createLogger } from '@/shared/logger';
 
 import {
   assertCanCreateProject,
   assertDeleteConfirmed,
+  countTasksByCategory,
   isEntityId,
   normalizeProjectName,
   StatusSet,
@@ -27,6 +29,7 @@ function toProjectDto(row: ProjectRow): ProjectDto {
     workspaceSlug: row.workspace.slug,
     name: row.name,
     description: row.description,
+    icon: resolveEntityIcon(row.icon, row.id),
     createdAt: row.createdAt,
     tasksCount: row._count.placements,
   };
@@ -55,16 +58,37 @@ export async function listProjects(
   workspaceId: string,
 ): Promise<ProjectListItemDto[]> {
   await requireWorkspaceAccess(session, workspaceId);
-  log.debug({ userId: session.user.id, workspaceId }, '[project.listProjects]');
+  const userId = session.user.id;
+  // Срок — дата без времени, «сегодня» — в UTC (как у фильтра «Просрочено» в задачах).
+  const today = new Date().toISOString().slice(0, 10);
+  log.debug({ userId, workspaceId, today }, '[project.listProjects]');
 
-  const rows = await projectRepository.listByWorkspace(workspaceId);
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    statusesCount: row._count.statuses,
-    tasksCount: row._count.placements,
-  }));
+  const [rows, stats] = await Promise.all([
+    projectRepository.listByWorkspace(workspaceId),
+    projectRepository.taskStatsByWorkspace(workspaceId, userId, today),
+  ]);
+  const statsByProject = new Map(stats.map((row) => [row.projectId, row]));
+  return rows.map((row) => {
+    const projectStats = statsByProject.get(row.id);
+    const tasksActivity = projectStats?.lastActivityAt;
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      icon: resolveEntityIcon(row.icon, row.id),
+      tasksCount: row._count.placements,
+      tasksByCategory: countTasksByCategory(
+        row.statuses.map((status) => ({
+          category: status.category,
+          tasksCount: status._count.placements,
+        })),
+      ),
+      overdueCount: projectStats?.overdue ?? 0,
+      myOpenCount: projectStats?.mine ?? 0,
+      lastActivityAt:
+        tasksActivity && tasksActivity > row.updatedAt ? tasksActivity : row.updatedAt,
+    };
+  });
 }
 
 export async function getProject(
@@ -79,7 +103,7 @@ export async function getProject(
 
 export async function createProject(
   session: AuthSession,
-  input: { workspaceId: string; name: string; description?: string },
+  input: { workspaceId: string; name: string; description?: string; icon?: EntityIcon },
 ): Promise<ProjectDto> {
   const { workspaceId } = input;
   const userId = session.user.id;
@@ -107,13 +131,14 @@ export async function createProject(
           workspaceId,
           name,
           description: input.description ?? null,
+          icon: input.icon ?? null,
           createdById: userId,
         },
         statuses,
       );
     });
     log.info(
-      { workspaceId, projectId: row.id, userId, statusesCount: statuses.length },
+      { workspaceId, projectId: row.id, userId, statusesCount: statuses.length, icon: row.icon },
       '[project] created',
     );
     return toProjectDto(row);
@@ -128,7 +153,14 @@ export async function createProject(
 
 export async function updateProject(
   session: AuthSession,
-  input: { workspaceId: string; projectId: string; name: string; description?: string },
+  input: {
+    workspaceId: string;
+    projectId: string;
+    name: string;
+    description?: string;
+    /** Не передана — иконка не меняется. */
+    icon?: EntityIcon;
+  },
 ): Promise<ProjectDto> {
   const { workspaceId, projectId } = input;
   await requireWorkspacePermission(session, workspaceId, 'manageProjects');
@@ -144,6 +176,7 @@ export async function updateProject(
     const count = await projectRepository.update(workspaceId, projectId, {
       name,
       description: input.description ?? null,
+      icon: input.icon,
     });
     if (count === 0) throw new NotFoundError('Проект не найден');
   } catch (error) {
@@ -154,7 +187,10 @@ export async function updateProject(
     throw error;
   }
 
-  log.info({ workspaceId, projectId, userId: session.user.id }, '[project] updated');
+  log.info(
+    { workspaceId, projectId, userId: session.user.id, icon: input.icon },
+    '[project] updated',
+  );
   return toProjectDto(await loadProject(workspaceId, projectId));
 }
 

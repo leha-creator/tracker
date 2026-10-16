@@ -131,6 +131,9 @@ model Workspace {
   /// Проставляет сервис пространств сразу после создания (поле в плагине с input: false).
   taskKey   String?  @unique
   logo      String?
+  /// Ключ предустановленной иконки (shared/entity-icon); null — не выбрана, показывается по id.
+  /// Проставляет сервис пространств после создания (поле не входит в схему плагина).
+  icon      String?
   metadata  String?
   createdAt DateTime @default(now())
 
@@ -207,11 +210,13 @@ model Project {
   workspaceId String
   name        String
   description String?
+  /// Ключ предустановленной иконки (shared/entity-icon); null — не выбрана, показывается по id.
+  icon        String?
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace        Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace        Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy        User?                    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   statuses         ProjectStatus[]
   placements       TaskPlacement[]

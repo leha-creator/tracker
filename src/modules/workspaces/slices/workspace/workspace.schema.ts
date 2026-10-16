@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { ENTITY_ICONS } from '@/shared/entity-icon';
+
 import { normalizeTaskKey, taskKeyProblem } from '../../models/task-key';
 import { slugProblem } from '../../models/workspace-slug';
 
@@ -46,10 +48,17 @@ const optionalTaskKeyField = z
   .transform((value) => (value?.trim() ? value : undefined))
   .pipe(taskKeyField.optional());
 
+/** Ключ иконки; пусто → undefined (при создании — иконка по id, при правке — без изменений). */
+const iconField = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.enum(ENTITY_ICONS, { error: 'Выберите иконку из списка' }).optional(),
+);
+
 export const createWorkspaceSchema = z.object({
   name: nameField,
   slug: slugField,
   taskKey: optionalTaskKeyField,
+  icon: iconField,
 });
 
 export const updateTaskKeySchema = z.object({
@@ -57,7 +66,11 @@ export const updateTaskKeySchema = z.object({
   taskKey: taskKeyField,
 });
 
-export const renameWorkspaceSchema = z.object({ workspaceId: workspaceIdField, name: nameField });
+export const renameWorkspaceSchema = z.object({
+  workspaceId: workspaceIdField,
+  name: nameField,
+  icon: iconField,
+});
 
 export const deleteWorkspaceSchema = z.object({
   workspaceId: workspaceIdField,

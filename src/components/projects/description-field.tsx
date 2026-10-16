@@ -6,9 +6,12 @@ import { PROJECT_DESCRIPTION_MAX_LENGTH } from '@/modules/projects/client';
 export function DescriptionField({
   defaultValue,
   errors,
+  className,
 }: {
   defaultValue?: string;
   errors?: string[];
+  /** Классы поля: например, высота под соседнюю колонку. */
+  className?: string;
 }) {
   const hasErrors = Boolean(errors?.length);
   return (
@@ -20,6 +23,7 @@ export function DescriptionField({
         rows={3}
         maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
         defaultValue={defaultValue}
+        className={className}
         aria-invalid={hasErrors || undefined}
         aria-describedby={hasErrors ? 'description-error' : undefined}
       />

@@ -8,8 +8,13 @@ export {
   PROJECT_NAME_MAX_LENGTH,
   PROJECT_NAME_MIN_LENGTH,
 } from './project';
-export { STATUS_CATEGORIES, STATUS_CATEGORY_LABELS } from './status-category';
-export type { StatusCategory } from './status-category';
+export {
+  completionPercent,
+  countTasksByCategory,
+  STATUS_CATEGORIES,
+  STATUS_CATEGORY_LABELS,
+} from './status-category';
+export type { StatusCategory, TasksByCategory } from './status-category';
 export {
   DEFAULT_STATUS_COLOR,
   parseStatusColor,
