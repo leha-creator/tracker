@@ -122,7 +122,11 @@ function MemberRow({
               {member.name}
             </Link>
             {member.isCurrentUser && <span className="text-muted-foreground"> (вы)</span>}
-            <div className="text-sm break-all text-muted-foreground">{member.email}</div>
+            {member.isAgent ? (
+              <div className="text-sm text-muted-foreground">Агент для Claude Code</div>
+            ) : (
+              <div className="text-sm break-all text-muted-foreground">{member.email}</div>
+            )}
           </div>
         </div>
         {roleError && (
@@ -132,7 +136,9 @@ function MemberRow({
         )}
       </TableCell>
       <TableCell>
-        {canManage ? (
+        {member.isAgent ? (
+          <Badge variant="outline">Агент</Badge>
+        ) : canManage ? (
           <Select
             value={rolePending ? requestedRole : member.role}
             disabled={rolePending}
@@ -172,7 +178,14 @@ function MemberRow({
         />
       </TableCell>
       <TableCell className="text-right">
-        {member.isCurrentUser ? (
+        {member.isAgent ? (
+          // Агентом управляют в разделе «Агенты»: права, ответственный, отключение и токены.
+          canManage && (
+            <Button asChild variant="ghost" size="sm">
+              <Link href={`/w/${workspaceSlug}/settings/agents`}>Настроить</Link>
+            </Button>
+          )
+        ) : member.isCurrentUser ? (
           <ConfirmActionDialog
             action={leaveWorkspaceAction}
             fields={{ workspaceId }}
@@ -242,7 +255,7 @@ function MemberPermissionCell({
   if (member.role === 'owner') {
     return <span className="text-sm text-muted-foreground">Всегда</span>;
   }
-  if (!canManage) {
+  if (!canManage || member.isAgent) {
     return <span className="text-sm text-muted-foreground">{granted ? 'Управляет' : 'Нет'}</span>;
   }
 

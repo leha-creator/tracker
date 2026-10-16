@@ -28,3 +28,5 @@ export type {
   NotificationType,
   NotificationTypeInfo,
 } from './notification-type';
+export { routeAgentRecipients } from './agent-routing';
+export type { AgentReroute, AgentRoute } from './agent-routing';

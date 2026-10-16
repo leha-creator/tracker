@@ -1,6 +1,7 @@
 /** Слот загрузки presigned POST: адрес хранилища и поля политики. */
 export interface UploadSlot {
-  attachmentId: string;
+  /** Не нужен для команды; у документа — documentId. */
+  attachmentId?: string;
   url: string;
   fields: Record<string, string>;
 }

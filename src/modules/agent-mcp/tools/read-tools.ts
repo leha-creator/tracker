@@ -20,11 +20,13 @@ import {
   TASK_PRIORITIES,
 } from '@/modules/tasks';
 import { ValidationError } from '@/shared/errors';
+import { listTaskDocuments } from '@/modules/documents';
 import { createLogger } from '@/shared/logger';
 
-import type { McpContext } from '../context';
+import { actorOf, type McpContext } from '../context';
 import {
   formatTaskDetails,
+  formatTaskDocuments,
   formatTaskList,
   formatWorkspaceContext,
   normalizeName,
@@ -59,7 +61,7 @@ export async function getWorkspaceContextTool(ctx: McpContext): Promise<string> 
   return formatWorkspaceContext({
     workspace: ctx.workspace,
     url: `${ctx.baseUrl.replace(/\/+$/, '')}/w/${ctx.workspace.slug}`,
-    me: { userId: ctx.session.user.id, name: ctx.session.user.name },
+    actor: actorOf(ctx),
     projects,
     members,
     githubGuide,
@@ -187,7 +189,8 @@ export async function getTaskTool(
     listTaskBranchesAndCommits(ctx.session, workspaceId, task.id),
     listTaskAttachments(ctx.session, workspaceId, task.id),
   ]);
-  return formatTaskDetails({
+  const documents = await listTaskDocuments(ctx.session, workspaceId, task.id);
+  const details = formatTaskDetails({
     task,
     url: taskUrl(ctx.baseUrl, ctx.workspace.slug, task.number),
     suggestedBranch: branchFor(task.key, task.title),
@@ -197,6 +200,7 @@ export async function getTaskTool(
     branchesAndCommits,
     attachments,
   });
+  return `${details}\n\n${formatTaskDocuments(documents)}`;
 }
 
 export function registerReadTools(server: McpServer, ctx: McpContext): void {

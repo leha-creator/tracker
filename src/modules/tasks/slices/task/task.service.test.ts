@@ -105,6 +105,7 @@ const session: AuthSession = {
     image: null,
     role: 'user',
     banned: false,
+    isAgent: false,
   },
   session: { id: 's-1', expiresAt: new Date('2030-01-01') },
 };
@@ -197,7 +198,16 @@ describe('createTask with a parent', () => {
     expect(lockTree).not.toHaveBeenCalled();
     expect(createRow).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ parentId: null }),
+      expect.objectContaining({ parentId: null, createdViaTokenId: null }),
+    );
+  });
+
+  it('marks a task created through an MCP token', async () => {
+    const via = { tokenId: 'tok-1', tokenName: 'Ноутбук', scopes: ['read', 'tasks'], agent: null };
+    await createTask({ ...session, via }, { workspaceId: 'ws-1', title: 'A' });
+    expect(createRow).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ createdViaTokenId: 'tok-1' }),
     );
   });
 

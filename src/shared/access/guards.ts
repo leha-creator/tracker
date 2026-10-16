@@ -23,6 +23,11 @@ async function requireActiveSession(read: ReadSession, scope: string): Promise<A
     log.warn({ userId: session.user.id }, `[${scope}] banned user`);
     throw new ForbiddenError('Учётная запись заблокирована');
   }
+  // Вторая линия обороны: сессию агенту не выдаёт хук Better Auth (agent-session-guard).
+  if (session.user.isAgent) {
+    log.warn({ userId: session.user.id }, `[${scope}] agent session rejected`);
+    throw new ForbiddenError('Агент не может работать в интерфейсе');
+  }
   return session;
 }
 
@@ -32,7 +37,7 @@ async function requireSessionOrRedirect(
   returnTo?: string,
 ): Promise<AuthSession> {
   const session = await read();
-  if (!session || session.user.banned) {
+  if (!session || session.user.banned || session.user.isAgent) {
     const target = safeRedirectPath(returnTo, '');
     log.debug({ returnTo: target }, `[${scope}] redirect to login`);
     redirect(target ? `/login?returnTo=${encodeURIComponent(target)}` : '/login');

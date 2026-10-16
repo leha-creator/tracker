@@ -54,6 +54,22 @@ async function SettingsSection({
       </Card>
       <Card>
         <CardHeader>
+          <CardTitle>Агенты</CardTitle>
+          <CardDescription>
+            Отдельные участники для Claude Code: свои токены, права и ответственный.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link
+            href={`/w/${workspace.slug}/settings/agents`}
+            className="text-sm text-primary hover:underline"
+          >
+            Настроить агентов
+          </Link>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
           <CardTitle>Интеграция с GitHub</CardTitle>
           <CardDescription>
             Подключите свои репозитории: PR, ветки и коммиты привязываются к задачам по ключу.

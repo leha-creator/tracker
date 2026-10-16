@@ -70,7 +70,7 @@ function noteRow(overrides: Partial<DocumentRow> = {}): DocumentRow {
     status: null,
     createdAt: new Date('2026-10-16T10:00:00Z'),
     updatedAt: new Date('2026-10-16T11:00:00Z'),
-    createdBy: { id: 'user-1', name: 'Анна', image: null },
+    createdBy: { id: 'user-1', name: 'Анна', image: null, isAgent: false },
     updatedBy: null,
     tags: [
       { tag: { id: 't2', name: 'Релизы', nameKey: 'релизы', color: 'blue' } },
@@ -81,6 +81,7 @@ function noteRow(overrides: Partial<DocumentRow> = {}): DocumentRow {
     fileName: null,
     storageKey: null,
     workspace: { slug: 'team' },
+    createdViaToken: null,
     ...overrides,
   };
 }
@@ -172,7 +173,35 @@ describe('createNote', () => {
       titleKey: 'план релиза',
       content: 'a\nb',
       userId: 'user-1',
+      createdViaTokenId: null,
     });
+  });
+
+  it('marks a note created through an MCP token and shows the mark for a human author', async () => {
+    createNoteRepo.mockResolvedValue(noteRow({ createdViaToken: { name: 'Ноутбук' } }));
+    const via = { tokenId: 'tok-1', tokenName: 'Ноутбук', scopes: ['read'], agent: null };
+    const dto = await createNote(
+      { ...session, via },
+      { workspaceId: WS, folderId: null, title: 'A', content: '' },
+    );
+    expect(createNoteRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ createdViaTokenId: 'tok-1' }),
+    );
+    expect(dto.createdVia).toEqual({ tokenName: 'Ноутбук' });
+
+    createNoteRepo.mockResolvedValue(
+      noteRow({
+        createdBy: { id: 'agent-1', name: 'Claude', image: null, isAgent: true },
+        createdViaToken: { name: 'CI' },
+      }),
+    );
+    const byAgent = await createNote(session, {
+      workspaceId: WS,
+      folderId: null,
+      title: 'A',
+      content: '',
+    });
+    expect(byAgent.createdVia).toBeNull();
   });
 
   it('rejects a folder of another workspace', async () => {

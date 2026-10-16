@@ -14,7 +14,7 @@ export const memberRepository = {
         canManageProjects: true,
         canManageDocuments: true,
         createdAt: true,
-        user: { select: { id: true, name: true, email: true, image: true } },
+        user: { select: { id: true, name: true, email: true, image: true, isAgent: true } },
       },
     });
   },
@@ -37,7 +37,18 @@ export const memberRepository = {
         canManageProjects: true,
         canManageDocuments: true,
         createdAt: true,
-        user: { select: { id: true, name: true, email: true, image: true, createdAt: true } },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            createdAt: true,
+            isAgent: true,
+            // Ответственный агента (таблица модуля agents — чтение для профиля и карточки).
+            agent: { select: { responsible: { select: { id: true, name: true } } } },
+          },
+        },
       },
     });
   },
@@ -47,7 +58,9 @@ export const memberRepository = {
     return prisma.workspaceMember.findMany({
       where: { workspaceId },
       orderBy: { createdAt: 'asc' },
-      select: { user: { select: { id: true, name: true, email: true, image: true } } },
+      select: {
+        user: { select: { id: true, name: true, email: true, image: true, isAgent: true } },
+      },
     });
   },
 
@@ -92,7 +105,7 @@ export const memberRepository = {
   findInWorkspace(workspaceId: string, memberId: string) {
     return prisma.workspaceMember.findFirst({
       where: { id: memberId, workspaceId },
-      select: { id: true, userId: true, role: true },
+      select: { id: true, userId: true, role: true, user: { select: { isAgent: true } } },
     });
   },
 

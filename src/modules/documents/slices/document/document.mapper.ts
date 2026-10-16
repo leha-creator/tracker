@@ -12,7 +12,7 @@ import type {
 } from './document.dto';
 import type { DocumentRow, DocumentSummaryRow } from './document.select';
 
-type UserRow = { id: string; name: string; image: string | null } | null;
+type UserRow = { id: string; name: string; image: string | null; isAgent: boolean } | null;
 
 function toUserDto(user: UserRow): DocumentUserDto | null {
   return user ? { userId: user.id, name: user.name, image: user.image } : null;
@@ -62,5 +62,10 @@ export function toDocumentDto(row: DocumentRow): DocumentDto {
     content: row.kind === 'note' ? (row.content ?? '') : null,
     fileName: row.fileName,
     inlineViewable: type ? isInlineViewable(type) : false,
+    // У автора-агента пометку не показываем — и так видно, что это агент.
+    createdVia:
+      row.createdViaToken && row.createdBy && !row.createdBy.isAgent
+        ? { tokenName: row.createdViaToken.name }
+        : null,
   };
 }

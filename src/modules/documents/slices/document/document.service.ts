@@ -81,10 +81,18 @@ export async function createNote(
     titleKey: documentTitleKey(title),
     content,
     userId,
+    createdViaTokenId: session.via?.tokenId ?? null,
   });
   // Текст заметки не логируем — только длину.
   log.info(
-    { workspaceId, documentId: row.id, folderId, userId, length: content.length },
+    {
+      workspaceId,
+      documentId: row.id,
+      folderId,
+      userId,
+      length: content.length,
+      via: session.via?.tokenId ?? null,
+    },
     '[document] note created',
   );
   return toDocumentDto(row);

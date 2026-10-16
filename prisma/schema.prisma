@@ -30,6 +30,9 @@ model User {
   banned        Boolean?  @default(false)
   banReason     String?
   banExpires    DateTime?
+  /// Служебный пользователь-агент пространства (модуль agents): без пароля и почты, войти не может.
+  /// Поле Better Auth с input: false — проставляет только сервис агентов.
+  isAgent       Boolean   @default(false)
 
   sessions Session[]
   accounts Account[]
@@ -54,7 +57,13 @@ model User {
 
   connectedGithubInstallations WorkspaceGithubInstallation[] @relation("GithubInstallationConnector")
 
-  apiTokens ApiToken[]
+  apiTokens       ApiToken[]    @relation("ApiTokenOwner")
+  issuedApiTokens ApiToken[]    @relation("ApiTokenIssuer")
+  mcpActivities   McpActivity[]
+
+  agent                WorkspaceAgent?  @relation("AgentUser")
+  responsibleForAgents WorkspaceAgent[] @relation("AgentResponsible")
+  createdAgents        WorkspaceAgent[] @relation("AgentCreator")
 }
 
 model Session {
@@ -139,7 +148,9 @@ model Workspace {
   githubInstallations WorkspaceGithubInstallation[]
   githubRepositories  WorkspaceGithubRepository[]
 
-  apiTokens ApiToken[]
+  apiTokens     ApiToken[]
+  agents        WorkspaceAgent[]
+  mcpActivities McpActivity[]
 }
 
 model WorkspaceMember {
@@ -255,25 +266,28 @@ enum TaskPriority {
 }
 
 model Task {
-  id          String       @id @default(uuid(7)) @db.Uuid
-  workspaceId String
+  id                String       @id @default(uuid(7)) @db.Uuid
+  workspaceId       String
   /// Сквозной номер в пространстве (#42). Выдаётся через WorkspaceTaskCounter, не переиспользуется.
-  number      Int
-  title       String
+  number            Int
+  title             String
   /// Простой текст (rich-text — на этапе «Проектная документация»).
-  description String?
-  priority    TaskPriority @default(none)
-  dueDate     DateTime?    @db.Date
+  description       String?
+  priority          TaskPriority @default(none)
+  dueDate           DateTime?    @db.Date
   /// Участник пространства; снимается триггером при выходе из пространства.
-  assigneeId  String?
-  createdById String?
+  assigneeId        String?
+  createdById       String?
   /// Родительская задача того же пространства; null — задача верхнего уровня. Удаление родителя
   /// удаляет всё поддерево (каскад), глубина и циклы проверяются в модуле tasks (models/task-tree).
-  parentId    String?      @db.Uuid
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  parentId          String?      @db.Uuid
+  /// Токен MCP, через который задачу создал агент (пометка «через агента»).
+  createdViaTokenId String?      @db.Uuid
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdViaToken    ApiToken?          @relation("TaskCreatedVia", fields: [createdViaTokenId], references: [id], onDelete: SetNull)
   assignee           User?              @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   createdBy          User?              @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
   /// Составной ключ (parentId, workspaceId): подзадача не может оказаться в чужом пространстве.
@@ -331,20 +345,23 @@ model WorkspaceTaskCounter {
 // чужом пространстве. Удаление задачи удаляет её комментарии, удаление пользователя — только автора.
 
 model TaskComment {
-  id          String    @id @default(uuid(7)) @db.Uuid
-  workspaceId String
-  taskId      String    @db.Uuid
+  id                String    @id @default(uuid(7)) @db.Uuid
+  workspaceId       String
+  taskId            String    @db.Uuid
   /// Автор; null — пользователь удалён (комментарий остаётся).
-  authorId    String?
+  authorId          String?
   /// Простой текст.
-  body        String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  body              String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
   /// Момент последнего изменения текста; null — не редактировался.
-  editedAt    DateTime?
+  editedAt          DateTime?
+  /// Токен MCP, через который комментарий написан (пометка «через агента»).
+  createdViaTokenId String?   @db.Uuid
 
-  task   Task  @relation(fields: [taskId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  author User? @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  task            Task      @relation(fields: [taskId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  author          User?     @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  createdViaToken ApiToken? @relation("TaskCommentCreatedVia", fields: [createdViaTokenId], references: [id], onDelete: SetNull)
 
   attachments TaskAttachment[]
 
@@ -525,38 +542,41 @@ model DocumentFolder {
 }
 
 model Document {
-  id          String              @id @default(uuid(7)) @db.Uuid
-  workspaceId String
+  id                String              @id @default(uuid(7)) @db.Uuid
+  workspaceId       String
   /// Папка; null — корень пространства.
-  folderId    String?             @db.Uuid
-  kind        DocumentKind
-  title       String
+  folderId          String?             @db.Uuid
+  kind              DocumentKind
+  title             String
   /// lower(title) — поиск и сортировка по названию.
-  titleKey    String
+  titleKey          String
   /// Markdown заметки; у файла — null.
-  content     String?
+  content           String?
   /// Версия для оптимистичной блокировки правки заметки.
-  version     Int                 @default(1)
+  version           Int                 @default(1)
   /// Поля файла (у заметки — null). Имя санитизировано, в ключе хранилища не используется.
-  fileName    String?
-  extension   String?
+  fileName          String?
+  extension         String?
   /// MIME по расширению из allowlist, а не из браузера.
-  contentType String?
-  size        Int?
-  storageKey  String?             @unique
-  status      DocumentFileStatus?
-  uploadedAt  DateTime?
-  createdById String?
-  updatedById String?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  contentType       String?
+  size              Int?
+  storageKey        String?             @unique
+  status            DocumentFileStatus?
+  uploadedAt        DateTime?
+  createdById       String?
+  updatedById       String?
+  /// Токен MCP, через который документ создан (пометка «через агента»).
+  createdViaTokenId String?             @db.Uuid
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
-  workspace Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  folder    DocumentFolder?         @relation(fields: [folderId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  createdBy User?                   @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy User?                   @relation("DocumentUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
-  tags      DocumentTagAssignment[]
-  taskLinks TaskDocumentLink[]
+  workspace       Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdViaToken ApiToken?               @relation("DocumentCreatedVia", fields: [createdViaTokenId], references: [id], onDelete: SetNull)
+  folder          DocumentFolder?         @relation(fields: [folderId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  createdBy       User?                   @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy       User?                   @relation("DocumentUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  tags            DocumentTagAssignment[]
+  taskLinks       TaskDocumentLink[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId, folderId, titleKey])
@@ -881,8 +901,9 @@ model GithubAppConfig {
 }
 
 // ── Токены доступа (MCP) ───────────────────────────────────────────────────────
-// Личный токен пользователя для агентов (Claude Code через /api/mcp). Действует с правами
-// владельца в одном пространстве, админских прав не даёт. Членство проверяется при каждом запросе.
+// Токен для агентов (Claude Code через /api/mcp). Личный токен действует с правами пользователя,
+// токен агента — с правами агента пространства (userId — служебный пользователь-агент).
+// Действует в одном пространстве, админских прав не даёт. Членство проверяется при каждом запросе.
 
 model ApiToken {
   id          String    @id @default(uuid(7)) @db.Uuid
@@ -899,11 +920,73 @@ model ApiToken {
   /// Обновляется не чаще раза в минуту.
   lastUsedAt  DateTime?
   revokedAt   DateTime?
+  /// Кто выпустил: сам пользователь (личный токен) или владелец пространства (токен агента).
+  issuedById  String?
+  /// Области: "read" (всегда), "tasks" (задачи, комментарии, вложения), "documents" (документы).
+  scopes      String[]  @default(["read", "tasks", "documents"])
   createdAt   DateTime  @default(now())
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation("ApiTokenOwner", fields: [userId], references: [id], onDelete: Cascade)
+  issuedBy  User?     @relation("ApiTokenIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdTasks     Task[]        @relation("TaskCreatedVia")
+  createdComments  TaskComment[] @relation("TaskCommentCreatedVia")
+  createdDocuments Document[]    @relation("DocumentCreatedVia")
+  activities       McpActivity[]
 
   @@index([userId, createdAt])
   @@index([workspaceId])
+  @@index([issuedById])
+}
+
+// ── Агенты пространства ────────────────────────────────────────────────────────
+// Агент — служебный User (isAgent) с членством в одном пространстве (WorkspaceMember, роль member).
+// Членство и строку агента создаёт модуль agents в обход плагина organization. Отключение снимает
+// членство и отзывает токены, строка User остаётся — авторство в истории сохраняется.
+
+model WorkspaceAgent {
+  /// Служебный пользователь агента.
+  userId            String    @id
+  workspaceId       String
+  /// Ответственный участник: ему приходят уведомления, адресованные агенту.
+  responsibleUserId String?
+  description       String?
+  createdById       String?
+  /// Отключён: токены отозваны, членство снято.
+  disabledAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  user        User      @relation("AgentUser", fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  responsible User?     @relation("AgentResponsible", fields: [responsibleUserId], references: [id], onDelete: SetNull)
+  createdBy   User?     @relation("AgentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([responsibleUserId])
+  @@index([createdById])
+}
+
+/// Журнал изменений через MCP. Записи старше 90 дней удаляются по ходу записи.
+model McpActivity {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  workspaceId String
+  /// Кто действовал: агент или владелец личного токена.
+  userId      String
+  tokenId     String?  @db.Uuid
+  /// Имя инструмента MCP (`change_status`).
+  tool        String
+  /// Готовая строка для показа («Перевёл TSK-42: К выполнению → В работе»).
+  summary     String
+  /// Ключ задачи (TSK-42) или id документа.
+  targetKey   String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     ApiToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, userId, createdAt])
+  @@index([tokenId, createdAt])
+  @@index([createdAt])
 }

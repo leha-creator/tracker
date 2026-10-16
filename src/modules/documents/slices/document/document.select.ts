@@ -5,7 +5,7 @@ export const VISIBLE_DOCUMENT_WHERE = {
   OR: [{ kind: 'note' as const }, { status: 'ready' as const }],
 };
 
-const USER_SELECT = { select: { id: true, name: true, image: true } } as const;
+const USER_SELECT = { select: { id: true, name: true, image: true, isAgent: true } } as const;
 
 /** Поля документа для списков (без текста заметки). */
 export const DOCUMENT_SUMMARY_SELECT = {
@@ -35,6 +35,8 @@ export const DOCUMENT_SELECT = {
   fileName: true,
   storageKey: true,
   workspace: { select: { slug: true } },
+  // Пометка «через агента»: автор-человек и токен MCP, через который создан документ.
+  createdViaToken: { select: { name: true } },
 } as const;
 
 export type DocumentSummaryRow = Prisma.DocumentGetPayload<{

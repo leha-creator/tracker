@@ -51,9 +51,21 @@ function getTransport(): Transporter {
   return globalForMail.mailTransport;
 }
 
-/** Отправляет письмо. Бросает InternalError при сбое SMTP (адресат в логах маскируется). */
+/** Домен `.invalid` (RFC 2606) заведомо недоставляем — например, служебная почта агентов. */
+export function isUndeliverableAddress(address: string): boolean {
+  return /\.invalid$/i.test(address.trim());
+}
+
+/**
+ * Отправляет письмо. Бросает InternalError при сбое SMTP (адресат в логах маскируется).
+ * Адреса `*.invalid` пропускаются без ошибки: `messageId` пустой.
+ */
 export async function sendMail(message: MailMessage): Promise<{ messageId: string }> {
   const to = maskEmail(message.to);
+  if (isUndeliverableAddress(message.to)) {
+    log.warn({ to }, '[mail] undeliverable address skipped');
+    return { messageId: '' };
+  }
   log.debug({ to, subject: message.subject }, '[mail.send]');
   try {
     const info = await getTransport().sendMail({ from: getEnv().MAIL_FROM, ...message });

@@ -7,7 +7,7 @@ import {
   type WorkspaceRole,
 } from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
-import { NotFoundError } from '@/shared/errors';
+import { NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
 import { Membership } from '../../models';
@@ -22,10 +22,22 @@ import { memberRepository } from './member.repository';
 
 const log = createLogger('workspaces.member');
 
-async function loadMembership(workspaceId: string, memberId: string): Promise<Membership> {
+/**
+ * Участник для изменения владельцем. Агентом управляют в разделе «Агенты» (модуль agents):
+ * роль, права и исключение здесь для него запрещены.
+ */
+async function loadMembership(
+  workspaceId: string,
+  memberId: string,
+  scope: string,
+): Promise<Membership> {
   const row = await memberRepository.findInWorkspace(workspaceId, memberId);
   const role = row ? parseWorkspaceRole(row.role) : null;
   if (!row || !role) throw new NotFoundError('Участник не найден');
+  if (row.user.isAgent) {
+    log.warn({ workspaceId, memberId, scope }, '[member] agent change rejected');
+    throw new ValidationError('Агентом управляют в настройках пространства, в разделе «Агенты»');
+  }
   return new Membership(row.id, row.userId, role);
 }
 
@@ -55,6 +67,7 @@ export async function listMembers(session: AuthSession, workspaceId: string): Pr
         canManageDocuments: row.canManageDocuments,
         joinedAt: row.createdAt,
         isCurrentUser: row.user.id === session.user.id,
+        isAgent: row.user.isAgent,
       },
     ];
   });
@@ -101,6 +114,10 @@ export async function getMember(
     joinedAt: row.createdAt,
     registeredAt: row.user.createdAt,
     isCurrentUser: row.user.id === session.user.id,
+    isAgent: row.user.isAgent,
+    responsible: row.user.agent?.responsible
+      ? { userId: row.user.agent.responsible.id, name: row.user.agent.responsible.name }
+      : null,
   };
 }
 
@@ -116,6 +133,7 @@ export async function listMemberIdentities(workspaceId: string): Promise<MemberI
     name: user.name,
     email: user.email,
     image: user.image,
+    isAgent: user.isAgent,
   }));
 }
 
@@ -159,7 +177,7 @@ export async function changeMemberRole(
   await requireWorkspaceAccess(session, workspaceId, 'owner');
   log.debug({ userId: session.user.id, workspaceId, memberId, role }, '[member.changeRole] start');
 
-  const target = await loadMembership(workspaceId, memberId);
+  const target = await loadMembership(workspaceId, memberId, 'changeRole');
   const ownersCount = await memberRepository.countOwners(workspaceId);
   try {
     target.assertCanChangeRole(role, ownersCount);
@@ -188,7 +206,7 @@ export async function removeMember(
   await requireWorkspaceAccess(session, workspaceId, 'owner');
   log.debug({ userId: session.user.id, workspaceId, memberId }, '[member.remove] start');
 
-  const target = await loadMembership(workspaceId, memberId);
+  const target = await loadMembership(workspaceId, memberId, 'remove');
   const ownersCount = await memberRepository.countOwners(workspaceId);
   try {
     target.assertCanBeRemovedBy(session.user.id, ownersCount);
@@ -238,7 +256,7 @@ export async function setMemberPermission(
     '[member.setPermission] start',
   );
 
-  const target = await loadMembership(workspaceId, memberId);
+  const target = await loadMembership(workspaceId, memberId, 'setPermission');
   try {
     target.assertPermissionsConfigurable();
   } catch (error) {

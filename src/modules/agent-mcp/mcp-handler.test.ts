@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { AuthVia } from '@/shared/auth';
+
 import type { ApiTokenContext } from '@/modules/api-tokens';
 import type * as ApiTokensModule from '@/modules/api-tokens';
 import { UnauthorizedError } from '@/shared/errors';
@@ -12,6 +14,14 @@ vi.mock('@/modules/api-tokens', async (importOriginal) => ({
 }));
 
 const { handleMcpRequest, MCP_MAX_BODY_BYTES, methodNotAllowed } = await import('./mcp-handler');
+const { TOOL_SCOPES } = await import('./models');
+
+const VIA: AuthVia = {
+  tokenId: 't-1',
+  tokenName: 'Claude Code',
+  scopes: ['read', 'tasks', 'documents'],
+  agent: null,
+};
 
 const auth: ApiTokenContext = {
   session: {
@@ -22,12 +32,15 @@ const auth: ApiTokenContext = {
       image: null,
       role: 'user',
       banned: false,
+      isAgent: false,
     },
     session: { id: 'api-token:t-1', expiresAt: new Date('2030-01-01') },
+    via: VIA,
   },
   workspace: { id: 'ws-1', slug: 'team', name: 'Команда', taskKey: 'TSK' },
   tokenId: 't-1',
   tokenPrefix: 'tkr_abcdefgh',
+  via: VIA,
 };
 
 function rpc(body: unknown, headers: Record<string, string> = {}): Request {
@@ -90,21 +103,9 @@ describe('POST /api/mcp', () => {
     const tools = (await (
       await handleMcpRequest(rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' }))
     ).json()) as { result: { tools: { name: string }[] } };
-    expect(tools.result.tools.map((tool) => tool.name).sort()).toEqual([
-      'add_comment',
-      'complete_attachment_upload',
-      'create_task',
-      'get_attachment_url',
-      'get_github_conventions',
-      'get_task',
-      'get_workspace_context',
-      'list_tasks',
-      'preview_github_links',
-      'request_attachment_upload',
-      'set_task_parent',
-      'set_task_status',
-      'update_task',
-    ]);
+    expect(tools.result.tools.map((tool) => tool.name).sort()).toEqual(
+      Object.keys(TOOL_SCOPES).sort(),
+    );
 
     const prompts = (await (
       await handleMcpRequest(rpc({ jsonrpc: '2.0', id: 3, method: 'prompts/list' }))
@@ -113,6 +114,42 @@ describe('POST /api/mcp', () => {
       'start_task',
       'finish_task',
     ]);
+  });
+
+  it('токен только с read: инструменты изменения и сценарии скрыты, вызов отклоняется', async () => {
+    authenticateApiToken.mockResolvedValue({
+      ...auth,
+      session: { ...auth.session, via: { ...VIA, scopes: ['read'] } },
+      via: { ...VIA, scopes: ['read'] },
+    });
+    const tools = (await (
+      await handleMcpRequest(rpc({ jsonrpc: '2.0', id: 4, method: 'tools/list' }))
+    ).json()) as { result: { tools: { name: string }[] } };
+    expect(tools.result.tools.map((tool) => tool.name).sort()).toEqual(
+      Object.entries(TOOL_SCOPES)
+        .filter(([, scope]) => scope === 'read')
+        .map(([name]) => name)
+        .sort(),
+    );
+
+    const call = (await (
+      await handleMcpRequest(
+        rpc({
+          jsonrpc: '2.0',
+          id: 5,
+          method: 'tools/call',
+          params: { name: 'create_task', arguments: { title: 'x' } },
+        }),
+      )
+    ).json()) as RpcResponse;
+    // Незарегистрированный инструмент: ошибка, задача не создаётся.
+    expect(JSON.stringify(call)).toMatch(/create_task/);
+    expect(call.result?.isError ?? Boolean(call.error)).toBe(true);
+
+    const prompts = (await (
+      await handleMcpRequest(rpc({ jsonrpc: '2.0', id: 6, method: 'prompts/list' }))
+    ).json()) as RpcResponse;
+    expect(JSON.stringify(prompts)).not.toContain('start_task');
   });
 
   it('слишком большое тело — 413', async () => {

@@ -47,6 +47,8 @@ export async function GET(
       image: card?.image ?? null,
       position: card?.position ?? null,
       role: member.role,
+      isAgent: member.isAgent,
+      responsibleName: member.responsible?.name ?? null,
       openCount: summary.openCount,
       overdueCount: summary.overdueCount,
     };

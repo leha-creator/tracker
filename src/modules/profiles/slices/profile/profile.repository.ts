@@ -43,6 +43,12 @@ export const profileRepository = {
     });
   },
 
+  /** Служебный пользователь-агент (User.isAgent): вместо фото — робот. */
+  async isAgent(userId: string): Promise<boolean> {
+    const row = await prisma.user.findUnique({ where: { id: userId }, select: { isAgent: true } });
+    return row?.isAgent ?? false;
+  },
+
   async findAvatarKey(userId: string): Promise<string | null> {
     const row = await prisma.userProfile.findUnique({
       where: { userId },

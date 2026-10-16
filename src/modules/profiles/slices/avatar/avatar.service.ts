@@ -115,11 +115,20 @@ export async function removeAvatar(session: AuthSession): Promise<void> {
  * Ссылка на фото: своё, пользователя из общего пространства или любое — администратору.
  * Остальным — `NotFoundError` (не раскрываем, есть ли пользователь).
  */
+/** Фото агента пространства (статичный файл public/agent-avatar.svg). */
+export const AGENT_AVATAR_PATH = '/agent-avatar.svg';
+
 export async function getAvatarDownload(
   session: AuthSession,
   userId: string,
 ): Promise<{ url: string }> {
   const viewerId = session.user.id;
+  // Агент: статичный робот из public/. Это не данные пользователя, поэтому без проверки общего
+  // пространства — робот виден и у отключённого агента (его членство снято) в истории задач.
+  if (await profileRepository.isAgent(userId)) {
+    log.debug({ viewerId, userId }, '[avatar.download] agent avatar');
+    return { url: AGENT_AVATAR_PATH };
+  }
   const allowed =
     viewerId === userId || isAdmin(session.user) || (await sharesWorkspace(viewerId, userId));
   if (!allowed) {

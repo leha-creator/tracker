@@ -71,9 +71,13 @@ async function MemberProfile({ params }: Pick<Props, 'params'>) {
           </h1>
           {card?.position && <p className="text-muted-foreground">{card.position}</p>}
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Badge variant={member.role === 'owner' ? 'default' : 'secondary'}>
-              {WORKSPACE_ROLE_LABELS[member.role]}
-            </Badge>
+            {member.isAgent ? (
+              <Badge variant="secondary">Агент</Badge>
+            ) : (
+              <Badge variant={member.role === 'owner' ? 'default' : 'secondary'}>
+                {WORKSPACE_ROLE_LABELS[member.role]}
+              </Badge>
+            )}
             {member.role !== 'owner' && member.canManageProjects && (
               <Badge variant="outline">Управляет проектами</Badge>
             )}
@@ -156,13 +160,30 @@ async function MemberProfile({ params }: Pick<Props, 'params'>) {
           </CardHeader>
           <CardContent>
             <dl className="grid gap-3 text-sm">
-              <Detail label="Email">
-                <a href={`mailto:${member.email}`} className="break-all hover:underline">
-                  {member.email}
-                </a>
-              </Detail>
+              {member.isAgent ? (
+                <Detail label="Ответственный">
+                  {member.responsible ? (
+                    <Link
+                      href={`/w/${workspace.slug}/members/${member.responsible.userId}`}
+                      className="hover:underline"
+                    >
+                      {member.responsible.name}
+                    </Link>
+                  ) : (
+                    'не назначен'
+                  )}
+                </Detail>
+              ) : (
+                <Detail label="Email">
+                  <a href={`mailto:${member.email}`} className="break-all hover:underline">
+                    {member.email}
+                  </a>
+                </Detail>
+              )}
               <Detail label="В пространстве с">{DATE.format(member.joinedAt)}</Detail>
-              <Detail label="Зарегистрирован">{DATE.format(member.registeredAt)}</Detail>
+              {!member.isAgent && (
+                <Detail label="Зарегистрирован">{DATE.format(member.registeredAt)}</Detail>
+              )}
               <Detail label="Создал задач">{summary.createdCount}</Detail>
               <Detail label="Последняя активность">
                 {summary.lastActivityAt ? DATE_TIME.format(summary.lastActivityAt) : 'нет'}

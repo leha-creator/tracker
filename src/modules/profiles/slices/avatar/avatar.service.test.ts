@@ -11,6 +11,7 @@ const createUploadPost =
 const createDownloadUrl = vi.fn<(input: { key: string; contentType: string }) => Promise<string>>();
 const setAvatarKey = vi.fn<(userId: string, key: string | null) => Promise<string | null>>();
 const findAvatarKey = vi.fn<(userId: string) => Promise<string | null>>();
+const isAgentRepo = vi.fn<(userId: string) => Promise<boolean>>().mockResolvedValue(false);
 const updateAuthUser = vi.fn<(fields: { image?: string | null }) => Promise<void>>();
 const sharesWorkspace = vi.fn<(a: string, b: string) => Promise<boolean>>();
 
@@ -31,6 +32,7 @@ vi.mock('../profile/profile.repository', () => ({
   profileRepository: {
     setAvatarKey: (userId: string, key: string | null) => setAvatarKey(userId, key),
     findAvatarKey: (userId: string) => findAvatarKey(userId),
+    isAgent: (userId: string) => isAgentRepo(userId),
   },
 }));
 
@@ -44,7 +46,15 @@ const {
 
 function sessionOf(id: string, role: 'user' | 'admin' = 'user'): AuthSession {
   return {
-    user: { id, email: `${id}@example.com`, name: id, image: null, role, banned: false },
+    user: {
+      id,
+      email: `${id}@example.com`,
+      name: id,
+      image: null,
+      role,
+      banned: false,
+      isAgent: false,
+    },
     session: { id: 's-1', expiresAt: new Date('2030-01-01') },
   };
 }
@@ -56,6 +66,7 @@ const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  isAgentRepo.mockResolvedValue(false);
   deleteObjects.mockResolvedValue(0);
   headObject.mockResolvedValue({ size: 1000 });
   readObjectPrefix.mockResolvedValue(PNG);
@@ -116,6 +127,14 @@ describe('removeAvatar', () => {
 });
 
 describe('getAvatarDownload', () => {
+  it('returns the robot for an agent without a storage lookup', async () => {
+    isAgentRepo.mockResolvedValueOnce(true);
+    await expect(getAvatarDownload(session, 'agent-1')).resolves.toEqual({
+      url: '/agent-avatar.svg',
+    });
+    expect(findAvatarKey).not.toHaveBeenCalled();
+  });
+
   it('allows users sharing a workspace', async () => {
     sharesWorkspace.mockResolvedValue(true);
     findAvatarKey.mockResolvedValue('users/user-2/avatar/x.jpg');

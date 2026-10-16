@@ -4,6 +4,8 @@ export interface MentionCandidate {
   name: string;
   email: string;
   image?: string | null;
+  /** Агент пространства: в подсказке — «(агент)» вместо служебного email. */
+  isAgent?: boolean;
 }
 
 /** Упоминание в тексте: `body.slice(start, end)` — `@Имя`. */
@@ -69,7 +71,8 @@ export function findMentionQuery(text: string, caret: number): MentionQuery | nu
 function rankCandidate(candidate: MentionCandidate, query: string): number | null {
   if (query === '') return 0;
   const name = normalize(candidate.name);
-  const email = normalize(candidate.email);
+  // Служебный email агента (agent-<id>@…) в поиске не участвует — только имя.
+  const email = candidate.isAgent ? '' : normalize(candidate.email);
   if (name.startsWith(query)) return 0;
   if (name.split(/\s+/).some((word) => word.startsWith(query))) return 1;
   if (emailLocalPart(email).startsWith(query)) return 2;

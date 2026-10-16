@@ -44,6 +44,8 @@ export interface DocumentDto extends DocumentSummaryDto {
   fileName: string | null;
   /** Файл можно открыть по ссылке `inline` (картинка, PDF, медиа). */
   inlineViewable: boolean;
+  /** Создан агентом по личному токену автора; null — вручную или самим агентом. */
+  createdVia: { tokenName: string } | null;
 }
 
 export interface NoteSavedDto {

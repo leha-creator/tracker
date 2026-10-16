@@ -9,7 +9,10 @@ const requireWorkspaceAccess =
   vi.fn<
     (session: AuthSession, workspaceId: string, minRole?: WorkspaceRole) => Promise<WorkspaceAccess>
   >();
-const findInWorkspace = vi.fn<() => Promise<{ id: string; userId: string; role: string } | null>>();
+const findInWorkspace =
+  vi.fn<
+    () => Promise<{ id: string; userId: string; role: string; user: { isAgent: boolean } } | null>
+  >();
 const countOwners = vi.fn<() => Promise<number>>();
 const setPermission =
   vi.fn<(ws: string, memberId: string, permission: string, value: boolean) => Promise<number>>();
@@ -70,6 +73,7 @@ const session: AuthSession = {
     image: null,
     role: 'user',
     banned: false,
+    isAgent: false,
   },
   session: { id: 's-1', expiresAt: new Date('2030-01-01') },
 };
@@ -111,7 +115,12 @@ describe('changeMemberRole', () => {
 
   it('does not demote the last owner', async () => {
     accessAs('owner');
-    findInWorkspace.mockResolvedValue({ id: 'm-self', userId: 'user-owner', role: 'owner' });
+    findInWorkspace.mockResolvedValue({
+      id: 'm-self',
+      userId: 'user-owner',
+      role: 'owner',
+      user: { isAgent: false },
+    });
     countOwners.mockResolvedValue(1);
     await expect(
       changeMemberRole(session, { workspaceId: 'ws-1', memberId: 'm-self', role: 'member' }),
@@ -121,7 +130,12 @@ describe('changeMemberRole', () => {
 
   it('promotes a member through the plugin', async () => {
     accessAs('owner');
-    findInWorkspace.mockResolvedValue({ id: 'm-2', userId: 'user-2', role: 'member' });
+    findInWorkspace.mockResolvedValue({
+      id: 'm-2',
+      userId: 'user-2',
+      role: 'member',
+      user: { isAgent: false },
+    });
     countOwners.mockResolvedValue(1);
     await changeMemberRole(session, { workspaceId: 'ws-1', memberId: 'm-2', role: 'owner' });
     expect(updateMemberRole).toHaveBeenCalledWith(
@@ -133,7 +147,12 @@ describe('changeMemberRole', () => {
 describe('removeMember', () => {
   it('removes a member within the workspace', async () => {
     accessAs('owner');
-    findInWorkspace.mockResolvedValue({ id: 'm-2', userId: 'user-2', role: 'member' });
+    findInWorkspace.mockResolvedValue({
+      id: 'm-2',
+      userId: 'user-2',
+      role: 'member',
+      user: { isAgent: false },
+    });
     countOwners.mockResolvedValue(1);
     await removeMemberService(session, { workspaceId: 'ws-1', memberId: 'm-2' });
     expect(removeMember).toHaveBeenCalledWith(
@@ -143,11 +162,48 @@ describe('removeMember', () => {
 
   it('does not remove yourself', async () => {
     accessAs('owner');
-    findInWorkspace.mockResolvedValue({ id: 'm-self', userId: 'user-owner', role: 'owner' });
+    findInWorkspace.mockResolvedValue({
+      id: 'm-self',
+      userId: 'user-owner',
+      role: 'owner',
+      user: { isAgent: false },
+    });
     countOwners.mockResolvedValue(2);
     await expect(
       removeMemberService(session, { workspaceId: 'ws-1', memberId: 'm-self' }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+});
+
+describe('agent members', () => {
+  const agent = { id: 'm-a', userId: 'agent-1', role: 'member', user: { isAgent: true } };
+
+  it('are not removed from the members list', async () => {
+    accessAs('owner');
+    findInWorkspace.mockResolvedValue(agent);
+    countOwners.mockResolvedValue(1);
+    await expect(
+      removeMemberService(session, { workspaceId: 'ws-1', memberId: 'm-a' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(removeMember).not.toHaveBeenCalled();
+  });
+
+  it('do not get permissions or roles from the members list', async () => {
+    accessAs('owner');
+    findInWorkspace.mockResolvedValue(agent);
+    await expect(
+      setMemberPermission(session, {
+        workspaceId: 'ws-1',
+        memberId: 'm-a',
+        permission: 'manageDocuments',
+        value: true,
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(
+      changeMemberRole(session, { workspaceId: 'ws-1', memberId: 'm-a', role: 'owner' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(setPermission).not.toHaveBeenCalled();
+    expect(updateMemberRole).not.toHaveBeenCalled();
   });
 });
 
@@ -194,7 +250,12 @@ describe('setMemberPermission', () => {
 
   it('rejects configuring an owner', async () => {
     accessAs('owner');
-    findInWorkspace.mockResolvedValue({ id: 'm-2', userId: 'user-2', role: 'owner' });
+    findInWorkspace.mockResolvedValue({
+      id: 'm-2',
+      userId: 'user-2',
+      role: 'owner',
+      user: { isAgent: false },
+    });
     await expect(setMemberPermission(session, input)).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
     });
@@ -203,7 +264,12 @@ describe('setMemberPermission', () => {
 
   it('grants the permission to a member', async () => {
     accessAs('owner');
-    findInWorkspace.mockResolvedValue({ id: 'm-2', userId: 'user-2', role: 'member' });
+    findInWorkspace.mockResolvedValue({
+      id: 'm-2',
+      userId: 'user-2',
+      role: 'member',
+      user: { isAgent: false },
+    });
     setPermission.mockResolvedValue(1);
     await setMemberPermission(session, input);
     expect(setPermission).toHaveBeenCalledWith('ws-1', 'm-2', 'manageProjects', true);
@@ -211,7 +277,12 @@ describe('setMemberPermission', () => {
 
   it('grants manageDocuments with its own flag', async () => {
     accessAs('owner');
-    findInWorkspace.mockResolvedValue({ id: 'm-2', userId: 'user-2', role: 'member' });
+    findInWorkspace.mockResolvedValue({
+      id: 'm-2',
+      userId: 'user-2',
+      role: 'member',
+      user: { isAgent: false },
+    });
     setPermission.mockResolvedValue(1);
     await setMemberPermission(session, { ...input, permission: 'manageDocuments', value: false });
     expect(setPermission).toHaveBeenCalledWith('ws-1', 'm-2', 'manageDocuments', false);
@@ -267,6 +338,8 @@ describe('getMember', () => {
       email: 'boris@example.com',
       image: null,
       createdAt: new Date('2026-01-01'),
+      isAgent: false,
+      agent: null as { responsible: { id: string; name: string } | null } | null,
     },
   };
 
@@ -300,6 +373,18 @@ describe('getMember', () => {
     expect((await getMember(session, 'ws-1', 'user-2')).canManageDocuments).toBe(false);
   });
 
+  it('returns the responsible of an agent', async () => {
+    accessAs('member');
+    findByUser.mockResolvedValue({
+      ...row,
+      user: { ...row.user, isAgent: true, agent: { responsible: { id: 'u-3', name: 'Анна' } } },
+    });
+    expect(await getMember(session, 'ws-1', 'user-2')).toMatchObject({
+      isAgent: true,
+      responsible: { userId: 'u-3', name: 'Анна' },
+    });
+  });
+
   it('hides non-members', async () => {
     accessAs('member');
     findByUser.mockResolvedValue(null);
@@ -312,10 +397,10 @@ describe('getMember', () => {
 describe('listMemberIdentities', () => {
   it('maps users', async () => {
     listIdentities.mockResolvedValue([
-      { user: { id: 'u1', name: 'Анна', email: 'anna@example.com', image: null } },
+      { user: { id: 'u1', name: 'Анна', email: 'anna@example.com', image: null, isAgent: false } },
     ]);
     expect(await listMemberIdentities('ws-1')).toEqual([
-      { userId: 'u1', name: 'Анна', email: 'anna@example.com', image: null },
+      { userId: 'u1', name: 'Анна', email: 'anna@example.com', image: null, isAgent: false },
     ]);
   });
 });

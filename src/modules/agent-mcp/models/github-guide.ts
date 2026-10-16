@@ -1,3 +1,5 @@
+import { describeActor, hasMcpScope, type McpActor } from './tool-scopes';
+
 import type { CatalogProject } from './catalog';
 
 /** Что известно об интеграции пространства (сводка модуля integrations/github). */
@@ -44,15 +46,32 @@ export function describeAutomations(input: GithubGuideInput): ProjectAutomationV
 export function buildServerInstructions(input: {
   workspaceName: string;
   taskKey: string | null;
+  actor: McpActor;
 }): string {
   const key = input.taskKey;
   const example = key ? `${key}-42` : '#42';
+  const canEditTasks = hasMcpScope(input.actor.scopes, 'tasks');
   const lines = [
     `Tasker is the task tracker for this repository (workspace "${input.workspaceName}"). Tasks are referenced as ${example}.`,
+    describeActor(input.actor),
     'Start with get_workspace_context (projects, statuses, members, GitHub setup), then use get_task / list_tasks.',
-    'Use the tools to create tasks, change status, add comments and organise subtasks instead of keeping a separate TODO list.',
-    'Attach files (logs as .txt, screenshots, reports) with request_attachment_upload + complete_attachment_upload; read files people attached with get_attachment_url.',
   ];
+  if (canEditTasks) {
+    lines.push(
+      'Use the tools to create tasks, change status, add comments and organise subtasks instead of keeping a separate TODO list.',
+      'Attach files (logs as .txt, screenshots, reports) with request_attachment_upload + complete_attachment_upload; read files people attached with get_attachment_url.',
+    );
+  } else {
+    lines.push('Read files people attached with get_attachment_url.');
+  }
+  lines.push(
+    'Workspace Documents hold specs, ADRs and guides: before working on a task read the documents linked to it (get_task lists them, get_document reads them); search others with list_documents.',
+  );
+  if (hasMcpScope(input.actor.scopes, 'documents')) {
+    lines.push(
+      'Save results worth keeping (ADR, reports, implementation notes) as a note with create_note and link it to the task. Edit a note only with update_note and the current version from get_document; on a version conflict re-read and re-apply.',
+    );
+  }
   if (key) {
     lines.push(
       `GitHub linking is automatic by task key: put exactly one key like ${key}-42 in the branch name (${key.toLowerCase()}-42-short-slug), in every commit message ("${key}-42: what changed") and in the PR title. Never mention keys of unrelated tasks in PR titles or descriptions — each key links the PR to that task.`,

@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
-import { ApiTokensTable } from '@/components/profile/api-tokens/api-tokens-table';
-import { CreateApiTokenDialog } from '@/components/profile/api-tokens/create-api-token-dialog';
+import { ApiTokensTable } from '@/components/api-tokens/api-tokens-table';
+import { CreateApiTokenDialog } from '@/components/api-tokens/create-api-token-dialog';
 import { listMyApiTokens } from '@/modules/api-tokens';
 import { listMyWorkspaces } from '@/modules/workspaces';
 import { requireUserOrRedirect } from '@/shared/access';
@@ -40,11 +40,18 @@ async function TokensSection() {
     <div className="grid gap-3">
       <div>
         <CreateApiTokenDialog
-          workspaces={workspaces.map(({ id, name }) => ({ id, name }))}
+          target={{
+            kind: 'personal',
+            workspaces: workspaces.map(({ id, name }) => ({ id, name })),
+          }}
           baseUrl={getEnv().BETTER_AUTH_URL}
         />
       </div>
-      <ApiTokensTable items={tokens} />
+      <ApiTokensTable
+        items={tokens}
+        target={{ kind: 'personal' }}
+        activityHref={(tokenId) => `/profile/tokens/${tokenId}`}
+      />
     </div>
   );
 }

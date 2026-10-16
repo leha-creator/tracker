@@ -11,6 +11,13 @@ export interface PromptTask {
   ancestors: { key: string; title: string }[];
   subtasks: { done: number; total: number };
   branch: string | null;
+  /** Документы, связанные с задачей (спецификации, ADR). */
+  documents?: { id: string; title: string }[];
+}
+
+/** Что токен разрешает в сценарии: изменение документов — отдельная область. */
+export interface PromptOptions {
+  canEditDocuments?: boolean;
 }
 
 /** Автосмена статуса в проектах, где лежит задача (только они важны для сценария). */
@@ -40,6 +47,16 @@ function taskHeader(task: PromptTask): string[] {
   return lines;
 }
 
+function readDocumentsStep(task: PromptTask): string {
+  const documents = task.documents ?? [];
+  if (documents.length === 0) {
+    return 'Check workspace Documents for a spec or decisions on this topic (list_documents with query) — none are linked to the task yet.';
+  }
+  return `Read the linked documents with get_document before coding: ${documents
+    .map((document) => `«${document.title}» (${document.id})`)
+    .join(', ')}.`;
+}
+
 export function buildStartTaskPrompt(
   task: PromptTask,
   automations: readonly ProjectAutomationView[],
@@ -65,7 +82,8 @@ export function buildStartTaskPrompt(
   }
 
   const steps = [
-    `Call get_task for ${task.key} to read the full description, comments and existing GitHub links.`,
+    `Call get_task for ${task.key} to read the full description, comments, linked documents and existing GitHub links.`,
+    readDocumentsStep(task),
     'If the task is large, split it into subtasks with create_task (parent: the task) and work on them one by one, each in its own branch.',
     statusStep,
     task.branch
@@ -90,6 +108,7 @@ export function buildStartTaskPrompt(
 export function buildFinishTaskPrompt(
   task: PromptTask,
   automations: readonly ProjectAutomationView[],
+  options: PromptOptions = {},
 ): string {
   const automated = taskAutomations(task, automations);
   const keyRef = task.key.startsWith('#') ? null : task.key;
@@ -109,8 +128,11 @@ export function buildFinishTaskPrompt(
       ? `Open the PR, e.g. \`gh pr create --title "${keyRef}: <summary>" --body "<what and why>"\`. Do not mention other task keys (including the parent task) in the title or body.`
       : 'Open the PR.',
     `add_comment on ${task.key}: what was done, what is left, and the PR link.`,
+    options.canEditDocuments
+      ? `If the work produced decisions or instructions worth keeping (ADR, how-to, implementation notes), save them as a note with create_note linked to ${task.key} (tasks: ["${task.key}"]); to change an existing note, use update_note with the version from get_document.`
+      : null,
     statusStep,
-  ];
+  ].filter((step): step is string => step !== null);
 
   return [
     'Finish the work on this Tasker task.',

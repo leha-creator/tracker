@@ -14,6 +14,7 @@ import type {
 
 import type { CatalogMember, CatalogProject } from './catalog';
 import { humanSize } from './upload';
+import { describeActor, hasMcpScope, type McpActor } from './tool-scopes';
 
 /**
  * Ответы инструментов — компактный Markdown: агенту его легче читать, чем JSON, а id
@@ -156,7 +157,7 @@ export function formatTaskDetails(input: TaskDetailsInput): string {
 export interface WorkspaceContextInput {
   workspace: { name: string; slug: string; taskKey: string | null };
   url: string;
-  me: { userId: string; name: string };
+  actor: McpActor;
   projects: readonly CatalogProject[];
   members: readonly CatalogMember[];
   githubGuide: string;
@@ -169,7 +170,8 @@ export function formatWorkspaceContext(input: WorkspaceContextInput): string {
     '',
     `URL: ${input.url}`,
     `Task key: ${workspace.taskKey ?? 'none (tasks are #42, GitHub linking is off)'}`,
-    `You act as: ${input.me.name} (userId ${input.me.userId})`,
+    `Your userId: ${input.actor.userId}`,
+    describeActor(input.actor),
     '',
     '## Projects and statuses',
   ];
@@ -185,11 +187,19 @@ export function formatWorkspaceContext(input: WorkspaceContextInput): string {
     'Statuses can be passed by name, id or category (todo / in_progress / done).',
     '',
     '## Members',
-    ...input.members.map(
-      (member) => `- ${member.name} <${member.email}> (userId ${member.userId})`,
+    ...input.members.map((member) =>
+      member.isAgent
+        ? `- ${member.name} (agent; userId ${member.userId})`
+        : `- ${member.name} <${member.email}> (userId ${member.userId})`,
     ),
     '',
     'Mention a member in a comment as @Name (exact name from this list).',
+    '',
+    '## Documents',
+    'Specs, ADRs and guides live in workspace Documents: list_documents, list_document_folders, get_document. Documents linked to a task are listed in get_task.',
+    hasMcpScope(input.actor.scopes, 'documents')
+      ? 'Write results as notes (create_note, linked to the task); edit notes with update_note and the version from get_document.'
+      : 'This token cannot change documents.',
     '',
     input.githubGuide,
   );

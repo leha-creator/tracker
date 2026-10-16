@@ -2,7 +2,7 @@ import 'server-only';
 
 import { notifyByEmail } from '@/modules/notifications';
 import { parseWorkspaceRole, requireWorkspaceAccess, type WorkspaceRole } from '@/shared/access';
-import type { AuthSession } from '@/shared/auth';
+import { isAgentEmail, type AuthSession } from '@/shared/auth';
 import { getEnv } from '@/shared/env';
 import { InternalError, NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger, maskEmail } from '@/shared/logger';
@@ -60,6 +60,16 @@ export async function inviteMember(
   if (email === session.user.email.toLowerCase()) {
     throw new ValidationError('Нельзя пригласить самого себя', {
       fieldErrors: { email: ['Это ваш email'] },
+    });
+  }
+  // Служебный адрес агента: агентов добавляют в разделе «Агенты», а не приглашением.
+  if (isAgentEmail(email)) {
+    log.warn(
+      { workspaceId, email: maskEmail(email) },
+      '[invitation.invite] agent address rejected',
+    );
+    throw new ValidationError('Нельзя пригласить служебный адрес агента', {
+      fieldErrors: { email: ['Агентов добавляют в настройках пространства, в разделе «Агенты»'] },
     });
   }
 

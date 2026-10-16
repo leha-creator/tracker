@@ -7,9 +7,11 @@ import {
   buildMcpJson,
   expiryToDate,
   generateApiToken,
+  hasScope,
   hashApiToken,
   isApiTokenFormat,
   mcpEndpointUrl,
+  normalizeScopes,
   parseBearer,
   shouldTouchApiToken,
 } from '.';
@@ -106,5 +108,22 @@ describe('фрагменты подключения', () => {
       url: 'http://localhost:3000/api/mcp',
       headers: { Authorization: 'Bearer ${TASKER_TOKEN}' },
     });
+  });
+});
+
+describe('normalizeScopes', () => {
+  it('всегда добавляет read, убирает повторы и неизвестные значения', () => {
+    expect(normalizeScopes([])).toEqual(['read']);
+    expect(normalizeScopes(['documents', 'tasks', 'tasks', 'admin'])).toEqual([
+      'read',
+      'tasks',
+      'documents',
+    ]);
+  });
+
+  it('hasScope: read есть всегда', () => {
+    expect(hasScope([], 'read')).toBe(true);
+    expect(hasScope(['read'], 'tasks')).toBe(false);
+    expect(hasScope(['read', 'tasks'], 'tasks')).toBe(true);
   });
 });

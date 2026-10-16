@@ -11,7 +11,8 @@ const COMMENT_SELECT = {
   authorId: true,
   createdAt: true,
   editedAt: true,
-  author: { select: { id: true, name: true, image: true } },
+  author: { select: { id: true, name: true, image: true, isAgent: true } },
+  createdViaToken: { select: { name: true } },
   attachments: COMMENT_ATTACHMENTS_SELECT,
 } as const satisfies Prisma.TaskCommentSelect;
 
@@ -70,7 +71,13 @@ export const commentRepository = {
   },
 
   create(
-    data: { workspaceId: string; taskId: string; authorId: string; body: string },
+    data: {
+      workspaceId: string;
+      taskId: string;
+      authorId: string;
+      body: string;
+      createdViaTokenId: string | null;
+    },
     tx: Prisma.TransactionClient = prisma,
   ) {
     return tx.taskComment.create({ data, select: { id: true } });

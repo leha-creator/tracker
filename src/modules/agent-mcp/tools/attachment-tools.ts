@@ -14,7 +14,7 @@ import { createLogger } from '@/shared/logger';
 
 import type { McpContext } from '../context';
 import { buildUploadCommand, humanSize } from '../models';
-import { runTool } from '../tool-result';
+import { runTool, type ToolOutput } from '../tool-result';
 import { findTask } from '../workspace-data';
 import { taskRefArg } from './read-tools';
 
@@ -93,7 +93,7 @@ export async function requestUploadTool(
 export async function completeUploadTool(
   ctx: McpContext,
   args: { task: string | number; attachmentId: string },
-): Promise<string> {
+): Promise<ToolOutput> {
   const task = await findTask(ctx, args.task);
   const { target } = await completeAttachmentUpload(ctx.session, {
     workspaceId: ctx.workspace.id,
@@ -104,9 +104,14 @@ export async function completeUploadTool(
     { taskId: task.id, attachmentId: args.attachmentId, target, tokenId: ctx.tokenId },
     '[mcp.complete_attachment_upload] uploaded',
   );
-  return target === 'task'
-    ? `File attached to ${task.key}.`
-    : `File uploaded. Now call add_comment on ${task.key} with attachmentIds: ["${args.attachmentId}"] — until then it is a draft visible only to you (drafts are removed after 24 hours).`;
+  if (target === 'task') {
+    return {
+      text: `File attached to ${task.key}.`,
+      activity: { summary: `Прикрепил файл к ${task.key}`, targetKey: task.key },
+    };
+  }
+  // Файл комментария — черновик: в журнал попадёт add_comment.
+  return `File uploaded. Now call add_comment on ${task.key} with attachmentIds: ["${args.attachmentId}"] — until then it is a draft visible only to you (drafts are removed after 24 hours).`;
 }
 
 export async function getAttachmentUrlTool(

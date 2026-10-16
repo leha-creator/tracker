@@ -16,5 +16,17 @@ export {
   mcpEndpointUrl,
   TASKER_TOKEN_ENV,
 } from './models/connect';
-export { createApiTokenAction, revokeApiTokenAction } from './slices/token/token.actions';
+export {
+  API_TOKEN_SCOPE_DESCRIPTIONS,
+  API_TOKEN_SCOPE_LABELS,
+  API_TOKEN_SCOPES,
+} from './models/scopes';
+export type { ApiTokenScope } from './models/scopes';
+export {
+  createAgentTokenAction,
+  createApiTokenAction,
+  revokeAgentTokenAction,
+  revokeApiTokenAction,
+} from './slices/token/token.actions';
 export type { ApiTokenDto, CreatedApiTokenDto } from './slices/token/token.dto';
+export type { McpActivityDto, McpActivityPageDto } from './slices/activity/activity.dto';

@@ -125,15 +125,22 @@ tasker/
 │   │           ├── client.ts
 │   │           └── index.ts
 │   │
-│   │   ├── api-tokens/               # Личные токены агентов: tkr_… (SHA-256 в БД), одно пространство
-│   │   │   ├── slices/token/         # выпуск, отзыв, authenticateApiToken → AuthSession (роль user)
-│   │   │   ├── models/               # формат и хеш токена, сроки, фрагменты подключения Claude Code
+│   │   ├── agents/                   # Агенты пространства: служебный User (isAgent) + WorkspaceAgent
+│   │   │   ├── slices/agent/         # создание (User + WorkspaceMember + WorkspaceAgent в транзакции), правка, отключение, включение
+│   │   │   ├── models/               # лимиты, адрес фото агента
+│   │   │   ├── client.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── api-tokens/               # Токены доступа (личные и агентов): tkr_… (SHA-256 в БД), одно пространство
+│   │   │   ├── slices/token/         # выпуск, отзыв, токены агента, authenticateApiToken → AuthSession (роль user, via)
+│   │   │   ├── slices/activity/      # журнал действий MCP (McpActivity): запись, чтение по агенту и по токену
+│   │   │   ├── models/               # формат и хеш токена, сроки, области (scopes), фрагменты подключения Claude Code
 │   │   │   ├── client.ts
 │   │   │   └── index.ts
 │   │   │
 │   │   ├── agent-mcp/                # MCP-сервер для агентов (POST /api/mcp, без сессий)
-│   │   │   ├── tools/                # инструменты: чтение, изменение задач, GitHub (preview_github_links)
-│   │   │   ├── models/               # ссылки на задачу, выбор проекта/статуса/участника, правила GitHub, промпты, форматирование
+│   │   │   ├── tools/                # инструменты: чтение, изменение задач, вложения, документы, GitHub (preview_github_links)
+│   │   │   ├── models/               # ссылки на задачу, выбор проекта/статуса/участника/папки/тега, области инструментов (TOOL_SCOPES), правила GitHub, промпты, форматирование
 │   │   │   ├── prompts.ts            # start_task / finish_task
 │   │   │   ├── server.ts, mcp-handler.ts
 │   │   │   └── index.ts
@@ -171,7 +178,8 @@ tasker/
 - ✅ Если модулю нужны клиентские компоненты, он дополнительно экспортирует `client.ts`: actions, Zod-схемы, чистые функции и типы без server-only кода. Клиентские компоненты импортируют `@/modules/<module>/client`, серверный код — `@/modules/<module>`
 - ✅ `tasks` зависит от `projects` и `workspaces` (через их `index.ts`), но не наоборот. Страница доски сама собирает колонки из `projects` и карточки из `tasks`
 - ✅ `integrations/github` зависит от `tasks`, `projects`, `workspaces` и `notifications`, но они не зависят от `integrations/github`; системные функции без сессии (`resolveTaskRefs`, `changePlacementStatusBySystem`, `findWorkspacesByTaskKeys`) вызываются только из обработчиков с проверенной подписью вебхука
-- ✅ `agent-mcp` зависит от `api-tokens`, `tasks`, `projects`, `workspaces` и `integrations/github`; от него не зависит никто. Инструменты вызывают те же сервисы, что Server Actions, с сессией владельца токена; `workspaceId` берётся только из токена
+- ✅ `agent-mcp` зависит от `api-tokens`, `tasks`, `projects`, `workspaces`, `documents` и `integrations/github`; от него не зависит никто. Инструменты вызывают те же сервисы, что Server Actions, с сессией владельца токена; `workspaceId` берётся только из токена, области — из `session.via`
+- ✅ `agents` зависит от `api-tokens` (отзыв токенов отключённого агента), но не наоборот. `api-tokens`, `notifications`, `workspaces` и `profiles` читают `WorkspaceAgent` и `User.isAgent` своими репозиториями — задокументированное чтение чужой таблицы, чтобы не создавать цикл (`agents` → `api-tokens`, `notifications` ни от кого не зависит)
 - ✅ `documents` зависит от `tasks` (краткие данные и поиск задач для связей), но `tasks` не зависит от `documents`: раздел «Документы» в задаче собирает компонент слоя UI (`components/documents/task-documents`)
 - ✅ `admin` зависит от `workspaces` (число пространств, единоличное владение), но не наоборот. Проверки администратора (`requireAdmin`) читают сессию в обход cookie-кеша (`getFreshSession`)
 - ❌ Компоненты и страницы не импортируют `prisma` и репозитории

@@ -26,7 +26,7 @@ import { placementRepository } from '../placement/placement.repository';
 import { subtaskRepository } from '../subtask/subtask.repository';
 import { getSubtaskProgress, getTaskAncestors } from '../subtask/subtask.service';
 import type { TaskDto, TaskRefDto } from './task.dto';
-import { toTaskSummary, toUserDto } from './task.mapper';
+import { toTaskSummary, toCreatedVia, toUserDto } from './task.mapper';
 import { taskRepository, type TaskRow, type TaskWriteData } from './task.repository';
 
 const log = createLogger('tasks.task');
@@ -53,6 +53,7 @@ function toTaskDto(
     description: row.description,
     priority: row.priority,
     createdBy: toUserDto(row.createdBy),
+    createdVia: toCreatedVia(row.createdBy, row.createdViaToken),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     canDelete: canDeleteTask(row, actor),
@@ -163,7 +164,13 @@ export async function createTask(
   const userId = session.user.id;
   await requireWorkspaceAccess(session, workspaceId);
   log.debug(
-    { userId, workspaceId, placed: Boolean(placement), parentId },
+    {
+      userId,
+      workspaceId,
+      placed: Boolean(placement),
+      parentId,
+      via: session.via?.tokenId ?? null,
+    },
     '[task.createTask] start',
   );
 
@@ -192,6 +199,7 @@ export async function createTask(
       workspaceId,
       number,
       createdById: userId,
+      createdViaTokenId: session.via?.tokenId ?? null,
       parentId: parentId ?? null,
     });
     if (placement) {

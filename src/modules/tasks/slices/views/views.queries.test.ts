@@ -64,6 +64,7 @@ const session: AuthSession = {
     image: null,
     role: 'user',
     banned: false,
+    isAgent: false,
   },
   session: { id: 's-1', expiresAt: new Date('2030-01-01') },
 };

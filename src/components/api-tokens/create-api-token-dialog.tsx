@@ -28,6 +28,7 @@ import {
   API_TOKEN_NAME_MAX_LENGTH,
   buildClaudeMcpCommand,
   buildMcpJson,
+  createAgentTokenAction,
   createApiTokenAction,
   TASKER_TOKEN_ENV,
   type CreatedApiTokenDto,
@@ -35,18 +36,26 @@ import {
 import type { FormState } from '@/shared/types';
 
 import { CodeSnippet } from './code-snippet';
+import { ScopeFields } from './scope-fields';
+
+/** Кому выпускается токен: себе (пространство выбирается) или агенту (пространство агента). */
+export type ApiTokenTarget =
+  | { kind: 'personal'; workspaces: { id: string; name: string }[] }
+  | { kind: 'agent'; workspaceId: string; agentId: string; agentName: string };
 
 interface CreateApiTokenDialogProps {
-  workspaces: { id: string; name: string }[];
+  target: ApiTokenTarget;
   /** Публичный адрес Tasker (BETTER_AUTH_URL) — из него строится адрес MCP-сервера. */
   baseUrl: string;
+  disabled?: boolean;
 }
 
 /** Выпуск токена: форма, затем экран «скопируйте сейчас» с готовыми командами подключения. */
-export function CreateApiTokenDialog({ workspaces, baseUrl }: CreateApiTokenDialogProps) {
+export function CreateApiTokenDialog({ target, baseUrl, disabled }: CreateApiTokenDialogProps) {
   const [open, setOpen] = useState(false);
   // Новый ключ — новая форма: после закрытия диалог открывается чистым, без прошлого токена.
   const [formKey, setFormKey] = useState(0);
+  const noWorkspaces = target.kind === 'personal' && target.workspaces.length === 0;
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -56,7 +65,7 @@ export function CreateApiTokenDialog({ workspaces, baseUrl }: CreateApiTokenDial
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button type="button" disabled={workspaces.length === 0}>
+        <Button type="button" disabled={disabled || noWorkspaces}>
           <PlusIcon className="size-4" />
           Создать токен
         </Button>
@@ -64,7 +73,7 @@ export function CreateApiTokenDialog({ workspaces, baseUrl }: CreateApiTokenDial
       <DialogContent className="sm:max-w-2xl">
         <CreateApiTokenForm
           key={formKey}
-          workspaces={workspaces}
+          target={target}
           baseUrl={baseUrl}
           onDone={() => handleOpenChange(false)}
         />
@@ -74,12 +83,12 @@ export function CreateApiTokenDialog({ workspaces, baseUrl }: CreateApiTokenDial
 }
 
 function CreateApiTokenForm({
-  workspaces,
+  target,
   baseUrl,
   onDone,
 }: CreateApiTokenDialogProps & { onDone: () => void }) {
   const [state, formAction, pending] = useActionState<FormState<CreatedApiTokenDto>, FormData>(
-    createApiTokenAction,
+    target.kind === 'agent' ? createAgentTokenAction : createApiTokenAction,
     null,
   );
 
@@ -93,17 +102,29 @@ function CreateApiTokenForm({
   return (
     <form action={formAction} className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>Новый токен доступа</DialogTitle>
+        <DialogTitle>
+          {target.kind === 'agent'
+            ? `Новый токен агента «${target.agentName}»`
+            : 'Новый токен доступа'}
+        </DialogTitle>
         <DialogDescription>
-          Токен даёт агенту (например, Claude Code) доступ к задачам одного пространства с вашими
-          правами. Админских прав у токена нет.
+          {target.kind === 'agent'
+            ? 'Claude Code с этим токеном действует от имени агента: задачи, комментарии и документы подписываются агентом. Админских прав у токена нет.'
+            : 'Токен даёт агенту (например, Claude Code) доступ к одному пространству с вашими правами. Созданное через него помечается «через агента». Админских прав у токена нет.'}
         </DialogDescription>
       </DialogHeader>
+
+      {target.kind === 'agent' && (
+        <>
+          <input type="hidden" name="workspaceId" value={target.workspaceId} />
+          <input type="hidden" name="agentId" value={target.agentId} />
+        </>
+      )}
 
       <FormField
         name="name"
         label="Название"
-        placeholder="Claude Code — backend"
+        placeholder={target.kind === 'agent' ? 'Ноутбук Анны' : 'Claude Code — backend'}
         maxLength={API_TOKEN_NAME_MAX_LENGTH}
         defaultValue={failure?.values.name}
         errors={fieldErrors?.name}
@@ -112,31 +133,33 @@ function CreateApiTokenForm({
       />
 
       <div className="grid gap-2 sm:grid-cols-2">
-        <div className="grid gap-2">
-          <Label htmlFor="api-token-workspace">Пространство</Label>
-          <Select
-            name="workspaceId"
-            defaultValue={failure?.values.workspaceId || workspaces[0]?.id}
-          >
-            <SelectTrigger
-              id="api-token-workspace"
-              className="w-full"
-              aria-invalid={fieldErrors?.workspaceId ? true : undefined}
+        {target.kind === 'personal' && (
+          <div className="grid gap-2">
+            <Label htmlFor="api-token-workspace">Пространство</Label>
+            <Select
+              name="workspaceId"
+              defaultValue={failure?.values.workspaceId || target.workspaces[0]?.id}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {workspaces.map((workspace) => (
-                <SelectItem key={workspace.id} value={workspace.id}>
-                  {workspace.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {fieldErrors?.workspaceId && (
-            <p className="text-sm text-destructive">{fieldErrors.workspaceId.join(' ')}</p>
-          )}
-        </div>
+              <SelectTrigger
+                id="api-token-workspace"
+                className="w-full"
+                aria-invalid={fieldErrors?.workspaceId ? true : undefined}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {target.workspaces.map((workspace) => (
+                  <SelectItem key={workspace.id} value={workspace.id}>
+                    {workspace.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {fieldErrors?.workspaceId && (
+              <p className="text-sm text-destructive">{fieldErrors.workspaceId.join(' ')}</p>
+            )}
+          </div>
+        )}
 
         <div className="grid gap-2">
           <Label htmlFor="api-token-expiry">Срок действия</Label>
@@ -154,6 +177,8 @@ function CreateApiTokenForm({
           </Select>
         </div>
       </div>
+
+      <ScopeFields />
 
       <FormError message={fieldErrors ? undefined : failure?.error.message} />
       <DialogFooter>

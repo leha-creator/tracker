@@ -22,3 +22,11 @@ export {
 } from './connect';
 export { generateApiToken, hashApiToken } from './token-secret';
 export type { GeneratedApiToken } from './token-secret';
+export {
+  API_TOKEN_SCOPE_DESCRIPTIONS,
+  API_TOKEN_SCOPE_LABELS,
+  API_TOKEN_SCOPES,
+  hasScope,
+  normalizeScopes,
+} from './scopes';
+export type { ApiTokenScope } from './scopes';

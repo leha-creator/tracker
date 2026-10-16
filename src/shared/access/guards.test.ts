@@ -32,6 +32,7 @@ function sessionOf(overrides: Partial<AuthSession['user']> = {}): AuthSession {
       image: null,
       role: 'user',
       banned: false,
+      isAgent: false,
       ...overrides,
     },
     session: { id: 'session-1', expiresAt: new Date('2030-01-01') },
@@ -50,6 +51,11 @@ describe('requireUser', () => {
 
   it('throws FORBIDDEN for banned user', async () => {
     getSession.mockResolvedValue(sessionOf({ banned: true }));
+    await expect(requireUser()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('throws FORBIDDEN for an agent', async () => {
+    getSession.mockResolvedValue(sessionOf({ isAgent: true }));
     await expect(requireUser()).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 

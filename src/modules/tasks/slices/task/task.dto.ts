@@ -10,6 +10,14 @@ export interface TaskUserDto {
   image: string | null;
 }
 
+/**
+ * Создано через токен MCP от имени человека (личный токен): «через Claude Code». У агента
+ * пространства пометки нет — автор и так агент.
+ */
+export interface CreatedViaDto {
+  tokenName: string;
+}
+
 /** Размещение задачи в проекте: проект и статус в нём. */
 export interface TaskPlacementDto {
   projectId: string;
@@ -33,6 +41,8 @@ export interface TaskDto {
   isOverdue: boolean;
   assignee: TaskUserDto | null;
   createdBy: TaskUserDto | null;
+  /** Создана агентом по личному токену автора; null — вручную или самим агентом. */
+  createdVia: CreatedViaDto | null;
   createdAt: Date;
   updatedAt: Date;
   placements: TaskPlacementDto[];

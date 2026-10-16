@@ -183,7 +183,9 @@ export function CommentBodyField({
             >
               <UserAvatar user={{ name: member.name, image: member.image ?? null }} />
               <span className="min-w-0 flex-1 truncate">{member.name}</span>
-              <span className="truncate text-xs text-muted-foreground">{member.email}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {member.isAgent ? '(агент)' : member.email}
+              </span>
             </li>
           ))}
       </ul>

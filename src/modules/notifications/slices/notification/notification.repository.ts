@@ -3,7 +3,7 @@ import 'server-only';
 import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/db';
 
-import type { NotificationType } from '../../models';
+import type { AgentRoute, NotificationType } from '../../models';
 
 const NOTIFICATION_SELECT = {
   id: true,
@@ -89,9 +89,59 @@ export const notificationRepository = {
   },
 
   /** Получатели: email и имя для писем; заблокированные не получают ничего. */
+  /**
+   * Включённые агенты пространства среди получателей: ответственный (если ещё участник) и
+   * владельцы-люди. Задокументированное чтение таблиц модулей agents и workspaces — как чтение
+   * User для email: notifications ни от кого не зависит.
+   */
+  async findAgentRoutes(
+    workspaceId: string,
+    userIds: readonly string[],
+  ): Promise<Map<string, AgentRoute>> {
+    const agents = await prisma.workspaceAgent.findMany({
+      where: { workspaceId, userId: { in: [...userIds] }, disabledAt: null },
+      select: {
+        userId: true,
+        user: { select: { name: true } },
+        responsible: {
+          select: {
+            id: true,
+            workspaceMemberships: { where: { workspaceId }, select: { id: true } },
+          },
+        },
+      },
+    });
+    if (agents.length === 0) return new Map();
+    const owners = await prisma.workspaceMember.findMany({
+      where: { workspaceId, role: 'owner', user: { isAgent: false } },
+      select: { userId: true },
+    });
+    const ownerIds = owners.map((owner) => owner.userId);
+    return new Map(
+      agents.map((agent) => [
+        agent.userId,
+        {
+          agentId: agent.userId,
+          name: agent.user.name,
+          workspaceId,
+          responsibleUserId:
+            agent.responsible && agent.responsible.workspaceMemberships.length > 0
+              ? agent.responsible.id
+              : null,
+          ownerIds,
+        },
+      ]),
+    );
+  },
+
+  /** Получатели-люди: агенты сами уведомления не читают (их перенаправляет findAgentRoutes). */
   findRecipients(userIds: readonly string[]) {
     return prisma.user.findMany({
-      where: { id: { in: [...userIds] }, OR: [{ banned: false }, { banned: null }] },
+      where: {
+        id: { in: [...userIds] },
+        isAgent: false,
+        OR: [{ banned: false }, { banned: null }],
+      },
       select: { id: true, email: true, name: true },
     });
   },

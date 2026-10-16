@@ -2,6 +2,7 @@
 
 import { useActionState, useState, type ReactNode } from 'react';
 
+import { ViaAgentBadge } from '@/components/agents/via-agent-badge';
 import { FormError } from '@/components/forms/form-field';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/users/user-avatar';
@@ -149,6 +150,7 @@ export function CommentItem({
         ) : (
           <span className="font-medium">{authorName}</span>
         )}
+        <ViaAgentBadge via={comment.createdVia} />
         <time dateTime={createdAt.iso} className="text-xs text-muted-foreground">
           {createdAt.label}
         </time>

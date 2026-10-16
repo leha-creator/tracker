@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
+import { ViaAgentBadge } from '@/components/agents/via-agent-badge';
 import { docsHref } from '@/components/documents/docs-href';
 import { DocumentActions } from '@/components/documents/document-actions';
 import { DocumentBreadcrumbs } from '@/components/documents/document-breadcrumbs';
@@ -120,6 +121,9 @@ async function DocumentSection({ params }: Pick<Props, 'params'>) {
             <dd className="text-foreground">
               {DATE_FORMAT.format(document.createdAt)}
               {document.createdBy && `, ${document.createdBy.name}`}
+              {document.createdVia && (
+                <ViaAgentBadge via={document.createdVia} className="ml-1.5" />
+              )}
             </dd>
           </div>
           <div className="flex gap-1.5">

@@ -1,6 +1,6 @@
 import type { MentionRange } from '../../models/comment-mentions';
 import type { TaskAttachmentDto } from '../attachment/attachment.dto';
-import type { TaskUserDto } from '../task/task.dto';
+import type { CreatedViaDto, TaskUserDto } from '../task/task.dto';
 
 export interface TaskCommentDto {
   id: string;
@@ -10,6 +10,8 @@ export interface TaskCommentDto {
   mentions: MentionRange[];
   /** null — автор удалён. */
   author: TaskUserDto | null;
+  /** Написан агентом по личному токену автора; null — вручную или самим агентом. */
+  createdVia: CreatedViaDto | null;
   createdAt: Date;
   /** null — не редактировался. */
   editedAt: Date | null;

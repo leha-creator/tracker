@@ -29,7 +29,7 @@ import {
   taskUrl,
   type CatalogProject,
 } from '../models';
-import { runTool } from '../tool-result';
+import { runTool, type ToolOutput } from '../tool-result';
 import { findTask, loadCatalog, loadMembers } from '../workspace-data';
 import { branchFor, taskRefArg } from './read-tools';
 
@@ -91,7 +91,7 @@ type CreateTaskArgs = {
   status?: string;
 };
 
-export async function createTaskTool(ctx: McpContext, args: CreateTaskArgs): Promise<string> {
+export async function createTaskTool(ctx: McpContext, args: CreateTaskArgs): Promise<ToolOutput> {
   const [catalog, parent] = await Promise.all([
     loadCatalog(ctx),
     args.parent === undefined ? null : findTask(ctx, args.parent),
@@ -122,7 +122,7 @@ export async function createTaskTool(ctx: McpContext, args: CreateTaskArgs): Pro
 
   const key = taskKeyOf(number, ctx.workspace.taskKey);
   const branch = branchFor(key, args.title);
-  return [
+  const text = [
     `Created **${key}** ${args.title}`,
     `URL: ${taskUrl(ctx.baseUrl, ctx.workspace.slug, number)}`,
     parent ? `Subtask of ${parent.key} ${parent.title}` : null,
@@ -133,6 +133,15 @@ export async function createTaskTool(ctx: McpContext, args: CreateTaskArgs): Pro
   ]
     .filter(Boolean)
     .join('\n');
+  return {
+    text,
+    activity: {
+      summary: parent
+        ? `Создал подзадачу ${key} «${args.title}» в ${parent.key}`
+        : `Создал ${key} «${args.title}»`,
+      targetKey: key,
+    },
+  };
 }
 
 export const updateTaskArgs = {
@@ -153,7 +162,16 @@ type UpdateTaskArgs = {
   assignee?: string | null;
 };
 
-export async function updateTaskTool(ctx: McpContext, args: UpdateTaskArgs): Promise<string> {
+/** Поля задачи в журнале — по-русски. */
+const FIELD_TITLES: Record<string, string> = {
+  title: 'название',
+  description: 'описание',
+  priority: 'приоритет',
+  dueDate: 'срок',
+  assignee: 'ответственного',
+};
+
+export async function updateTaskTool(ctx: McpContext, args: UpdateTaskArgs): Promise<ToolOutput> {
   const task = await findTask(ctx, args.task);
   const changed = (['title', 'description', 'priority', 'dueDate', 'assignee'] as const).filter(
     (field) => args[field] !== undefined,
@@ -174,7 +192,13 @@ export async function updateTaskTool(ctx: McpContext, args: UpdateTaskArgs): Pro
     assigneeId,
   });
   log.info({ taskId: task.id, fields: changed, tokenId: ctx.tokenId }, '[mcp.update_task] updated');
-  return `Updated ${task.key}: ${changed.join(', ')}.`;
+  return {
+    text: `Updated ${task.key}: ${changed.join(', ')}.`,
+    activity: {
+      summary: `Изменил ${task.key}: ${changed.map((field) => FIELD_TITLES[field]).join(', ')}`,
+      targetKey: task.key,
+    },
+  };
 }
 
 export const setTaskStatusArgs = {
@@ -192,7 +216,7 @@ export const setTaskStatusArgs = {
 export async function setTaskStatusTool(
   ctx: McpContext,
   args: { task: string | number; status: string; project?: string },
-): Promise<string> {
+): Promise<ToolOutput> {
   const [task, catalog] = await Promise.all([findTask(ctx, args.task), loadCatalog(ctx)]);
   const project = placementProject(task, catalog, args.project);
   const status = resolveStatus(project, args.status);
@@ -205,7 +229,13 @@ export async function setTaskStatusTool(
       { taskId: task.id, projectId: project.id, to: status.id, tokenId: ctx.tokenId },
       '[mcp.set_task_status] placed',
     );
-    return `${task.key} added to project «${project.name}» with status «${status.name}» (${status.category}).`;
+    return {
+      text: `${task.key} added to project «${project.name}» with status «${status.name}» (${status.category}).`,
+      activity: {
+        summary: `Добавил ${task.key} в проект «${project.name}»: ${status.name}`,
+        targetKey: task.key,
+      },
+    };
   }
   if (current.statusId === status.id) {
     return `${task.key} is already «${status.name}» in «${project.name}».`;
@@ -221,13 +251,19 @@ export async function setTaskStatusTool(
     },
     '[mcp.set_task_status] changed',
   );
-  return `${task.key} in «${project.name}»: «${current.statusName}» → «${status.name}» (${status.category}).`;
+  return {
+    text: `${task.key} in «${project.name}»: «${current.statusName}» → «${status.name}» (${status.category}).`,
+    activity: {
+      summary: `Перевёл ${task.key}: ${current.statusName} → ${status.name}`,
+      targetKey: task.key,
+    },
+  };
 }
 
 export async function setTaskParentTool(
   ctx: McpContext,
   args: { task: string | number; parent: string | number | null },
-): Promise<string> {
+): Promise<ToolOutput> {
   const [task, parent] = await Promise.all([
     findTask(ctx, args.task),
     args.parent === null ? null : findTask(ctx, args.parent),
@@ -242,14 +278,20 @@ export async function setTaskParentTool(
     '[mcp.set_task_parent] changed',
   );
   return parent
-    ? `${task.key} is now a subtask of ${parent.key} ${parent.title}.`
-    : `${task.key} is now a top-level task.`;
+    ? {
+        text: `${task.key} is now a subtask of ${parent.key} ${parent.title}.`,
+        activity: { summary: `Сделал ${task.key} подзадачей ${parent.key}`, targetKey: task.key },
+      }
+    : {
+        text: `${task.key} is now a top-level task.`,
+        activity: { summary: `Сделал ${task.key} задачей верхнего уровня`, targetKey: task.key },
+      };
 }
 
 export async function addCommentTool(
   ctx: McpContext,
   args: { task: string | number; body?: string; attachmentIds?: string[] },
-): Promise<string> {
+): Promise<ToolOutput> {
   const task = await findTask(ctx, args.task);
   const attachmentIds = args.attachmentIds ?? [];
   const { commentId } = await createComment(ctx.session, {
@@ -263,7 +305,10 @@ export async function addCommentTool(
     '[mcp.add_comment] created',
   );
   const files = attachmentIds.length ? ` with ${attachmentIds.length} file(s)` : '';
-  return `Comment added to ${task.key}${files}.`;
+  return {
+    text: `Comment added to ${task.key}${files}.`,
+    activity: { summary: `Прокомментировал ${task.key}`, targetKey: task.key },
+  };
 }
 
 export function registerWriteTools(server: McpServer, ctx: McpContext): void {

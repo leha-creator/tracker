@@ -62,6 +62,8 @@ export const fileRepository = {
       size: number;
       storageKey: string;
       userId: string;
+      /** Токен MCP, через который загружен файл (пометка «через агента»). */
+      createdViaTokenId: string | null;
     },
   ) {
     const { userId, ...rest } = data;

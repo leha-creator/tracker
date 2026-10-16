@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { requireWorkspaceAccess } from '@/shared/access';
-import type { AuthSession } from '@/shared/auth';
+import type { AuthSession, AuthVia } from '@/shared/auth';
 import { NotFoundError, UnauthorizedError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
@@ -12,12 +12,14 @@ import {
   expiryToDate,
   generateApiToken,
   hashApiToken,
+  normalizeScopes,
   parseBearer,
   shouldTouchApiToken,
+  type ApiTokenScope,
 } from '../../models';
 import type { ApiTokenDto, CreatedApiTokenDto } from './token.dto';
 import { apiTokenRepository, type ApiTokenRow } from './token.repository';
-import type { CreateApiTokenInput } from './token.schema';
+import type { CreateAgentTokenInput, CreateApiTokenInput } from './token.schema';
 
 const log = createLogger('api-tokens');
 
@@ -30,9 +32,12 @@ export interface ApiTokenContext {
   workspace: { id: string; slug: string; name: string; taskKey: string | null };
   tokenId: string;
   tokenPrefix: string;
+  /** То же, что `session.via`: название, области и агент токена. */
+  via: AuthVia;
 }
 
-type RejectReason = 'malformed' | 'unknown' | 'revoked' | 'expired' | 'banned' | 'not_member';
+type RejectReason =
+  'malformed' | 'unknown' | 'revoked' | 'expired' | 'banned' | 'not_member' | 'agent_disabled';
 
 function reject(reason: RejectReason, tokenId?: string): UnauthorizedError {
   log.warn({ reason, tokenId }, '[api-token.authenticate] rejected');
@@ -44,6 +49,7 @@ function toDto(row: ApiTokenRow, now: Date): ApiTokenDto {
     id: row.id,
     name: row.name,
     prefix: row.prefix,
+    scopes: normalizeScopes(row.scopes),
     workspace: row.workspace,
     createdAt: row.createdAt,
     lastUsedAt: row.lastUsedAt,
@@ -53,20 +59,19 @@ function toDto(row: ApiTokenRow, now: Date): ApiTokenDto {
   };
 }
 
-/** Выпускает токен для пространства, где пользователь — участник. Токен возвращается один раз. */
-export async function createApiToken(
-  session: AuthSession,
-  input: CreateApiTokenInput,
-): Promise<CreatedApiTokenDto> {
-  const userId = session.user.id;
-  const { workspaceId } = input;
-  await requireWorkspaceAccess(session, workspaceId);
+/** Выпуск: лимит действующих токенов владельца, хеш в БД, открытый токен — один раз. */
+async function issueToken(input: {
+  userId: string;
+  issuedById: string;
+  workspaceId: string;
+  name: string;
+  expiry: CreateApiTokenInput['expiry'];
+  scopes: ApiTokenScope[];
+}): Promise<CreatedApiTokenDto> {
   const now = new Date();
-  log.debug({ userId, workspaceId, expiry: input.expiry }, '[api-token.create] start');
-
-  const active = await apiTokenRepository.countActive(userId, now);
+  const active = await apiTokenRepository.countActive(input.userId, now);
   if (active >= API_TOKENS_PER_USER_LIMIT) {
-    log.warn({ userId, active }, '[api-token.create] limit reached');
+    log.warn({ userId: input.userId, active }, '[api-token.create] limit reached');
     throw new ValidationError(
       `Не больше ${API_TOKENS_PER_USER_LIMIT} действующих токенов. Отзовите ненужные.`,
     );
@@ -74,15 +79,35 @@ export async function createApiToken(
 
   const { token, prefix, hash } = generateApiToken();
   const row = await apiTokenRepository.create({
-    userId,
-    workspaceId,
+    userId: input.userId,
+    issuedById: input.issuedById,
+    workspaceId: input.workspaceId,
     name: input.name,
     prefix,
     tokenHash: hash,
+    scopes: input.scopes,
     expiresAt: expiryToDate(input.expiry, now),
   });
-  log.info({ tokenId: row.id, userId, workspaceId, prefix }, '[api-token] created');
   return { token: toDto(row, now), secret: token };
+}
+
+/** Выпускает личный токен для пространства, где пользователь — участник. */
+export async function createApiToken(
+  session: AuthSession,
+  input: CreateApiTokenInput,
+): Promise<CreatedApiTokenDto> {
+  const userId = session.user.id;
+  const { workspaceId } = input;
+  await requireWorkspaceAccess(session, workspaceId);
+  const scopes = normalizeScopes(input.scopes);
+  log.debug({ userId, workspaceId, expiry: input.expiry, scopes }, '[api-token.create] start');
+
+  const created = await issueToken({ ...input, userId, issuedById: userId, scopes });
+  log.info(
+    { tokenId: created.token.id, userId, workspaceId, prefix: created.token.prefix, scopes },
+    '[api-token] created',
+  );
+  return created;
 }
 
 export async function listMyApiTokens(session: AuthSession): Promise<ApiTokenDto[]> {
@@ -109,15 +134,97 @@ export async function revokeApiToken(session: AuthSession, tokenId: string): Pro
   log.info({ tokenId, userId, workspaceId: row.workspaceId, revoked }, '[api-token] revoked');
 }
 
+/**
+ * Агент этого пространства и проверка, что смотрящий — его владелец. Агент другого пространства
+ * или не агент — NOT_FOUND (не раскрываем), не владелец — FORBIDDEN.
+ */
+async function requireAgentOwner(session: AuthSession, workspaceId: string, agentId: string) {
+  await requireWorkspaceAccess(session, workspaceId, 'owner');
+  const agent = await apiTokenRepository.findAgent(agentId);
+  if (!agent || agent.workspaceId !== workspaceId) {
+    log.warn({ userId: session.user.id, workspaceId, agentId }, '[api-token.agent] not found');
+    throw new NotFoundError('Агент не найден');
+  }
+  return agent;
+}
+
+/** Выпускает токен агента (только владелец пространства агента; агент должен быть включён). */
+export async function createAgentToken(
+  session: AuthSession,
+  input: CreateAgentTokenInput,
+): Promise<CreatedApiTokenDto> {
+  const { workspaceId, agentId } = input;
+  const agent = await requireAgentOwner(session, workspaceId, agentId);
+  if (agent.disabledAt) {
+    log.warn({ agentId, workspaceId }, '[api-token.createAgent] rejected: agent disabled');
+    throw new ValidationError('Агент отключён: включите его, чтобы выпустить токен');
+  }
+  const scopes = normalizeScopes(input.scopes);
+  const created = await issueToken({
+    ...input,
+    userId: agentId,
+    issuedById: session.user.id,
+    scopes,
+  });
+  log.info(
+    { tokenId: created.token.id, agentId, workspaceId, by: session.user.id, scopes },
+    '[api-token] agent token created',
+  );
+  return created;
+}
+
+/** Токены агента — для владельца пространства на странице агента. */
+export async function listAgentTokens(
+  session: AuthSession,
+  workspaceId: string,
+  agentId: string,
+): Promise<ApiTokenDto[]> {
+  await requireAgentOwner(session, workspaceId, agentId);
+  const rows = await apiTokenRepository.listForUser(agentId);
+  log.debug({ agentId, workspaceId, count: rows.length }, '[api-token.listAgent]');
+  const now = new Date();
+  return rows.map((row) => toDto(row, now));
+}
+
+/** Отзывает токен агента (только владелец пространства агента). */
+export async function revokeAgentToken(
+  session: AuthSession,
+  input: { workspaceId: string; agentId: string; tokenId: string },
+): Promise<void> {
+  const { workspaceId, agentId, tokenId } = input;
+  await requireAgentOwner(session, workspaceId, agentId);
+  const row = await apiTokenRepository.findOwned(agentId, tokenId);
+  if (!row) {
+    log.warn({ agentId, tokenId }, '[api-token.revokeAgent] not found');
+    throw new NotFoundError('Токен не найден');
+  }
+  if (row.revokedAt) return;
+  const revoked = await apiTokenRepository.revoke(tokenId, new Date());
+  log.info(
+    { tokenId, agentId, workspaceId, by: session.user.id, revoked },
+    '[api-token] agent token revoked',
+  );
+}
+
+/**
+ * Отзывает все токены пользователя. Без проверки сессии: только для серверных модулей, которые
+ * уже проверили права (отключение агента владельцем пространства в модуле agents).
+ */
+export async function revokeAllUserApiTokens(userId: string): Promise<number> {
+  const revoked = await apiTokenRepository.revokeAllForUser(userId, new Date());
+  log.info({ userId, revoked }, '[api-token] all user tokens revoked');
+  return revoked;
+}
+
 function isBanned(user: { banned: boolean | null; banExpires: Date | null }, now: Date): boolean {
   if (!user.banned) return false;
   return !user.banExpires || user.banExpires.getTime() > now.getTime();
 }
 
 /**
- * Проверяет `Authorization: Bearer tkr_…` и строит сессию владельца токена.
- * Пользователь и членство читаются при каждом запросе: блокировка и выход из пространства
- * действуют сразу. Роль всегда `user` — токен не даёт админских прав.
+ * Проверяет `Authorization: Bearer tkr_…` и строит сессию владельца токена (человека или агента).
+ * Пользователь, агент и членство читаются при каждом запросе: блокировка, отключение агента и выход
+ * из пространства действуют сразу. Роль всегда `user` — токен не даёт админских прав.
  */
 export async function authenticateApiToken(
   authorization: string | null | undefined,
@@ -133,6 +240,24 @@ export async function authenticateApiToken(
   if (state !== 'active') throw reject(state, row.id);
   if (isBanned(row.user, now)) throw reject('banned', row.id);
 
+  const agent = row.user.agent;
+  if (row.user.isAgent && (!agent || agent.disabledAt || agent.workspaceId !== row.workspace.id)) {
+    throw reject('agent_disabled', row.id);
+  }
+
+  const via: AuthVia = {
+    tokenId: row.id,
+    tokenName: row.name,
+    scopes: normalizeScopes(row.scopes),
+    agent:
+      row.user.isAgent && agent
+        ? {
+            name: row.user.name,
+            responsibleUserId: agent.responsibleUserId,
+            responsibleName: agent.responsible?.name ?? null,
+          }
+        : null,
+  };
   const session: AuthSession = {
     user: {
       id: row.user.id,
@@ -141,8 +266,10 @@ export async function authenticateApiToken(
       image: row.user.image,
       role: 'user',
       banned: false,
+      isAgent: row.user.isAgent,
     },
     session: { id: `api-token:${row.id}`, expiresAt: row.expiresAt ?? new Date(8.64e15) },
+    via,
   };
 
   try {
@@ -161,8 +288,14 @@ export async function authenticateApiToken(
   }
 
   log.debug(
-    { tokenId: row.id, userId: row.user.id, workspaceId: row.workspace.id },
+    {
+      tokenId: row.id,
+      userId: row.user.id,
+      workspaceId: row.workspace.id,
+      agent: row.user.isAgent,
+      scopes: via.scopes,
+    },
     '[api-token.authenticate] ok',
   );
-  return { session, workspace: row.workspace, tokenId: row.id, tokenPrefix: row.prefix };
+  return { session, workspace: row.workspace, tokenId: row.id, tokenPrefix: row.prefix, via };
 }

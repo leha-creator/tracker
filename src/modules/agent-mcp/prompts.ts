@@ -4,6 +4,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { GetPromptResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
+import { listTaskDocuments } from '@/modules/documents';
 import { getWorkspaceGithubSummary } from '@/modules/integrations/github';
 import { AppError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
@@ -13,6 +14,7 @@ import {
   buildFinishTaskPrompt,
   buildStartTaskPrompt,
   describeAutomations,
+  hasMcpScope,
   taskUrl,
   type PromptTask,
 } from './models';
@@ -33,7 +35,11 @@ async function buildPrompt(
     loadCatalog(ctx),
     getWorkspaceGithubSummary(ctx.session, ctx.workspace.id),
   ]);
-  log.debug({ name, taskId: task.id, tokenId: ctx.tokenId }, '[mcp.prompt]');
+  const documents = await listTaskDocuments(ctx.session, ctx.workspace.id, task.id);
+  log.debug(
+    { name, taskId: task.id, documents: documents.length, tokenId: ctx.tokenId },
+    '[mcp.prompt]',
+  );
 
   const promptTask: PromptTask = {
     key: task.key,
@@ -48,6 +54,7 @@ async function buildPrompt(
     ancestors: task.ancestors,
     subtasks: task.subtaskProgress,
     branch: branchFor(task.key, task.title),
+    documents: documents.map((document) => ({ id: document.id, title: document.title })),
   };
   const automations = github.enabled
     ? describeAutomations({ taskKey: ctx.workspace.taskKey, github, projects })
@@ -55,7 +62,9 @@ async function buildPrompt(
   const text =
     name === 'start_task'
       ? buildStartTaskPrompt(promptTask, automations)
-      : buildFinishTaskPrompt(promptTask, automations);
+      : buildFinishTaskPrompt(promptTask, automations, {
+          canEditDocuments: hasMcpScope(ctx.via.scopes, 'documents'),
+        });
   return {
     description: `${name} ${task.key}`,
     messages: [{ role: 'user', content: { type: 'text', text } }],

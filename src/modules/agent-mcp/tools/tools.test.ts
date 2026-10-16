@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { AuthVia } from '@/shared/auth';
+
 import type * as GithubModule from '@/modules/integrations/github';
 import type * as ProjectsModule from '@/modules/projects';
 import type * as TasksModule from '@/modules/tasks';
@@ -8,7 +10,7 @@ import type * as WorkspacesModule from '@/modules/workspaces';
 import { ForbiddenError, ValidationError } from '@/shared/errors';
 
 import type { McpContext } from '../context';
-import { runTool } from '../tool-result';
+import { runTool, type ToolOutput } from '../tool-result';
 
 const listTasks = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const listProjectTasks = vi.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -24,6 +26,7 @@ const getSummary = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const requestUpload = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const completeUpload = vi.fn<(...args: unknown[]) => Promise<{ target: string }>>();
 const getDownload = vi.fn<(...args: unknown[]) => Promise<{ url: string }>>();
+const recordActivity = vi.fn<(input: unknown) => Promise<void>>();
 
 const P_DEV = '0199e5a0-0000-7000-8000-000000000001';
 const P_OPS = '0199e5a0-0000-7000-8000-000000000002';
@@ -34,6 +37,9 @@ const S_OPS = '0199e5a0-0000-7000-8000-000000000021';
 
 const EMPTY_PAGE = { items: [], total: 0, page: 1, pageCount: 1, pageSize: 50 };
 
+vi.mock('@/modules/api-tokens', () => ({
+  recordActivity: (input: unknown) => recordActivity(input),
+}));
 vi.mock('@/modules/tasks', async (importOriginal) => ({
   ...(await importOriginal<typeof TasksModule>()),
   listTasks: (...args: unknown[]) => listTasks(...args),
@@ -90,6 +96,13 @@ const { previewGithubLinksTool } = await import('./github-tools');
 const { completeUploadTool, getAttachmentUrlTool, requestUploadTool } =
   await import('./attachment-tools');
 
+const VIA: AuthVia = {
+  tokenId: 't-1',
+  tokenName: 'Claude Code',
+  scopes: ['read', 'tasks', 'documents'],
+  agent: null,
+};
+
 const ctx: McpContext = {
   session: {
     user: {
@@ -99,12 +112,15 @@ const ctx: McpContext = {
       image: null,
       role: 'user',
       banned: false,
+      isAgent: false,
     },
     session: { id: 'api-token:t-1', expiresAt: new Date('2030-01-01') },
+    via: VIA,
   },
   workspace: { id: 'ws-1', slug: 'team', name: 'Команда', taskKey: 'TSK' },
   tokenId: 't-1',
   tokenPrefix: 'tkr_abcdefgh',
+  via: VIA,
   baseUrl: 'http://localhost:3000',
 };
 
@@ -119,6 +135,11 @@ function placement(projectId: string, projectName: string, statusId: string, sta
   };
 }
 
+/** Текст ответа инструмента (инструменты изменения возвращают ещё и запись журнала). */
+function textOf(output: ToolOutput): string {
+  return typeof output === 'string' ? output : output.text;
+}
+
 function task(overrides: Partial<TaskDto> = {}): TaskDto {
   return {
     id: 'task-42',
@@ -131,6 +152,7 @@ function task(overrides: Partial<TaskDto> = {}): TaskDto {
     isOverdue: false,
     assignee: null,
     createdBy: null,
+    createdVia: null,
     createdAt: new Date('2026-10-16T10:00:00Z'),
     updatedAt: new Date('2026-10-16T10:00:00Z'),
     placements: [placement(P_DEV, 'Разработка', S_TODO, 'К выполнению')],
@@ -144,6 +166,7 @@ function task(overrides: Partial<TaskDto> = {}): TaskDto {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  recordActivity.mockResolvedValue();
   listTasks.mockResolvedValue(EMPTY_PAGE);
   listProjectTasks.mockResolvedValue(EMPTY_PAGE);
   getTaskByNumber.mockImplementation((_s, _ws, number) =>
@@ -199,12 +222,14 @@ describe('list_tasks', () => {
 
 describe('create_task', () => {
   it('задача верхнего уровня встаёт в первый todo-статус указанного проекта', async () => {
-    const text = await createTaskTool(ctx, {
-      title: 'Новая',
-      project: 'Разработка',
-      assignee: 'me',
-      priority: 'high',
-    });
+    const text = textOf(
+      await createTaskTool(ctx, {
+        title: 'Новая',
+        project: 'Разработка',
+        assignee: 'me',
+        priority: 'high',
+      }),
+    );
     expect(createTask).toHaveBeenCalledWith(ctx.session, {
       workspaceId: 'ws-1',
       title: 'Новая',
@@ -221,7 +246,7 @@ describe('create_task', () => {
   });
 
   it('подзадача без проекта не размещается', async () => {
-    const text = await createTaskTool(ctx, { title: 'Шаг 1', parent: 'TSK-42' });
+    const text = textOf(await createTaskTool(ctx, { title: 'Шаг 1', parent: 'TSK-42' }));
     expect(getTaskByNumber).toHaveBeenCalledWith(ctx.session, 'ws-1', 42);
     expect(createTask.mock.calls[0]![1]).toMatchObject({
       parentId: 'task-42',
@@ -260,7 +285,7 @@ describe('update_task', () => {
 
 describe('set_task_status', () => {
   it('одно размещение — проект можно не указывать', async () => {
-    const text = await setTaskStatusTool(ctx, { task: 'TSK-42', status: 'in_progress' });
+    const text = textOf(await setTaskStatusTool(ctx, { task: 'TSK-42', status: 'in_progress' }));
     expect(changeStatus).toHaveBeenCalledWith(ctx.session, {
       workspaceId: 'ws-1',
       taskId: 'task-42',
@@ -271,7 +296,7 @@ describe('set_task_status', () => {
   });
 
   it('тот же статус — без изменений', async () => {
-    const text = await setTaskStatusTool(ctx, { task: 42, status: 'К выполнению' });
+    const text = textOf(await setTaskStatusTool(ctx, { task: 42, status: 'К выполнению' }));
     expect(changeStatus).not.toHaveBeenCalled();
     expect(text).toContain('already');
   });
@@ -307,7 +332,7 @@ describe('set_task_status', () => {
 
 describe('set_task_parent и add_comment', () => {
   it('null — задача верхнего уровня', async () => {
-    const text = await setTaskParentTool(ctx, { task: 'TSK-42', parent: null });
+    const text = textOf(await setTaskParentTool(ctx, { task: 'TSK-42', parent: null }));
     expect(setTaskParent).toHaveBeenCalledWith(ctx.session, {
       workspaceId: 'ws-1',
       taskId: 'task-42',
@@ -327,7 +352,7 @@ describe('set_task_parent и add_comment', () => {
   });
 
   it('комментарий из одних файлов: пустой текст и id вложений', async () => {
-    const text = await addCommentTool(ctx, { task: 42, attachmentIds: ['att-1', 'att-2'] });
+    const text = textOf(await addCommentTool(ctx, { task: 42, attachmentIds: ['att-1', 'att-2'] }));
     expect(createComment).toHaveBeenCalledWith(ctx.session, {
       workspaceId: 'ws-1',
       taskId: 'task-42',
@@ -338,7 +363,62 @@ describe('set_task_parent и add_comment', () => {
   });
 });
 
+describe('журнал действий', () => {
+  it('runTool пишет журнал только при успехе инструмента изменения', async () => {
+    await runTool(ctx, 'add_comment', () =>
+      Promise.resolve({
+        text: 'ok',
+        activity: { summary: 'Прокомментировал TSK-42', targetKey: 'TSK-42' },
+      }),
+    );
+    expect(recordActivity).toHaveBeenCalledWith({
+      workspaceId: 'ws-1',
+      userId: 'u-1',
+      tokenId: 't-1',
+      tool: 'add_comment',
+      summary: 'Прокомментировал TSK-42',
+      targetKey: 'TSK-42',
+    });
+
+    recordActivity.mockClear();
+    await runTool(ctx, 'get_task', () => Promise.resolve('read only'));
+    await runTool(ctx, 'add_comment', () => Promise.reject(new ValidationError('нет')));
+    expect(recordActivity).not.toHaveBeenCalled();
+  });
+
+  it('сбой журнала не ломает ответ', async () => {
+    recordActivity.mockRejectedValueOnce(new Error('db down'));
+    const result = await runTool(ctx, 'add_comment', () =>
+      Promise.resolve({ text: 'ok', activity: { summary: 's', targetKey: null } }),
+    );
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toEqual([{ type: 'text', text: 'ok' }]);
+  });
+
+  it('тексты журнала для основных инструментов', async () => {
+    getTaskByNumber.mockResolvedValue(task());
+    const status = await setTaskStatusTool(ctx, { task: 'TSK-42', status: 'in_progress' });
+    expect(typeof status === 'string' ? null : status.activity).toEqual({
+      summary: 'Перевёл TSK-42: К выполнению → В работе',
+      targetKey: 'TSK-42',
+    });
+    const comment = await addCommentTool(ctx, { task: 'TSK-42', body: 'Готово' });
+    expect(typeof comment === 'string' ? null : comment.activity?.summary).toBe(
+      'Прокомментировал TSK-42',
+    );
+  });
+});
+
 describe('runTool', () => {
+  it('инструмент вне областей токена — isError, обработчик не вызывается', async () => {
+    const handler = vi.fn(() => Promise.resolve('done'));
+    const readOnly = { ...ctx, via: { ...ctx.via, scopes: ['read'] } };
+    const result = await runTool(readOnly, 'create_task', handler);
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain('tasks');
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('ошибки домена — isError с текстом, неожиданные — общий текст', async () => {
     setTaskParent.mockRejectedValueOnce(
       new ValidationError('Нельзя сделать задачу подзадачей её собственной подзадачи'),
@@ -360,7 +440,7 @@ describe('runTool', () => {
     expect(forbidden.isError).toBe(true);
     expect(forbidden.content).toEqual([{ type: 'text', text: 'Недостаточно прав' }]);
 
-    const crash = await runTool(ctx, 'x', () => Promise.reject(new Error('db down')));
+    const crash = await runTool(ctx, 'get_task', () => Promise.reject(new Error('db down')));
     expect(crash.isError).toBe(true);
     expect(JSON.stringify(crash.content)).not.toContain('db down');
   });
@@ -453,7 +533,7 @@ describe('вложения', () => {
 
   it('подтверждение: в задачу — готово, для комментария — напоминание о черновике', async () => {
     completeUpload.mockResolvedValueOnce({ target: 'task' });
-    expect(await completeUploadTool(ctx, { task: 42, attachmentId: 'att-1' })).toBe(
+    expect(textOf(await completeUploadTool(ctx, { task: 42, attachmentId: 'att-1' }))).toBe(
       'File attached to TSK-42.',
     );
     expect(completeUpload).toHaveBeenCalledWith(ctx.session, {
@@ -463,7 +543,7 @@ describe('вложения', () => {
     });
 
     completeUpload.mockResolvedValueOnce({ target: 'comment' });
-    expect(await completeUploadTool(ctx, { task: 42, attachmentId: 'att-1' })).toContain(
+    expect(textOf(await completeUploadTool(ctx, { task: 42, attachmentId: 'att-1' }))).toContain(
       'draft visible only to you',
     );
   });

@@ -10,6 +10,7 @@ import {
   type GithubGuideInput,
   type PromptTask,
 } from '.';
+import type { McpActor } from './tool-scopes';
 
 const projects: CatalogProject[] = [
   {
@@ -36,18 +37,56 @@ function input(overrides: Partial<GithubGuideInput['github']> = {}): GithubGuide
   };
 }
 
+const PERSONAL: McpActor = {
+  name: 'Анна',
+  userId: 'u-1',
+  tokenName: 'Ноутбук',
+  scopes: ['read', 'tasks', 'documents'],
+  agent: null,
+};
+
 describe('buildServerInstructions', () => {
+  it('говорит, от чьего имени действует агент, и перечисляет области', () => {
+    const agent = buildServerInstructions({
+      workspaceName: 'Команда',
+      taskKey: 'TSK',
+      actor: {
+        ...PERSONAL,
+        name: 'Claude — backend',
+        scopes: ['read'],
+        agent: { responsibleName: 'Анна' },
+      },
+    });
+    expect(agent).toContain('You act as agent "Claude — backend" (responsible: Анна)');
+    expect(agent).toContain('Token scopes: read.');
+    expect(agent).toContain('You cannot change tasks');
+    expect(agent).not.toContain('request_attachment_upload');
+
+    const personal = buildServerInstructions({
+      workspaceName: 'Команда',
+      taskKey: 'TSK',
+      actor: PERSONAL,
+    });
+    expect(personal).toContain('You act as Анна via personal token "Ноутбук"');
+    expect(personal).toContain('Token scopes: read, tasks, documents.');
+    expect(personal).not.toContain('You cannot change');
+  });
+
   it('с ключом — правила ветки, коммитов и PR', () => {
-    const text = buildServerInstructions({ workspaceName: 'Команда', taskKey: 'TSK' });
+    const text = buildServerInstructions({
+      workspaceName: 'Команда',
+      taskKey: 'TSK',
+      actor: PERSONAL,
+    });
     expect(text).toContain('TSK-42');
     expect(text).toContain('tsk-42-short-slug');
     expect(text).toContain('get_github_conventions');
   });
 
   it('без ключа — предупреждение', () => {
-    expect(buildServerInstructions({ workspaceName: 'Команда', taskKey: null })).toContain(
-      'no task key',
-    );
+    expect(
+      buildServerInstructions({ workspaceName: 'Команда', taskKey: null, actor: PERSONAL }),
+    ).toContain('no task key');
   });
 });
 
@@ -153,6 +192,34 @@ describe('промпты start_task / finish_task', () => {
     const automated = buildFinishTaskPrompt(task, automation);
     expect(automated).toContain('Leave the status to Tasker');
     expect(automated).toContain('Разработка → Готово');
+  });
+
+  it('start_task: прочитать связанные документы', () => {
+    const withDocs = { ...task, documents: [{ id: 'doc-1', title: 'Спецификация входа' }] };
+    expect(buildStartTaskPrompt(withDocs, [])).toContain(
+      'Read the linked documents with get_document before coding: «Спецификация входа» (doc-1)',
+    );
+    expect(buildStartTaskPrompt(task, [])).toContain('list_documents');
+  });
+
+  it('finish_task: заметка в документах — только с областью documents', () => {
+    expect(buildFinishTaskPrompt(task, [], { canEditDocuments: true })).toContain(
+      'create_note linked to TSK-42',
+    );
+    expect(buildFinishTaskPrompt(task, [])).not.toContain('create_note');
+  });
+
+  it('инструкции без области documents не предлагают менять документы', () => {
+    const readTasks = buildServerInstructions({
+      workspaceName: 'Команда',
+      taskKey: 'TSK',
+      actor: { ...PERSONAL, scopes: ['read', 'tasks'] },
+    });
+    expect(readTasks).toContain('get_document');
+    expect(readTasks).not.toContain('create_note');
+    expect(
+      buildServerInstructions({ workspaceName: 'Команда', taskKey: 'TSK', actor: PERSONAL }),
+    ).toContain('create_note');
   });
 
   it('без ключа пространства — без ветки и без требований к ключу', () => {

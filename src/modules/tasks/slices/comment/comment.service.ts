@@ -24,7 +24,7 @@ import {
 import { toAttachmentDto } from '../attachment/attachment.mapper';
 import { attachmentRepository } from '../attachment/attachment.repository';
 import { deleteStoredObjects } from '../attachment/attachment.storage';
-import { toUserDto } from '../task/task.mapper';
+import { toCreatedVia, toUserDto } from '../task/task.mapper';
 import type { TaskCommentDto, TaskCommentsDto } from './comment.dto';
 import { commentRepository, type CommentRow, type CommentTaskRow } from './comment.repository';
 import { EMPTY_COMMENT_MESSAGE } from './comment.schema';
@@ -47,6 +47,7 @@ function toCommentDto(
     body: row.body,
     mentions: extractMentions(row.body, members),
     author: toUserDto(row.author),
+    createdVia: toCreatedVia(row.author, row.createdViaToken),
     createdAt: row.createdAt,
     editedAt: row.editedAt,
     canEdit: canEditComment(row, access),
@@ -197,7 +198,13 @@ export async function createComment(
 
   const id = await prisma.$transaction(async (tx) => {
     const comment = await commentRepository.create(
-      { workspaceId, taskId, authorId: access.userId, body },
+      {
+        workspaceId,
+        taskId,
+        authorId: access.userId,
+        body,
+        createdViaTokenId: session.via?.tokenId ?? null,
+      },
       tx,
     );
     if (attachmentIds.length > 0) {
@@ -226,6 +233,7 @@ export async function createComment(
       userId: access.userId,
       length: body.length,
       attachments: attachmentIds.length,
+      via: session.via?.tokenId ?? null,
     },
     '[comment] created',
   );

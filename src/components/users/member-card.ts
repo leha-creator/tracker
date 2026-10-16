@@ -6,6 +6,9 @@ export interface MemberCardData {
   image: string | null;
   position: string | null;
   role: 'owner' | 'member';
+  /** Агент пространства: вместо роли и email — метка «Агент» и ответственный. */
+  isAgent: boolean;
+  responsibleName: string | null;
   openCount: number;
   overdueCount: number;
 }

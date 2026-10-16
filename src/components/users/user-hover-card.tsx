@@ -99,7 +99,9 @@ export function UserHoverCard({ user, children, focusable = true, className }: U
                   <span className="truncate text-muted-foreground">{state.data.position}</span>
                 )}
                 <span className="truncate text-xs text-muted-foreground">
-                  {WORKSPACE_ROLE_LABELS[state.data.role]} · {state.data.email}
+                  {state.data.isAgent
+                    ? `Агент · отвечает: ${state.data.responsibleName ?? 'не назначен'}`
+                    : `${WORKSPACE_ROLE_LABELS[state.data.role]} · ${state.data.email}`}
                 </span>
               </>
             ) : state.status === 'loading' ? (

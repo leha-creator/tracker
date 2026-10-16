@@ -14,6 +14,7 @@ import {
   formatNotificationText,
   parseNotificationPayload,
   resolveChannels,
+  routeAgentRecipients,
   type NotificationEvent,
   type TypedNotification,
 } from '../../models';
@@ -108,15 +109,33 @@ function scheduleMails(jobs: MailJob[]): void {
  * настройкам получателя. Никогда не бросает: сбой уведомлений не отменяет само действие.
  */
 export async function notify(events: readonly NotificationEvent[]): Promise<void> {
-  const unique = dedupeRecipients(events);
-  if (unique.length === 0) {
+  const direct = dedupeRecipients(events);
+  if (direct.length === 0) {
     log.debug({ events: events.length }, '[notification.notify] no recipients');
     return;
   }
-  const first = unique[0]!;
+  const first = direct[0]!;
   const context = { workspaceId: first.workspaceId, taskId: first.taskId ?? null };
 
   try {
+    // Агенту пространства уведомления не доставляются — их получает ответственный.
+    const routes = await notificationRepository.findAgentRoutes(
+      first.workspaceId,
+      direct.map((event) => event.recipientId),
+    );
+    let unique = direct;
+    if (routes.size > 0) {
+      const routed = routeAgentRecipients(direct, routes);
+      unique = dedupeRecipients(routed.events);
+      for (const item of routed.rerouted) {
+        log.info(
+          { agentId: item.agentId, to: item.to, type: item.type, workspaceId: first.workspaceId },
+          '[notification] rerouted from agent',
+        );
+      }
+    }
+    if (unique.length === 0) return;
+
     const recipientIds = unique.map((event) => event.recipientId);
     const [preferences, recipients] = await Promise.all([
       preferenceRepository.listForUsers(recipientIds),

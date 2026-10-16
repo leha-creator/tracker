@@ -26,7 +26,7 @@ export async function loadCatalog(ctx: McpContext): Promise<CatalogProject[]> {
 /** Участники пространства. Членство токена уже проверено при аутентификации. */
 export async function loadMembers(ctx: McpContext): Promise<CatalogMember[]> {
   const members = await listMemberIdentities(ctx.workspace.id);
-  return members.map(({ userId, name, email }) => ({ userId, name, email }));
+  return members.map(({ userId, name, email, isAgent }) => ({ userId, name, email, isAgent }));
 }
 
 export async function loadGithubGuide(

@@ -10,6 +10,7 @@ interface UserRow {
   role: string;
   banned: boolean | null;
   banExpires: Date | null;
+  isAgent: boolean;
 }
 
 const requireAdmin = vi.fn<() => Promise<AuthSession>>();
@@ -69,6 +70,7 @@ const adminSession: AuthSession = {
     image: null,
     role: 'admin',
     banned: false,
+    isAgent: false,
   },
   session: { id: 's-1', expiresAt: new Date('2030-01-01') },
 };
@@ -80,6 +82,7 @@ function userRow(overrides: Partial<UserRow> = {}): UserRow {
     role: 'user',
     banned: false,
     banExpires: null,
+    isAgent: false,
     ...overrides,
   };
 }
@@ -102,6 +105,12 @@ describe('access', () => {
     });
     expect(findById).not.toHaveBeenCalled();
     expect(list).not.toHaveBeenCalled();
+  });
+
+  it('hides agents from admin actions', async () => {
+    findById.mockResolvedValue(userRow({ isAgent: true }));
+    await expect(unbanUser({ userId: 'agent-1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(unbanUserApi).not.toHaveBeenCalled();
   });
 
   it('returns NOT_FOUND for unknown user', async () => {

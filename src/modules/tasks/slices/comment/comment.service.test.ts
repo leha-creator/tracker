@@ -72,6 +72,7 @@ const session: AuthSession = {
     image: null,
     role: 'user',
     banned: false,
+    isAgent: false,
   },
   session: { id: 's-1', expiresAt: new Date('2030-01-01') },
 };
@@ -248,10 +249,27 @@ describe('createComment', () => {
       createComment(session, { workspaceId: 'ws-1', taskId: TASK_ID, body: 'Привет' }),
     ).resolves.toEqual({ commentId: COMMENT_ID });
     expect(create).toHaveBeenCalledWith(
-      { workspaceId: 'ws-1', taskId: TASK_ID, authorId: 'user-1', body: 'Привет' },
+      {
+        workspaceId: 'ws-1',
+        taskId: TASK_ID,
+        authorId: 'user-1',
+        body: 'Привет',
+        createdViaTokenId: null,
+      },
       { tx: true },
     );
     expect(bindToComment).not.toHaveBeenCalled();
+  });
+
+  it('marks a comment written through an MCP token', async () => {
+    const via = { tokenId: 'tok-1', tokenName: 'Ноутбук', scopes: ['read', 'tasks'], agent: null };
+    await createComment(
+      { ...session, via },
+      { workspaceId: 'ws-1', taskId: TASK_ID, body: 'Готово' },
+    );
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ createdViaTokenId: 'tok-1' }), {
+      tx: true,
+    });
   });
 
   it('notifies mentioned users and task watchers once each', async () => {

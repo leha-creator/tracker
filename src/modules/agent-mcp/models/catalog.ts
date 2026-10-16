@@ -19,6 +19,8 @@ export interface CatalogMember {
   userId: string;
   name: string;
   email: string;
+  /** Агент пространства: служебный email не показываем. */
+  isAgent?: boolean;
 }
 
 /** Без регистра, лишних пробелов и различия «ё/е». */
@@ -45,7 +47,7 @@ function quoteList(names: readonly string[]): string {
 }
 
 /** Единственный элемент по id или имени; иначе — ошибка со списком вариантов для агента. */
-function pickByIdOrName<T extends { id: string; name: string }>(
+export function pickByIdOrName<T extends { id: string; name: string }>(
   items: readonly T[],
   ref: string,
   what: { one: string; options: string },

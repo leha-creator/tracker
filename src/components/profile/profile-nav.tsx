@@ -17,7 +17,16 @@ export function ProfileNav() {
   return (
     <nav aria-label="Разделы профиля" className="no-scrollbar flex gap-5 overflow-x-auto border-b">
       {TABS.map((tab) => (
-        <TabLink key={tab.href} href={tab.href} active={pathname === tab.href} className="h-10">
+        <TabLink
+          key={tab.href}
+          href={tab.href}
+          // Журнал токена (/profile/tokens/<id>) — внутри вкладки «Токены доступа».
+          active={
+            pathname === tab.href ||
+            (tab.href === '/profile/tokens' && pathname.startsWith('/profile/tokens/'))
+          }
+          className="h-10"
+        >
           {tab.label}
         </TabLink>
       ))}

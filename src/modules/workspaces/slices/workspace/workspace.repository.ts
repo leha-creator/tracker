@@ -11,7 +11,13 @@ export const workspaceRepository = {
       select: {
         role: true,
         workspace: {
-          select: { id: true, slug: true, name: true, _count: { select: { members: true } } },
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+            // Агенты — служебные участники, в счётчик не входят.
+            _count: { select: { members: { where: { user: { isAgent: false } } } } },
+          },
         },
       },
     });

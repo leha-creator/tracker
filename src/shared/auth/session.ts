@@ -20,11 +20,28 @@ export interface AuthUser {
   image: string | null;
   role: GlobalRole;
   banned: boolean;
+  /** Служебный пользователь-агент пространства (модуль agents). Сессии в интерфейсе у него нет. */
+  isAgent: boolean;
+}
+
+/**
+ * Сессия построена по токену MCP (модуль api-tokens). По ней сервисы ставят пометку
+ * «через агента» (createdViaTokenId), а MCP проверяет области токена.
+ */
+export interface AuthVia {
+  tokenId: string;
+  tokenName: string;
+  /** Области токена: всегда содержит "read". */
+  scopes: string[];
+  /** Токен агента пространства; null — личный токен человека. */
+  agent: { name: string; responsibleUserId: string | null; responsibleName: string | null } | null;
 }
 
 export interface AuthSession {
   user: AuthUser;
   session: { id: string; expiresAt: Date };
+  /** Только у сессии токена MCP; у сессии браузера — undefined. */
+  via?: AuthVia;
 }
 
 type SessionResult = Awaited<ReturnType<ReturnType<typeof getAuth>['api']['getSession']>>;
@@ -38,6 +55,7 @@ function toAuthSession({ user, session }: NonNullable<SessionResult>): AuthSessi
       image: user.image ?? null,
       role: parseGlobalRole(user.role),
       banned: user.banned ?? false,
+      isAgent: user.isAgent ?? false,
     },
     session: { id: session.id, expiresAt: session.expiresAt },
   };

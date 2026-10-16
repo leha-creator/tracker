@@ -49,6 +49,7 @@ const owner: AuthSession = {
     image: null,
     role: 'user',
     banned: false,
+    isAgent: false,
   },
   session: { id: 's-1', expiresAt: new Date('2030-01-01') },
 };
@@ -107,6 +108,20 @@ describe('inviteMember', () => {
   it('rejects inviting yourself', async () => {
     await expect(
       inviteMember(owner, { workspaceId: 'ws-1', email: 'owner@example.com', role: 'member' }),
+    ).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      fieldErrors: { email: expect.any(Array) },
+    });
+    expect(createInvitation).not.toHaveBeenCalled();
+  });
+
+  it('rejects the service address of an agent', async () => {
+    await expect(
+      inviteMember(owner, {
+        workspaceId: 'ws-1',
+        email: 'agent-1@agents.tasker.invalid',
+        role: 'member',
+      }),
     ).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
       fieldErrors: { email: expect.any(Array) },

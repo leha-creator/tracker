@@ -2,14 +2,27 @@ import 'server-only';
 
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
-import { AppError } from '@/shared/errors';
+import { recordActivity } from '@/modules/api-tokens';
+import { AppError, ForbiddenError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
 import type { McpContext } from './context';
+import { isToolAllowed, scopeDeniedMessage, TOOL_SCOPES, type McpToolName } from './models';
 
 const log = createLogger('mcp');
 
 const INTERNAL_MESSAGE = 'Внутренняя ошибка Tasker. Попробуйте ещё раз или сообщите пользователю.';
+
+/** Что записать в журнал действий после успешного изменения (McpActivity). */
+export interface ToolActivity {
+  /** Готовая строка для людей: «Перевёл TSK-42: К выполнению → В работе». */
+  summary: string;
+  /** Ключ задачи или id документа. */
+  targetKey: string | null;
+}
+
+/** Ответ инструмента: текст агенту и, для изменений, запись журнала. */
+export type ToolOutput = string | { text: string; activity?: ToolActivity | null };
 
 export function textResult(text: string): CallToolResult {
   return { content: [{ type: 'text', text }] };
@@ -32,14 +45,34 @@ function appErrorText(error: AppError): string {
  */
 export async function runTool(
   ctx: McpContext,
-  tool: string,
-  handler: () => Promise<string>,
+  tool: McpToolName,
+  handler: () => Promise<ToolOutput>,
 ): Promise<CallToolResult> {
   const started = performance.now();
   const meta = { tool, tokenId: ctx.tokenId, workspaceId: ctx.workspace.id };
   log.debug(meta, '[mcp.tool] call');
   try {
-    const text = await handler();
+    // Вторая линия обороны: инструменты вне областей токена и так не регистрируются (server.ts).
+    if (!isToolAllowed(tool, ctx.via.scopes)) {
+      log.warn({ ...meta, scope: TOOL_SCOPES[tool] }, '[mcp.tool] scope denied');
+      throw new ForbiddenError(scopeDeniedMessage(tool));
+    }
+    const output = await handler();
+    const text = typeof output === 'string' ? output : output.text;
+    const activity = typeof output === 'string' ? null : (output.activity ?? null);
+    if (activity) {
+      // Без ожидания: журнал не задерживает ответ и не ломает его (recordActivity не бросает).
+      void recordActivity({
+        workspaceId: ctx.workspace.id,
+        userId: ctx.session.user.id,
+        tokenId: ctx.tokenId,
+        tool,
+        summary: activity.summary,
+        targetKey: activity.targetKey,
+      }).catch((error: unknown) =>
+        log.warn({ ...meta, err: error }, '[mcp.activity] record failed'),
+      );
+    }
     log.debug({ ...meta, durationMs: Math.round(performance.now() - started) }, '[mcp.tool] done');
     return textResult(text);
   } catch (error) {

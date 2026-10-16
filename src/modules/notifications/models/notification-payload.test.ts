@@ -140,3 +140,22 @@ describe('GitHub notifications', () => {
     expect(text).toEqual({ title, subject: 'TSK-42 Починить вход', excerpt: 'Fix login' });
   });
 });
+
+describe('forAgent', () => {
+  it('adds the agent to the title', () => {
+    const text = formatNotificationText({
+      type: 'task_assigned',
+      payload: {
+        workspaceSlug: 'team',
+        workspaceName: 'Команда',
+        actorName: 'Анна',
+        taskNumber: 1,
+        taskTitle: 'A',
+        forAgent: { name: 'Claude' },
+      },
+      commentId: null,
+      invitationId: null,
+    });
+    expect(text.title).toBe('Вас назначили ответственным (для агента Claude)');
+  });
+});

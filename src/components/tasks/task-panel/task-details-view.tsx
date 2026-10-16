@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
+import { ViaAgentBadge } from '@/components/agents/via-agent-badge';
 import { TaskDocumentsSection } from '@/components/documents/task-documents/task-documents-section';
 import { TaskGithubSection } from '@/components/github/task-github-section';
 import { listProjects, listWorkspaceStatuses } from '@/modules/projects';
@@ -137,6 +138,11 @@ export async function TaskDetailsView({
             <TaskTitleEditor workspaceId={workspace.id} task={task} />
             <p className="text-xs text-muted-foreground">
               {task.createdBy ? `${task.createdBy.name} · ` : ''}
+              {task.createdVia && (
+                <>
+                  <ViaAgentBadge via={task.createdVia} className="px-1 py-0" />{' '}
+                </>
+              )}
               создана {DATE_TIME.format(task.createdAt)} · изменена{' '}
               {DATE_TIME.format(task.updatedAt)}
             </p>

@@ -4,7 +4,7 @@
 
 ## Обзор проекта
 
-Tasker — простой таск-трекер с рабочими пространствами, ролями (admin / владелец пространства / участник), канбан-доской и списком задач; задача может находиться в нескольких проектах со своим статусом в каждом и иметь подзадачи любой вложенности (по желанию — на доске). Есть профили пользователей (фото, должность, описание), @упоминания в комментариях и уведомления (в приложении и письмом). Необязательная интеграция с GitHub: GitHub App, вход через GitHub, привязка PR, веток и коммитов к задачам по ключу `TSK-42`, автосмена статуса. Агенты (Claude Code) работают с задачами через MCP-сервер `/api/mcp` по личному токену. У каждого пространства — раздел «Документы»: папки, теги, Markdown-заметки и файлы с просмотром, привязка к задачам. Подробности — в [`.ai-factory/DESCRIPTION.md`](.ai-factory/DESCRIPTION.md).
+Tasker — простой таск-трекер с рабочими пространствами, ролями (admin / владелец пространства / участник), канбан-доской и списком задач; задача может находиться в нескольких проектах со своим статусом в каждом и иметь подзадачи любой вложенности (по желанию — на доске). Есть профили пользователей (фото, должность, описание), @упоминания в комментариях и уведомления (в приложении и письмом). Необязательная интеграция с GitHub: GitHub App, вход через GitHub, привязка PR, веток и коммитов к задачам по ключу `TSK-42`, автосмена статуса. Агенты (Claude Code) работают с задачами и документами через MCP-сервер `/api/mcp` — как агенты пространства (отдельные участники со своими токенами, правами и ответственным) или по личному токену; у токена есть области, изменения пишутся в журнал. У каждого пространства — раздел «Документы»: папки, теги, Markdown-заметки и файлы с просмотром, привязка к задачам. Подробности — в [`.ai-factory/DESCRIPTION.md`](.ai-factory/DESCRIPTION.md).
 
 ## Технологический стек
 
@@ -30,7 +30,7 @@ tasker/
 ├── .claude/                  # Скиллы и субагенты
 ├── .github/workflows/ci.yml  # CI/CD: pnpm check + build, миграции на чистом Postgres, образ и smoke-тест; на main — GHCR и деплой
 ├── prisma/
-│   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …), пространств (Workspace, WorkspaceMember, WorkspaceInvitation), проектов (Project, ProjectStatus), задач (Task, TaskPlacement, WorkspaceTaskCounter, TaskComment, TaskAttachment), профилей (UserProfile), уведомлений (Notification, NotificationPreference), документов (DocumentFolder, Document, DocumentTag, DocumentTagAssignment, TaskDocumentLink), GitHub (GithubInstallation, GithubRepository, GithubPullRequest, TaskPullRequest, TaskGithubBranch, TaskGithubCommit, GithubWebhookDelivery, GithubProjectAutomation, GithubAppConfig), токенов агентов (ApiToken); Workspace.taskKey — ключ задач (TSK-42); Task.parentId — подзадачи (составной FK, каскад)
+│   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …), пространств (Workspace, WorkspaceMember, WorkspaceInvitation), проектов (Project, ProjectStatus), задач (Task, TaskPlacement, WorkspaceTaskCounter, TaskComment, TaskAttachment), профилей (UserProfile), уведомлений (Notification, NotificationPreference), документов (DocumentFolder, Document, DocumentTag, DocumentTagAssignment, TaskDocumentLink), GitHub (GithubInstallation, GithubRepository, GithubPullRequest, TaskPullRequest, TaskGithubBranch, TaskGithubCommit, GithubWebhookDelivery, GithubProjectAutomation, GithubAppConfig), токенов (ApiToken: области, issuedById), агентов (WorkspaceAgent, User.isAgent), журнала MCP (McpActivity), пометки «через агента» (createdViaTokenId у Task, TaskComment, Document); Workspace.taskKey — ключ задач (TSK-42); Task.parentId — подзадачи (составной FK, каскад)
 │   └── migrations/
 ├── prisma.config.ts          # Подключение Prisma CLI (DATABASE_URL, миграции)
 ├── src/
@@ -39,11 +39,11 @@ tasker/
 │   │   ├── (auth)/           # /login, /register
 │   │   ├── not-found.tsx     # 404 для неизвестных адресов (+ w/[workspaceSlug]/not-found.tsx внутри пространства)
 │   │   ├── (app)/            # Защищённая зона: sticky-шапка (переключатель и разделы пространства, колокольчик уведомлений, меню пользователя, skip-link), /, /admin (→ /admin/users, + integrations — GitHub App),
-│   │   │                     # /workspaces/new, /w/[workspaceSlug] (+ settings, settings/members, settings/github), /invite/[invitationId],
+│   │   │                     # /workspaces/new, /w/[workspaceSlug] (+ settings, settings/members, settings/github, settings/agents, settings/agents/[agentId]), /invite/[invitationId],
 │   │   │                     # /w/[workspaceSlug]/projects/new, projects/[projectId]/{board,list,settings},
 │   │   │                     # /w/[workspaceSlug]/tasks (+ new, [taskNumber]), /w/[workspaceSlug]/members/[userId] (публичный профиль),
 │   │   │                     # /w/[workspaceSlug]/docs (+ new, [documentId], [documentId]/edit) — документы пространства,
-│   │   │                     # /profile (+ notifications, account, tokens), /notifications
+│   │   │                     # /profile (+ notifications, account, tokens, tokens/[tokenId] — журнал токена), /notifications
 │   │   └── api/
 │   │       ├── auth/[...all]/ # Better Auth handler
 │   │       ├── attachments/[attachmentId]/ # GET — проверка доступа и 302 на presigned-ссылку файла
@@ -65,8 +65,9 @@ tasker/
 │   │   ├── notifications/    # Уведомления: notify/notifyByEmail для других модулей (никогда не бросают), настройки «тип × канал», письма через after(); ни от кого не зависит
 │   │   ├── documents/        # Документы пространства: папки (дерево), Markdown-заметки (версия), файлы (presigned POST, квота), теги, связи с задачами; зависит от tasks
 │   │   ├── integrations/github/ # GitHub App (пакет octokit): установки и репозитории, вебхуки, PR (ревью, CI), ветки и коммиты задач, ручная привязка, автосмена статуса, уведомления о PR, привязка GitHub-аккаунта, создание GitHub App из админки по манифесту (app-setup); зависит от tasks, projects, workspaces, notifications
-│   │   ├── api-tokens/       # Личные токены доступа агентов: выпуск, отзыв, authenticateApiToken → AuthSession (роль user, одно пространство); зависит только от shared
-│   │   ├── agent-mcp/        # MCP-сервер: инструменты задач (чтение, создание, статус, родитель, комментарии, вложения через presigned POST и curl), правила GitHub, preview_github_links, промпты start_task/finish_task; зависит от api-tokens, tasks, projects, workspaces, integrations/github
+│   │   ├── agents/           # Агенты пространства: служебный User (isAgent) + WorkspaceAgent, членство в обход плагина, ответственный, права, отключение/включение; зависит от api-tokens
+│   │   ├── api-tokens/       # Токены доступа (личные и агентов): области (scopes), выпуск, отзыв, authenticateApiToken → AuthSession (роль user, via); срез activity — журнал действий MCP; зависит только от shared
+│   │   ├── agent-mcp/        # MCP-сервер: инструменты задач (чтение, создание, статус, родитель, комментарии, вложения через presigned POST и curl) и документов (поиск, чтение, заметки с версией, загрузка, папки, теги, связи), области токена (TOOL_SCOPES), журнал, правила GitHub, промпты start_task/finish_task; зависит от api-tokens, tasks, projects, workspaces, documents, integrations/github
 │   │   └── admin/            # Администрирование ресурса: модели (правила над пользователями, запрос списка), срез user (чтение — репозиторий, изменения — плагин admin через callAdminApi); зависит от workspaces и profiles
 │   ├── components/
 │   │   ├── layout/           # Каркас: PageContainer (ширина страниц), WorkspaceSections и TabLink (навигация),
@@ -83,7 +84,9 @@ tasker/
 │   │                         # attachments/ — вложения: очередь загрузки (presigned POST), зона перетаскивания, список, миниатюры;
 │   │                         # subtasks/ — подзадачи: раздел в задаче, строка (вывести на доску, отвязать), быстрое добавление, выбор родителя, хлебные крошки
 │   │   ├── users/            # UserAvatar (фото или инициалы), UserHoverCard (карточка участника при наведении, данные — по запросу)
-│   │   ├── profile/          # Свой профиль: вкладки, фото, форма «О себе», матрица настроек уведомлений; api-tokens/ — токены доступа (выпуск с командами подключения, отзыв)
+│   │   ├── profile/          # Свой профиль: вкладки, фото, форма «О себе», матрица настроек уведомлений
+│   │   ├── api-tokens/       # Токены доступа (профиль и страница агента): таблица, выпуск с областями и командами подключения, отзыв, лента журнала
+│   │   ├── agents/           # Раздел «Агенты» (таблица, диалог создания и правки), ViaAgentBadge — пометка «через Claude Code»
 │   │   ├── notifications/    # Колокольчик (опрос счётчика), элемент и лента уведомлений
 │   │   ├── github/           # Раздел GitHub задачи, индикатор PR (доска, список), настройки GitHub пространства и проекта, привязка аккаунта, кнопка «Войти через GitHub»
 │   │   ├── documents/        # Раздел «Документы»: дерево папок, список и фильтры (URL), загрузка, диалоги; markdown/ — безопасный рендер;
@@ -137,13 +140,15 @@ tasker/
 | `src/modules/workspaces/index.ts` | Пространства, участники, приглашения: actions и read-функции (`client.ts` — для клиентских компонентов) |
 | `src/modules/projects/index.ts` | Проекты и статусы: actions и read-функции (`listProjects`, `getProject`, `listStatuses`, `listWorkspaceStatuses`; `client.ts` — для клиентских компонентов, в т.ч. `moveStatusAction` и чистая функция `reorderStatuses`) |
 | `src/modules/tasks/index.ts` | Задачи, размещения, комментарии и вложения: actions и read-функции (`getTaskByNumber`, `listSubtasks`, `listTaskComments`, `listTaskAttachments`, `getAttachmentDownload`, `listTasks`, `listProjectTasks`, `getBoardCards`, `getMemberTaskSummary`, `getTaskSummaries`, `parseTaskListParams`; сервисы изменения для agent-mcp — `createTask`, `updateTask`, `addToProject`, `changeStatus`, `setTaskParent`, `createComment`; чистые функции упоминаний `extractMentions`, `filterMentionCandidates`, `findMentionQuery`; `client.ts` — для клиентских компонентов, в т.ч. `movePlacementAction`, `setTaskParentAction`, `searchParentCandidatesAction` и чистые функции переноса карточек) |
-| `src/modules/documents/index.ts` | Документы пространства: `listDocuments`, `parseDocumentListParams`, `listFolderTree`, `getDocument`, `getDocumentText`, `getDocumentFile` (для `/api/documents/[id]/file`), `getWorkspaceStorageUsage`, `listTags`, `listTaskDocuments`, `listDocumentTasks`; actions папок, заметок, загрузки, тегов и связей с задачами (`client.ts` — в т.ч. `applyMarkdownFormat`, `parseDelimited`) |
+| `src/modules/documents/index.ts` | Документы пространства: `listDocuments`, `parseDocumentListParams`, `listFolderTree`, `getDocument`, `getDocumentText`, `getDocumentFile` (для `/api/documents/[id]/file`), `getWorkspaceStorageUsage`, `listTags`, `listTaskDocuments`, `listDocumentTasks`; сервисы изменения для agent-mcp — `createNote`, `updateNote`, `createFolder`, `setDocumentTags`, `linkDocumentToTask`, `unlinkDocumentFromTask`, `requestDocumentUpload`, `completeDocumentUpload`; actions папок, заметок, загрузки, тегов и связей с задачами (`client.ts` — в т.ч. `applyMarkdownFormat`, `parseDelimited`) |
 | `src/modules/profiles/index.ts` | Профили: `getMyProfile`, `getProfileCards`, `getAvatarDownload`, `prepareAvatarCleanup`; actions профиля и фото (`client.ts` — в т.ч. `isAvatarUrl`) |
 | `src/modules/notifications/index.ts` | Уведомления: `notify`, `notifyByEmail` (для модулей), `listMyNotifications`, `countMyUnreadNotifications`, `getMyNotificationPreferences`; actions прочтения и настроек (`client.ts`) |
 | `src/modules/admin/index.ts` | Пользователи ресурса: `listAdminUsers`, `parseAdminUserListParams`; actions блокировки, роли, сессий и удаления (`client.ts` — для клиентских компонентов) |
 | `src/modules/integrations/github/index.ts` | GitHub: `isGithubEnabled`, `handleGithubWebhook`, `verifyGithubWebhookSignature`, `completeInstallation`, `getGithubSettings`, `listTaskPullRequests`, `listTaskBranchesAndCommits`, `getPullRequestBadges`, `getProjectAutomation`, `getMyGithubAccount`, `getGithubAppSetup`, `completeGithubAppManifest`, `getWorkspaceGithubSummary` (сводка для любого участника), `findTaskReferences` (`client.ts` — actions установки, привязки, автоматизации, типы DTO, `suggestBranchName`) |
-| `src/modules/api-tokens/index.ts` | Токены агентов: `authenticateApiToken`, `listMyApiTokens` (`client.ts` — actions выпуска и отзыва, `buildClaudeMcpCommand`, `buildMcpJson`) |
-| `src/modules/agent-mcp/index.ts` | `handleMcpRequest` — MCP-сервер Tasker (инструменты в `tools/`, правила GitHub и промпты — чистые функции в `models/`) |
+| `src/modules/agents/index.ts` | Агенты пространства: `listAgents`, `getAgent` (`client.ts` — actions создания, правки, отключения и включения) |
+| `src/modules/api-tokens/index.ts` | Токены: `authenticateApiToken`, `listMyApiTokens`, `listAgentTokens`, `revokeAllUserApiTokens` (для agents), `hasScope`, журнал — `recordActivity`, `listAgentActivity`, `listTokenActivity`, `parseActivityCursor` (`client.ts` — actions выпуска и отзыва личных и агентских токенов, области, `buildClaudeMcpCommand`, `buildMcpJson`) |
+| `src/modules/agent-mcp/index.ts` | `handleMcpRequest` — MCP-сервер Tasker (инструменты в `tools/`, области, правила GitHub, документы и промпты — чистые функции в `models/`) |
+| `src/shared/auth/agent-session-guard.ts` | Хук Better Auth: агенту пространства сессия не выдаётся |
 | `src/app/api/mcp/route.ts` | MCP-эндпоинт для агентов |
 | `src/app/api/webhooks/github/route.ts` | Вебхуки GitHub App |
 | `src/modules/auth/index.ts` | `signInAction`, `signUpAction`, `signOutAction`, Zod-схемы форм |

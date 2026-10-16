@@ -47,6 +47,7 @@ function sessionOf(overrides: Partial<AuthSession['user']> = {}): AuthSession {
       image: null,
       role: 'user',
       banned: false,
+      isAgent: false,
       ...overrides,
     },
     session: { id: 'session-1', expiresAt: new Date('2030-01-01') },

@@ -20,7 +20,8 @@ const TASK_SELECT = {
   _count: { select: { subtasks: true } },
   workspace: { select: { slug: true, name: true, taskKey: true } },
   assignee: { select: { id: true, name: true, image: true } },
-  createdBy: { select: { id: true, name: true } },
+  createdBy: { select: { id: true, name: true, isAgent: true } },
+  createdViaToken: { select: { name: true } },
   placements: PLACEMENT_SELECT,
 } as const satisfies Prisma.TaskSelect;
 
@@ -63,6 +64,8 @@ export const taskRepository = {
       workspaceId: string;
       number: number;
       createdById: string;
+      /** Токен MCP, через который создана задача (пометка «через агента»). */
+      createdViaTokenId: string | null;
       parentId: string | null;
     },
   ) {

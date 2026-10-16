@@ -13,6 +13,8 @@ export interface MemberDto {
   canManageDocuments: boolean;
   joinedAt: Date;
   isCurrentUser: boolean;
+  /** Агент пространства: им управляют в разделе «Агенты», а не в списке участников. */
+  isAgent: boolean;
 }
 
 /** Участник пространства по userId — для публичного профиля и карточки при наведении. */
@@ -30,6 +32,9 @@ export interface WorkspaceMemberDto {
   joinedAt: Date;
   registeredAt: Date;
   isCurrentUser: boolean;
+  isAgent: boolean;
+  /** Ответственный агента; у человека и агента без ответственного — null. */
+  responsible: { userId: string; name: string } | null;
 }
 
 /** Имя и email участника — кандидат для @упоминания. */
@@ -38,6 +43,8 @@ export interface MemberIdentityDto {
   name: string;
   email: string;
   image: string | null;
+  /** Агент — в списках выбора с подписью «(агент)». */
+  isAgent: boolean;
 }
 
 /** Пространство, где пользователь — единственный владелец. */

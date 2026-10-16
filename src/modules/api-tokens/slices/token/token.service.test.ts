@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceAccess } from '@/shared/access';
 import type * as AccessModule from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
-import { NotFoundError, UnauthorizedError, ValidationError } from '@/shared/errors';
+import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from '@/shared/errors';
 
 import { generateApiToken, hashApiToken } from '../../models';
 
@@ -21,6 +21,13 @@ const findOwned =
 const revoke = vi.fn<(tokenId: string, now: Date) => Promise<boolean>>();
 const findByHash = vi.fn<(hash: string) => Promise<ReturnType<typeof authRow> | null>>();
 const touch = vi.fn<(tokenId: string, now: Date, before: Date) => Promise<void>>();
+const findAgent =
+  vi.fn<
+    (
+      agentId: string,
+    ) => Promise<{ userId: string; workspaceId: string; disabledAt: Date | null } | null>
+  >();
+const listForUser = vi.fn<(userId: string) => Promise<ReturnType<typeof tokenRow>[]>>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
@@ -35,10 +42,19 @@ vi.mock('./token.repository', () => ({
     revoke: (tokenId: string, now: Date) => revoke(tokenId, now),
     findByHash: (hash: string) => findByHash(hash),
     touch: (tokenId: string, now: Date, before: Date) => touch(tokenId, now, before),
+    findAgent: (agentId: string) => findAgent(agentId),
+    listForUser: (userId: string) => listForUser(userId),
   },
 }));
 
-const { authenticateApiToken, createApiToken, revokeApiToken } = await import('./token.service');
+const {
+  authenticateApiToken,
+  createAgentToken,
+  createApiToken,
+  listAgentTokens,
+  revokeAgentToken,
+  revokeApiToken,
+} = await import('./token.service');
 
 const session: AuthSession = {
   user: {
@@ -48,6 +64,7 @@ const session: AuthSession = {
     image: null,
     role: 'admin',
     banned: false,
+    isAgent: false,
   },
   session: { id: 's-1', expiresAt: new Date('2030-01-01') },
 };
@@ -65,6 +82,7 @@ function tokenRow() {
     id: 'tok-1',
     name: 'Claude Code',
     prefix: 'tkr_abcdefgh',
+    scopes: ['read', 'tasks'],
     createdAt: new Date('2026-10-16'),
     lastUsedAt: null,
     expiresAt: null,
@@ -76,7 +94,9 @@ function tokenRow() {
 function authRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'tok-1',
+    name: 'Claude Code',
     prefix: 'tkr_abcdefgh',
+    scopes: ['read', 'tasks', 'documents'],
     expiresAt: null as Date | null,
     revokedAt: null as Date | null,
     lastUsedAt: null as Date | null,
@@ -87,6 +107,13 @@ function authRow(overrides: Record<string, unknown> = {}) {
       image: null,
       banned: false as boolean | null,
       banExpires: null as Date | null,
+      isAgent: false,
+      agent: null as {
+        workspaceId: string;
+        disabledAt: Date | null;
+        responsibleUserId: string | null;
+        responsible?: { name: string } | null;
+      } | null,
     },
     workspace: { id: 'ws-1', slug: 'ws', name: 'Пространство', taskKey: 'TSK' },
     ...overrides,
@@ -108,11 +135,18 @@ describe('createApiToken', () => {
       name: 'Claude Code',
       workspaceId: 'ws-1',
       expiry: 'never',
+      scopes: ['tasks'],
     });
 
     expect(requireWorkspaceAccess).toHaveBeenCalledWith(session, 'ws-1');
     const data = create.mock.calls[0]![0];
-    expect(data).toMatchObject({ userId: 'user-1', workspaceId: 'ws-1', expiresAt: null });
+    expect(data).toMatchObject({
+      userId: 'user-1',
+      issuedById: 'user-1',
+      workspaceId: 'ws-1',
+      expiresAt: null,
+      scopes: ['read', 'tasks'],
+    });
     expect(data.tokenHash).toBe(hashApiToken(result.secret));
     expect(data).not.toHaveProperty('token');
     expect(result.secret.startsWith(data.prefix as string)).toBe(true);
@@ -122,7 +156,7 @@ describe('createApiToken', () => {
   it('отказывает сверх лимита действующих токенов', async () => {
     countActive.mockResolvedValue(20);
     await expect(
-      createApiToken(session, { name: 'x', workspaceId: 'ws-1', expiry: '30d' }),
+      createApiToken(session, { name: 'x', workspaceId: 'ws-1', expiry: '30d', scopes: ['read'] }),
     ).rejects.toBeInstanceOf(ValidationError);
     expect(create).not.toHaveBeenCalled();
   });
@@ -130,7 +164,7 @@ describe('createApiToken', () => {
   it('неучастнику пространства не выпускает', async () => {
     requireWorkspaceAccess.mockRejectedValue(new NotFoundError());
     await expect(
-      createApiToken(session, { name: 'x', workspaceId: 'ws-2', expiry: '30d' }),
+      createApiToken(session, { name: 'x', workspaceId: 'ws-2', expiry: '30d', scopes: ['read'] }),
     ).rejects.toBeInstanceOf(NotFoundError);
     expect(create).not.toHaveBeenCalled();
   });
@@ -170,6 +204,53 @@ describe('authenticateApiToken', () => {
     expect(ctx.workspace).toEqual({ id: 'ws-1', slug: 'ws', name: 'Пространство', taskKey: 'TSK' });
     expect(requireWorkspaceAccess).toHaveBeenCalledWith(ctx.session, 'ws-1');
     expect(touch).toHaveBeenCalledOnce();
+    expect(ctx.session.via).toEqual({
+      tokenId: 'tok-1',
+      tokenName: 'Claude Code',
+      scopes: ['read', 'tasks', 'documents'],
+      agent: null,
+    });
+    expect(ctx.via).toBe(ctx.session.via);
+  });
+
+  it('для токена агента — сессия агента и агент в via', async () => {
+    findByHash.mockResolvedValue(
+      authRow({
+        user: {
+          ...authRow().user,
+          id: 'agent-1',
+          name: 'Claude — backend',
+          isAgent: true,
+          agent: {
+            workspaceId: 'ws-1',
+            disabledAt: null,
+            responsibleUserId: 'user-1',
+            responsible: { name: 'Анна' },
+          },
+        },
+      }),
+    );
+    const ctx = await authenticateApiToken(header);
+    expect(ctx.session.user).toMatchObject({ id: 'agent-1', isAgent: true });
+    expect(ctx.via.agent).toEqual({
+      name: 'Claude — backend',
+      responsibleUserId: 'user-1',
+      responsibleName: 'Анна',
+    });
+  });
+
+  it('токен отключённого агента → UNAUTHORIZED', async () => {
+    findByHash.mockResolvedValue(
+      authRow({
+        user: {
+          ...authRow().user,
+          isAgent: true,
+          agent: { workspaceId: 'ws-1', disabledAt: new Date(), responsibleUserId: null },
+        },
+      }),
+    );
+    await expect(authenticateApiToken(header)).rejects.toBeInstanceOf(UnauthorizedError);
+    expect(requireWorkspaceAccess).not.toHaveBeenCalled();
   });
 
   it('не обновляет lastUsedAt чаще раза в минуту', async () => {
@@ -206,5 +287,58 @@ describe('authenticateApiToken', () => {
     findByHash.mockResolvedValue(authRow());
     requireWorkspaceAccess.mockRejectedValue(new NotFoundError());
     await expect(authenticateApiToken(header)).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+});
+
+describe('agent tokens', () => {
+  const input = {
+    name: 'CI',
+    workspaceId: 'ws-1',
+    agentId: 'agent-1',
+    expiry: '90d' as const,
+    scopes: ['read' as const, 'documents' as const],
+  };
+
+  beforeEach(() => {
+    findAgent.mockResolvedValue({ userId: 'agent-1', workspaceId: 'ws-1', disabledAt: null });
+  });
+
+  it('владелец выпускает токен агенту: userId — агент, issuedById — владелец', async () => {
+    await createAgentToken(session, input);
+    expect(requireWorkspaceAccess).toHaveBeenCalledWith(session, 'ws-1', 'owner');
+    expect(create.mock.calls[0]![0]).toMatchObject({
+      userId: 'agent-1',
+      issuedById: 'user-1',
+      scopes: ['read', 'documents'],
+    });
+  });
+
+  it('не владелец не выпускает', async () => {
+    requireWorkspaceAccess.mockRejectedValue(new ForbiddenError());
+    await expect(createAgentToken(session, input)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('агент другого пространства — NOT_FOUND', async () => {
+    findAgent.mockResolvedValue({ userId: 'agent-1', workspaceId: 'ws-2', disabledAt: null });
+    await expect(createAgentToken(session, input)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(listAgentTokens(session, 'ws-1', 'agent-1')).rejects.toBeInstanceOf(NotFoundError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('отключённому агенту не выпускает', async () => {
+    findAgent.mockResolvedValue({ userId: 'agent-1', workspaceId: 'ws-1', disabledAt: new Date() });
+    await expect(createAgentToken(session, input)).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('отзыв — только токена этого агента', async () => {
+    findOwned.mockResolvedValue(null);
+    await expect(
+      revokeAgentToken(session, { workspaceId: 'ws-1', agentId: 'agent-1', tokenId: 'tok-x' }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    findOwned.mockResolvedValue({ id: 'tok-1', workspaceId: 'ws-1', revokedAt: null });
+    await revokeAgentToken(session, { workspaceId: 'ws-1', agentId: 'agent-1', tokenId: 'tok-1' });
+    expect(findOwned).toHaveBeenLastCalledWith('agent-1', 'tok-1');
+    expect(revoke).toHaveBeenCalledWith('tok-1', expect.any(Date));
   });
 });

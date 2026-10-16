@@ -10,6 +10,8 @@ const workspaceRef = {
   workspaceName: z.string(),
   /** Имя автора действия на момент события; null — неизвестен. */
   actorName: z.string().nullable(),
+  /** Уведомление адресовано агенту пространства и перенаправлено человеку (ответственному). */
+  forAgent: z.object({ name: z.string() }).optional(),
 };
 
 const taskRef = {
@@ -111,6 +113,12 @@ export interface NotificationText {
 
 /** Текст уведомления для колокольчика, страницы и письма. */
 export function formatNotificationText(notification: TypedNotification): NotificationText {
+  const text = baseNotificationText(notification);
+  const agent = notification.payload.forAgent;
+  return agent ? { ...text, title: `${text.title} (для агента ${agent.name})` } : text;
+}
+
+function baseNotificationText(notification: TypedNotification): NotificationText {
   switch (notification.type) {
     case 'mention':
       return {

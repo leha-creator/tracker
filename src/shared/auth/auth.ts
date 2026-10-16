@@ -12,6 +12,8 @@ import { getEnv } from '@/shared/env';
 import { getGithubAppConfig, type GithubAppConfig } from '@/shared/github-app';
 import { createLogger } from '@/shared/logger';
 
+import { allowSessionCreation } from './agent-session-guard';
+
 const log = createLogger('auth');
 
 /** Срок жизни сессии и период её продления. */
@@ -104,6 +106,11 @@ function workspacesPlugin() {
   });
 }
 
+async function findIsAgent(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { isAgent: true } });
+  return user?.isAgent ?? false;
+}
+
 /** Провайдер GitHub (OAuth GitHub App) или ничего, если интеграция не настроена. */
 function githubProvider(github: GithubAppConfig | null) {
   if (!github) return {};
@@ -118,6 +125,13 @@ function createAuth(github: GithubAppConfig | null) {
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
     database: prismaAdapter(prisma, { provider: 'postgresql' }),
+    user: {
+      additionalFields: {
+        // Служебный пользователь-агент пространства. input: false — эндпоинты поле не принимают,
+        // его проставляет только сервис агентов (src/modules/agents).
+        isAgent: { type: 'boolean', defaultValue: false, required: false, input: false },
+      },
+    },
     emailAndPassword: {
       enabled: true,
       minPasswordLength: PASSWORD_MIN_LENGTH,
@@ -161,6 +175,15 @@ function createAuth(github: GithubAppConfig | null) {
           after: (user) => {
             log.info({ userId: user.id }, '[auth.hooks] user created');
             return Promise.resolve();
+          },
+        },
+      },
+      session: {
+        create: {
+          // Агент пространства (User.isAgent) не входит в интерфейс — в том числе через impersonation.
+          before: async (session) => {
+            const allowed = await allowSessionCreation(session, findIsAgent);
+            return allowed ? undefined : false;
           },
         },
       },

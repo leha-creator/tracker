@@ -54,6 +54,11 @@ async function loadTarget(actorId: string, userId: string, scope: string): Promi
     log.warn({ actorId, userId }, `[${scope}] user not found`);
     throw new NotFoundError('Пользователь не найден');
   }
+  // Агентом управляет владелец пространства (модуль agents), в админке его как будто нет.
+  if (row.isAgent) {
+    log.warn({ actorId, userId, scope }, '[admin.user] agent hidden');
+    throw new NotFoundError('Пользователь не найден');
+  }
   const target: TargetUser = { id: row.id, email: row.email, role: parseGlobalRole(row.role) };
   try {
     assertCanManageUser(actorId, target);

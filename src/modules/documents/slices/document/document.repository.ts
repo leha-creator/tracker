@@ -26,6 +26,8 @@ export const documentRepository = {
     titleKey: string;
     content: string;
     userId: string;
+    /** Токен MCP, через который создана заметка (пометка «через агента»). */
+    createdViaTokenId: string | null;
   }): Promise<DocumentRow> {
     const { userId, ...rest } = data;
     return prisma.document.create({

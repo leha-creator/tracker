@@ -11,7 +11,8 @@ function bannedNow(now: Date): Prisma.UserWhereInput {
 }
 
 export function buildUserWhere(query: AdminUserListQuery, now: Date): Prisma.UserWhereInput {
-  const and: Prisma.UserWhereInput[] = [];
+  // Агенты пространств — служебные пользователи: в админке ресурса их нет (модуль agents).
+  const and: Prisma.UserWhereInput[] = [{ isAgent: false }];
   if (query.q) {
     and.push({
       OR: [
@@ -25,7 +26,7 @@ export function buildUserWhere(query: AdminUserListQuery, now: Date): Prisma.Use
   if (query.role) and.push(query.role === 'admin' ? isAdminRole : { NOT: isAdminRole });
   if (query.status === 'banned') and.push(bannedNow(now));
   if (query.status === 'active') and.push({ NOT: bannedNow(now) });
-  return and.length > 0 ? { AND: and } : {};
+  return { AND: and };
 }
 
 export function buildUserOrderBy(query: AdminUserListQuery): Prisma.UserOrderByWithRelationInput[] {
@@ -69,7 +70,14 @@ export const userRepository = {
   findById(id: string) {
     return prisma.user.findUnique({
       where: { id },
-      select: { id: true, email: true, role: true, banned: true, banExpires: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        banned: true,
+        banExpires: true,
+        isAgent: true,
+      },
     });
   },
 };

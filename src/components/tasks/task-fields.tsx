@@ -32,6 +32,8 @@ export interface MemberOption {
   name: string;
   /** Адрес фото; без него — инициалы. */
   image?: string | null;
+  /** Агент пространства — с подписью «(агент)». */
+  isAgent?: boolean;
 }
 
 // У radix Select нет пустого значения: «не выбрано» — отдельный ключ, в форму уходит ''.
@@ -121,6 +123,7 @@ export function AssigneeSelect({
             <SelectItem key={member.userId} value={member.userId}>
               <UserAvatar user={{ name: member.name, image: member.image ?? null }} />
               <span className="truncate">{member.name}</span>
+              {member.isAgent && <span className="text-muted-foreground">(агент)</span>}
             </SelectItem>
           ))}
         </SelectContent>

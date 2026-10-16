@@ -1,4 +1,5 @@
 import type { ApiTokenState } from '../../models/api-token';
+import type { ApiTokenScope } from '../../models/scopes';
 
 /** Токен в списке профиля: без хеша и без самого токена. */
 export interface ApiTokenDto {
@@ -6,6 +7,8 @@ export interface ApiTokenDto {
   name: string;
   /** `tkr_abcd1234` — начало токена. */
   prefix: string;
+  /** Области токена; всегда содержат "read". */
+  scopes: ApiTokenScope[];
   workspace: { id: string; slug: string; name: string };
   createdAt: Date;
   lastUsedAt: Date | null;

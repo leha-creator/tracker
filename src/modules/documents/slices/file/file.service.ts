@@ -157,6 +157,7 @@ export async function requestDocumentUpload(
       size,
       storageKey,
       userId,
+      createdViaTokenId: session.via?.tokenId ?? null,
     });
   });
 

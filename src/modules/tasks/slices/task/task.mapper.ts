@@ -6,7 +6,7 @@ import { formatTaskKey, isTaskOverdue, toIsoDate } from '../../models';
 import type { TaskRow } from './task.repository';
 import type { TaskListRow } from './task.select';
 import type { TaskAncestorDto } from '../subtask/subtask.dto';
-import type { TaskListItemDto, TaskPlacementDto, TaskUserDto } from './task.dto';
+import type { TaskListItemDto, TaskPlacementDto, CreatedViaDto, TaskUserDto } from './task.dto';
 
 type PlacementRow = TaskRow['placements'][number];
 
@@ -25,6 +25,18 @@ export function toUserDto(
   user: { id: string; name: string; image?: string | null } | null,
 ): TaskUserDto | null {
   return user ? { userId: user.id, name: user.name, image: user.image ?? null } : null;
+}
+
+/**
+ * Пометка «через агента»: токен, через который создано, если автор — человек. У автора-агента
+ * пометку не показываем — и так видно, что это агент.
+ */
+export function toCreatedVia(
+  author: { isAgent: boolean } | null,
+  token: { name: string } | null,
+): CreatedViaDto | null {
+  if (!token || !author || author.isAgent) return null;
+  return { tokenName: token.name };
 }
 
 /** Родитель задачи для метки «↳ TSK-12» на карточке и в списках. */

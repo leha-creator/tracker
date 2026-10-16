@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthSession } from '@/shared/auth';
 import { NotFoundError } from '@/shared/errors';
 
-import type { NotificationChannels, NotificationEvent, NotificationType } from '../../models';
+import type {
+  AgentRoute,
+  NotificationChannels,
+  NotificationEvent,
+  NotificationType,
+} from '../../models';
 
 const listForUsers =
   vi.fn<
@@ -14,6 +19,8 @@ const findRecipients =
 const createMany =
   vi.fn<(rows: { userId: string }[]) => Promise<{ id: string; userId: string }[]>>();
 const findUserIdByEmail = vi.fn<(email: string) => Promise<string | null>>();
+const findAgentRoutes =
+  vi.fn<(ws: string, ids: readonly string[]) => Promise<Map<string, AgentRoute>>>();
 const list = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
 const exists = vi.fn<(userId: string, id: string) => Promise<boolean>>();
 const markRead = vi.fn<(userId: string, ids?: readonly string[]) => Promise<number>>();
@@ -36,6 +43,7 @@ vi.mock('../preference/preference.repository', () => ({
 vi.mock('./notification.repository', () => ({
   notificationRepository: {
     findRecipients: (ids: readonly string[]) => findRecipients(ids),
+    findAgentRoutes: (ws: string, ids: readonly string[]) => findAgentRoutes(ws, ids),
     createMany: (rows: { userId: string }[]) => createMany(rows),
     findUserIdByEmail: (email: string) => findUserIdByEmail(email),
     list: (...args: unknown[]) => list(...args),
@@ -55,6 +63,7 @@ const session: AuthSession = {
     image: null,
     role: 'user',
     banned: false,
+    isAgent: false,
   },
   session: { id: 's-1', expiresAt: new Date('2030-01-01') },
 };
@@ -97,6 +106,7 @@ beforeEach(() => {
     Promise.resolve(rows.map((row, index) => ({ id: `n${index}`, userId: row.userId }))),
   );
   sendMail.mockResolvedValue({ messageId: 'm1' });
+  findAgentRoutes.mockResolvedValue(new Map());
 });
 
 describe('notify', () => {
@@ -128,6 +138,31 @@ describe('notify', () => {
     expect(createMany).toHaveBeenCalledWith([]);
     await flushAfter();
     expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it('reroutes an agent notification to the responsible with forAgent', async () => {
+    findAgentRoutes.mockResolvedValue(
+      new Map([
+        [
+          'agent-1',
+          {
+            agentId: 'agent-1',
+            name: 'Claude',
+            workspaceId: 'ws-1',
+            responsibleUserId: 'u1',
+            ownerIds: ['owner'],
+          },
+        ],
+      ]),
+    );
+    await notify([event('mention', 'agent-1')]);
+    expect(findAgentRoutes).toHaveBeenCalledWith('ws-1', ['agent-1']);
+    const rows = createMany.mock.calls[0]![0] as {
+      userId: string;
+      payload: { forAgent?: { name: string } };
+    }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ userId: 'u1', payload: { forAgent: { name: 'Claude' } } });
   });
 
   it('skips the actor and unknown or banned users', async () => {
