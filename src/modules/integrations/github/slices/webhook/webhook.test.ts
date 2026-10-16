@@ -46,6 +46,8 @@ beforeEach(() => {
   transaction.mockImplementation((run: (tx: unknown) => Promise<unknown>) => run({ tx: true }));
   webhookRepo.recordDelivery.mockResolvedValue();
   webhookRepo.forgetDelivery.mockResolvedValue();
+  // Очистка старых доставок запускается случайно (PURGE_PROBABILITY): без ответа мока тест мигает.
+  webhookRepo.purgeDeliveriesBefore.mockResolvedValue(0);
   repo.syncRepositories.mockResolvedValue({ removed: 0 });
   repo.removeRepositories.mockResolvedValue(1);
 });
