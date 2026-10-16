@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { PullRequestIndicator } from '@/components/github/pull-request-indicator';
 import { StatusDot } from '@/components/projects/status-badge';
 import {
   Table,
@@ -15,6 +16,7 @@ import {
   type TaskListScope,
   type TaskPlacementDto,
 } from '@/modules/tasks/client';
+import type { PullRequestBadgesDto } from '@/modules/integrations/github/client';
 
 import { UserHoverCard } from '@/components/users/user-hover-card';
 
@@ -36,6 +38,8 @@ interface TaskListTableProps {
   searchParams: Record<string, string | string[] | undefined>;
   /** Проект вкладки «Список»: колонка «Статус» показывает статус в нём. */
   projectId?: string;
+  /** Индикаторы PR по id задачи (интеграция GitHub). */
+  pullRequests?: PullRequestBadgesDto;
 }
 
 /** Таблица задач. Сортируемые заголовки — клиентские, строки рендерятся на сервере. */
@@ -45,6 +49,7 @@ export function TaskListTable({
   basePath,
   searchParams,
   projectId,
+  pullRequests = {},
 }: TaskListTableProps) {
   const panel = parseTaskPanelParam(searchParams[TASK_PANEL_PARAM]);
   const openNumber = panel.mode === 'view' ? panel.number : null;
@@ -71,7 +76,12 @@ export function TaskListTable({
               key={task.id}
               data-state={task.number === openNumber ? 'selected' : undefined}
             >
-              <TableCell className="text-muted-foreground tabular-nums">{task.key}</TableCell>
+              <TableCell className="text-muted-foreground tabular-nums">
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                  {task.key}
+                  {pullRequests[task.id] && <PullRequestIndicator badge={pullRequests[task.id]!} />}
+                </span>
+              </TableCell>
               <TableCell className="max-w-80">
                 <Link
                   href={taskPanelHref(basePath, searchParams, task.number)}

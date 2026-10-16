@@ -1,9 +1,12 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Suspense } from 'react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DeleteWorkspaceDialog } from '@/components/workspaces/delete-workspace-dialog';
 import { RenameWorkspaceForm } from '@/components/workspaces/rename-workspace-form';
+import { TaskKeyForm } from '@/components/workspaces/task-key-form';
+import { isGithubEnabled } from '@/modules/integrations/github';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
 
 export const metadata: Metadata = { title: 'Настройки пространства — Tasker' };
@@ -37,6 +40,35 @@ async function SettingsSection({
           <RenameWorkspaceForm workspaceId={workspace.id} name={workspace.name} />
         </CardContent>
       </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Ключ задач</CardTitle>
+          <CardDescription>
+            Префикс номеров задач. По нему ветки, PR и коммиты GitHub привязываются к задачам.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TaskKeyForm workspaceId={workspace.id} taskKey={workspace.taskKey} />
+        </CardContent>
+      </Card>
+      {isGithubEnabled() && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Интеграция с GitHub</CardTitle>
+            <CardDescription>
+              Репозитории пространства: PR, ветки и коммиты привязываются к задачам по ключу.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link
+              href={`/w/${workspace.slug}/settings/github`}
+              className="text-sm text-primary hover:underline"
+            >
+              Настроить GitHub
+            </Link>
+          </CardContent>
+        </Card>
+      )}
       <Card className="border-destructive/40">
         <CardHeader>
           <CardTitle>Опасная зона</CardTitle>

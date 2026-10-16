@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { TaskPanel } from '@/components/tasks/task-panel/task-panel';
+import { getPullRequestBadges } from '@/modules/integrations/github';
 import { listStatuses } from '@/modules/projects';
 import { getBoardCards } from '@/modules/tasks';
 
@@ -66,12 +67,15 @@ async function BoardSection({ params }: Pick<Props, 'params'>) {
     listStatuses(session, workspace.id, project.id),
     getBoardCards(session, workspace.id, project.id),
   ]);
+  const taskIds = Object.values(cards).flatMap((column) => column.map((card) => card.taskId));
+  const pullRequests = await getPullRequestBadges(session, workspace.id, taskIds);
   return (
     <KanbanBoard
       workspaceId={workspace.id}
       projectId={project.id}
       statuses={statuses}
       cards={cards}
+      pullRequests={pullRequests}
     />
   );
 }

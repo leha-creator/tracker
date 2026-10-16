@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 
 import { resolveAuthPageReturnTo } from '@/components/auth/auth-redirect';
 import { FormSkeleton } from '@/components/auth/form-skeleton';
+import { GithubSignIn } from '@/components/auth/github-sign-in';
 import { SignInForm } from '@/components/auth/sign-in-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -27,5 +28,11 @@ export default function LoginPage({ searchParams }: PageProps<'/login'>) {
 
 async function SignInSection({ searchParams }: Pick<PageProps<'/login'>, 'searchParams'>) {
   const returnTo = await resolveAuthPageReturnTo(searchParams);
-  return <SignInForm returnTo={returnTo} />;
+  const { error } = await searchParams;
+  return (
+    <div className="grid gap-6">
+      <SignInForm returnTo={returnTo} />
+      <GithubSignIn returnTo={returnTo} errorCode={typeof error === 'string' ? error : undefined} />
+    </div>
+  );
 }

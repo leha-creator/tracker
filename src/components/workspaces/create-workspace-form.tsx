@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import {
   createWorkspaceAction,
   slugify,
+  suggestTaskKey,
+  TASK_KEY_MAX_LENGTH,
   SLUG_MAX_LENGTH,
   WORKSPACE_NAME_MAX_LENGTH,
   type FormState,
@@ -21,6 +23,7 @@ export function CreateWorkspaceForm() {
   const fieldErrors = failure?.error.fieldErrors;
   const [name, setName] = useState(failure?.values.name ?? '');
   const suggestedSlug = slugify(name);
+  const suggestedTaskKey = suggestTaskKey(name);
 
   return (
     <form action={formAction} className="grid gap-4" noValidate>
@@ -47,6 +50,22 @@ export function CreateWorkspaceForm() {
         <p className="text-sm text-muted-foreground">
           Ссылка на пространство: /w/{suggestedSlug || '…'}. Оставьте поле пустым, чтобы адрес
           составился из названия.
+        </p>
+      </div>
+      <div className="grid gap-1">
+        <FormField
+          name="taskKey"
+          label="Ключ задач"
+          placeholder={suggestedTaskKey}
+          maxLength={TASK_KEY_MAX_LENGTH}
+          autoComplete="off"
+          className="uppercase placeholder:normal-case"
+          defaultValue={failure?.values.taskKey}
+          errors={fieldErrors?.taskKey}
+        />
+        <p className="text-sm text-muted-foreground">
+          Задачи будут называться {suggestedTaskKey}-1, {suggestedTaskKey}-2… Ключ в названии ветки
+          или PR привяжет их к задаче. Оставьте поле пустым, чтобы взять {suggestedTaskKey}.
         </p>
       </div>
       <Button type="submit" disabled={pending}>

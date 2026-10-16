@@ -45,7 +45,7 @@ function toBoardCard(row: BoardPlacementRow, today: string): BoardCardDto {
   return {
     taskId: row.taskId,
     number: row.task.number,
-    key: formatTaskKey(row.task.number),
+    key: formatTaskKey(row.task.number, row.task.workspace.taskKey),
     title: row.task.title,
     priority: row.task.priority,
     dueDate,
@@ -297,7 +297,7 @@ export async function getTaskSummaries(
   return rows.map((row) => ({
     id: row.id,
     number: row.number,
-    key: formatTaskKey(row.number),
+    key: formatTaskKey(row.number, row.workspace.taskKey),
     title: row.title,
     isDone: !isTaskOpen(row.placements.map((placement) => placement.status.category)),
   }));

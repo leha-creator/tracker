@@ -31,7 +31,7 @@ export interface WorkspaceAccess {
 
 export interface WorkspaceContext {
   session: AuthSession;
-  workspace: { id: string; slug: string; name: string };
+  workspace: { id: string; slug: string; name: string; taskKey: string | null };
   access: WorkspaceAccess;
 }
 
@@ -50,6 +50,7 @@ const findWorkspaceBySlug = cache((slug: string, userId: string) =>
       id: true,
       slug: true,
       name: true,
+      taskKey: true,
       members: {
         where: { userId },
         select: { id: true, role: true, canManageProjects: true, canManageDocuments: true },
@@ -157,7 +158,12 @@ export async function requireWorkspaceAccessBySlug(
   log.debug({ userId, workspaceId: workspace.id, role }, '[access.requireWorkspaceAccessBySlug]');
   return {
     session,
-    workspace: { id: workspace.id, slug: workspace.slug, name: workspace.name },
+    workspace: {
+      id: workspace.id,
+      slug: workspace.slug,
+      name: workspace.name,
+      taskKey: workspace.taskKey,
+    },
     access: {
       userId,
       workspaceId: workspace.id,

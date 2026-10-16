@@ -23,7 +23,13 @@ const NO_DB_IN_PRESENTATION = [
 // Импорт модуля снаружи — только через его index.ts.
 const NO_DEEP_MODULE_IMPORTS = [
   {
-    group: ['@/modules/*/slices/**', '@/modules/*/models/**', '@/modules/**/slices/**'],
+    // `**` — и для вложенных модулей (integrations/github).
+    group: [
+      '@/modules/*/slices/**',
+      '@/modules/*/models/**',
+      '@/modules/**/slices/**',
+      '@/modules/**/models/**',
+    ],
     message: 'Импортируйте модуль только через его публичный API: @/modules/<module>.',
   },
 ];

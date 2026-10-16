@@ -1,0 +1,14 @@
+{
+  "action": "created",
+  "installation": {
+    "id": 77,
+    "account": { "id": 9, "login": "acme", "type": "Organization" },
+    "suspended_at": null,
+    "permissions": { "pull_requests": "read" }
+  },
+  "repositories": [
+    { "id": 5, "node_id": "R_5", "name": "web", "full_name": "acme/web", "private": true },
+    { "id": 6, "node_id": "R_6", "name": "api", "full_name": "acme/api", "private": false }
+  ],
+  "sender": { "id": 1, "login": "octocat" }
+}

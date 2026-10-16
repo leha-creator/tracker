@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { isEntityId } from '@/modules/projects';
+import { isEntityId, type StatusCategory } from '@/modules/projects';
 import { requireWorkspaceAccess } from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
 import {
@@ -125,7 +125,44 @@ export async function changeStatus(
     '[placement.changeStatus] start',
   );
 
-  const from = await prisma.$transaction(async (tx) => {
+  const from = await applyStatusChange(input);
+  if (from === statusId) {
+    log.debug({ workspaceId, taskId, projectId, statusId }, '[placement.changeStatus] unchanged');
+    return;
+  }
+  log.info({ workspaceId, taskId, projectId, from, to: statusId }, '[placement] status changed');
+}
+
+/**
+ * Смена статуса от имени системы (интеграции), без сессии: проверки «статус ∈ проект» и
+ * «задача в проекте» те же, что у changeStatus.
+ * Только для доверенных вызывающих — например, обработчика вебхука GitHub с проверенной
+ * подписью; права пользователя здесь не проверяются. Возвращает true, если статус изменился.
+ */
+export async function changePlacementStatusBySystem(
+  input: PlacementRef & { statusId: string; reason: string },
+): Promise<boolean> {
+  const { workspaceId, taskId, projectId, statusId, reason } = input;
+  assertIds(input, statusId);
+  const from = await applyStatusChange(input);
+  if (from === statusId) {
+    log.debug(
+      { workspaceId, taskId, projectId, statusId, reason },
+      '[placement.changeStatusBySystem] unchanged',
+    );
+    return false;
+  }
+  log.info(
+    { workspaceId, taskId, projectId, from, to: statusId, reason },
+    '[placement] status changed by system',
+  );
+  return true;
+}
+
+/** Статус размещения → в конец колонки нового статуса. Возвращает прежний статус. */
+async function applyStatusChange(input: PlacementRef & { statusId: string }): Promise<string> {
+  const { workspaceId, taskId, projectId, statusId } = input;
+  return prisma.$transaction(async (tx) => {
     const row = await placementRepository.find(tx, workspaceId, taskId, projectId);
     if (!row) {
       log.warn({ workspaceId, taskId, projectId }, '[placement.changeStatus] not placed');
@@ -154,12 +191,29 @@ export async function changeStatus(
     );
     return row.statusId;
   });
+}
 
-  if (from === statusId) {
-    log.debug({ workspaceId, taskId, projectId, statusId }, '[placement.changeStatus] unchanged');
-    return;
-  }
-  log.info({ workspaceId, taskId, projectId, from, to: statusId }, '[placement] status changed');
+/**
+ * Размещения задач с категорией статуса — системное чтение для интеграций (автосмена статуса).
+ * Только задачи пространства `workspaceId`.
+ */
+export async function listPlacementsForAutomation(
+  workspaceId: string,
+  taskIds: readonly string[],
+): Promise<{ taskId: string; projectId: string; statusId: string; category: StatusCategory }[]> {
+  const ids = [...new Set(taskIds)].filter(isEntityId);
+  if (ids.length === 0) return [];
+  const rows = await placementRepository.listWithCategory(workspaceId, ids);
+  log.debug(
+    { workspaceId, tasks: ids.length, placements: rows.length },
+    '[placement.listForAutomation]',
+  );
+  return rows.map((row) => ({
+    taskId: row.taskId,
+    projectId: row.projectId,
+    statusId: row.statusId,
+    category: row.status.category,
+  }));
 }
 
 /** Убирает задачу из проекта; сама задача остаётся в пространстве. */

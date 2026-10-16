@@ -21,6 +21,7 @@ export const TASK_LIST_SELECT = {
   priority: true,
   dueDate: true,
   assignee: { select: { id: true, name: true, image: true } },
+  workspace: { select: { taskKey: true } },
   placements: PLACEMENT_SELECT,
 } as const satisfies Prisma.TaskSelect;
 

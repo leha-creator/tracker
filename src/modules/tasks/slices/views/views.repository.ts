@@ -134,6 +134,7 @@ export const viewsRepository = {
             priority: true,
             dueDate: true,
             assignee: { select: { id: true, name: true, image: true } },
+            workspace: { select: { taskKey: true } },
           },
         },
       },
@@ -150,6 +151,7 @@ export const viewsRepository = {
         number: true,
         title: true,
         placements: { select: { status: { select: { category: true } } } },
+        workspace: { select: { taskKey: true } },
       },
     });
   },

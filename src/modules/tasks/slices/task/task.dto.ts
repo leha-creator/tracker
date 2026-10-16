@@ -49,3 +49,13 @@ export interface TaskListItemDto {
   assignee: TaskUserDto | null;
   placements: TaskPlacementDto[];
 }
+
+/** Задача, найденная по номеру из внешней ссылки (системное чтение для интеграций). */
+export interface TaskRefDto {
+  taskId: string;
+  number: number;
+  key: string;
+  title: string;
+  assigneeId: string | null;
+  createdById: string | null;
+}

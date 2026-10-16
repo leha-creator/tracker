@@ -20,7 +20,25 @@ export const workspaceRepository = {
   findById(workspaceId: string) {
     return prisma.workspace.findUnique({
       where: { id: workspaceId },
-      select: { id: true, slug: true, name: true },
+      select: { id: true, slug: true, name: true, taskKey: true },
+    });
+  },
+
+  /** Ключ занят другим пространством (кроме `exceptWorkspaceId`). */
+  async isTaskKeyTaken(taskKey: string, exceptWorkspaceId?: string): Promise<boolean> {
+    const row = await prisma.workspace.findUnique({ where: { taskKey }, select: { id: true } });
+    return row !== null && row.id !== exceptWorkspaceId;
+  },
+
+  /** Бросает P2002, если ключ занят (см. isUniqueViolation). */
+  async setTaskKey(workspaceId: string, taskKey: string): Promise<void> {
+    await prisma.workspace.update({ where: { id: workspaceId }, data: { taskKey } });
+  },
+
+  findByTaskKeys(taskKeys: readonly string[]) {
+    return prisma.workspace.findMany({
+      where: { taskKey: { in: [...taskKeys] } },
+      select: { id: true, slug: true, name: true, taskKey: true },
     });
   },
 };

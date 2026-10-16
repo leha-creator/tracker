@@ -11,3 +11,6 @@ export {
   signUpSchema,
 } from './slices/credentials/credentials.schema';
 export type { SignInInput, SignUpInput } from './slices/credentials/credentials.schema';
+export { signInWithGithubAction } from './slices/social/social.actions';
+export type { SocialSignInState } from './slices/social/social.actions';
+export { githubSignInErrorMessage } from './slices/social/social.messages';

@@ -20,6 +20,7 @@ const updateStatus = vi.fn<(...args: unknown[]) => Promise<number>>();
 const deletePlacement = vi.fn<(...args: unknown[]) => Promise<number>>();
 const listColumn = vi.fn<() => Promise<{ taskId: string; position: string }[]>>();
 const updatePositions = vi.fn<(...args: unknown[]) => Promise<void>>();
+const listWithCategory = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
@@ -47,11 +48,18 @@ vi.mock('./placement.repository', () => ({
     delete: (...args: unknown[]) => deletePlacement(...args),
     listColumn: () => listColumn(),
     updatePositions: (...args: unknown[]) => updatePositions(...args),
+    listWithCategory: (...args: unknown[]) => listWithCategory(...args),
   },
 }));
 
-const { addToProject, changeStatus, movePlacement, removeFromProject } =
-  await import('./placement.service');
+const {
+  addToProject,
+  changePlacementStatusBySystem,
+  changeStatus,
+  listPlacementsForAutomation,
+  movePlacement,
+  removeFromProject,
+} = await import('./placement.service');
 
 const session: AuthSession = {
   user: {
@@ -315,5 +323,48 @@ describe('movePlacement', () => {
     );
     await expect(movePlacement(session, moveInput)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(findPlacement).not.toHaveBeenCalled();
+  });
+});
+
+describe('changePlacementStatusBySystem', () => {
+  const systemInput = { ...input, reason: 'github_pr_merged' };
+
+  it('changes status without a session and reports change', async () => {
+    lastPosition.mockResolvedValue(null);
+    await expect(changePlacementStatusBySystem(systemInput)).resolves.toBe(true);
+    expect(requireWorkspaceAccess).not.toHaveBeenCalled();
+    expect(updateStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports no change for the same status', async () => {
+    await expect(changePlacementStatusBySystem({ ...systemInput, statusId: S1 })).resolves.toBe(
+      false,
+    );
+    expect(updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('keeps project and placement checks', async () => {
+    findStatus.mockResolvedValue({ id: S2, projectId: OTHER_PROJECT, category: 'todo' });
+    await expect(changePlacementStatusBySystem(systemInput)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    findPlacement.mockResolvedValue(null);
+    await expect(changePlacementStatusBySystem(systemInput)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+});
+
+describe('listPlacementsForAutomation', () => {
+  it('maps categories and skips malformed ids without a query', async () => {
+    listWithCategory.mockResolvedValue([
+      { taskId: TASK_ID, projectId: PROJECT_ID, statusId: S1, status: { category: 'todo' } },
+    ]);
+    await expect(listPlacementsForAutomation('ws-1', [TASK_ID, TASK_ID, 'bad'])).resolves.toEqual([
+      { taskId: TASK_ID, projectId: PROJECT_ID, statusId: S1, category: 'todo' },
+    ]);
+    expect(listWithCategory).toHaveBeenCalledWith('ws-1', [TASK_ID]);
+    await expect(listPlacementsForAutomation('ws-1', ['bad'])).resolves.toEqual([]);
+    expect(listWithCategory).toHaveBeenCalledTimes(1);
   });
 });

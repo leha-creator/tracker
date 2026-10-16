@@ -31,7 +31,7 @@ export function toTaskSummary(row: TaskRow | TaskListRow, today: string) {
   const dueDate = row.dueDate ? toIsoDate(row.dueDate) : null;
   const placements = row.placements.map(toPlacementDto);
   return {
-    key: formatTaskKey(row.number),
+    key: formatTaskKey(row.number, row.workspace.taskKey),
     dueDate,
     isOverdue: isTaskOverdue(
       dueDate,

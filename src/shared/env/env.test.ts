@@ -130,4 +130,67 @@ describe('parseEnv', () => {
     expect((caught as EnvValidationError).invalidKeys).toEqual(['SMTP_PORT']);
     expect((caught as EnvValidationError).message).not.toContain('not-a-port');
   });
+
+  describe('GitHub App', () => {
+    const GITHUB_ENV = {
+      GITHUB_APP_ID: '123456',
+      GITHUB_APP_SLUG: 'tasker-dev',
+      GITHUB_APP_PRIVATE_KEY: '-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----',
+      GITHUB_APP_CLIENT_ID: 'Iv23li-client',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret-value',
+      GITHUB_WEBHOOK_SECRET: 'webhook-secret-value',
+    };
+
+    it('is disabled when nothing is set (including empty strings)', () => {
+      expect(parseEnv(VALID_ENV).GITHUB_ENABLED).toBe(false);
+      expect(
+        parseEnv({ ...VALID_ENV, GITHUB_APP_ID: '', GITHUB_WEBHOOK_SECRET: '' }).GITHUB_ENABLED,
+      ).toBe(false);
+    });
+
+    it('is enabled when everything is set and unescapes PEM newlines', () => {
+      const env = parseEnv({ ...VALID_ENV, ...GITHUB_ENV });
+      expect(env.GITHUB_ENABLED).toBe(true);
+      expect(env.GITHUB_APP_PRIVATE_KEY).toBe(
+        '-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----',
+      );
+    });
+
+    it('rejects partial configuration listing missing keys only', () => {
+      const caught = (() => {
+        try {
+          parseEnv({ ...VALID_ENV, GITHUB_APP_ID: '1', GITHUB_APP_SLUG: 'tasker' });
+        } catch (error) {
+          return error;
+        }
+      })();
+      expect(caught).toBeInstanceOf(EnvValidationError);
+      expect((caught as EnvValidationError).invalidKeys).toEqual([
+        'GITHUB_APP_PRIVATE_KEY',
+        'GITHUB_APP_CLIENT_ID',
+        'GITHUB_APP_CLIENT_SECRET',
+        'GITHUB_WEBHOOK_SECRET',
+      ]);
+    });
+
+    it('validates app id and webhook secret without leaking values', () => {
+      const caught = (() => {
+        try {
+          parseEnv({
+            ...VALID_ENV,
+            ...GITHUB_ENV,
+            GITHUB_APP_ID: 'abc',
+            GITHUB_WEBHOOK_SECRET: 'short',
+          });
+        } catch (error) {
+          return error;
+        }
+      })();
+      expect((caught as EnvValidationError).invalidKeys).toEqual([
+        'GITHUB_APP_ID',
+        'GITHUB_WEBHOOK_SECRET',
+      ]);
+      expect((caught as EnvValidationError).message).not.toContain('short');
+    });
+  });
 });

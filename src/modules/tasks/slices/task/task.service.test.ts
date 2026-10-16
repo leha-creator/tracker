@@ -14,7 +14,7 @@ const createRow = vi.fn<
     id: string;
     number: number;
     title: string;
-    workspace: { slug: string; name: string };
+    workspace: { slug: string; name: string; taskKey: string | null };
   }>
 >();
 const findById = vi.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -64,6 +64,7 @@ vi.mock('./task.repository', () => ({
     findByNumber: (...args: unknown[]) => findByNumber(...args),
     update: (...args: unknown[]) => updateRow(...args),
     delete: (...args: unknown[]) => deleteRow(...args),
+    listByNumbers: (...args: unknown[]) => listByNumbers(...args),
   },
 }));
 vi.mock('../placement/placement.repository', () => ({
@@ -74,7 +75,10 @@ vi.mock('../placement/placement.repository', () => ({
   },
 }));
 
-const { createTask, deleteTask, getTaskByNumber, updateTask } = await import('./task.service');
+const listByNumbers = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
+
+const { createTask, deleteTask, getTaskByNumber, resolveTaskRefs, updateTask } =
+  await import('./task.service');
 
 const session: AuthSession = {
   user: {
@@ -103,7 +107,7 @@ function taskRow(overrides: Record<string, unknown> = {}) {
     createdById: 'author',
     createdAt: new Date('2026-10-15T10:00:00.000Z'),
     updatedAt: new Date('2026-10-15T10:00:00.000Z'),
-    workspace: { slug: 'team', name: 'Команда' },
+    workspace: { slug: 'team', name: 'Команда', taskKey: 'TM' },
     assignee: null,
     createdBy: { id: 'author', name: 'Author' },
     placements: [
@@ -141,7 +145,7 @@ beforeEach(() => {
     id: TASK_ID,
     number: 7,
     title: 'Задача',
-    workspace: { slug: 'team', name: 'Команда' },
+    workspace: { slug: 'team', name: 'Команда', taskKey: 'TM' },
   });
   notify.mockResolvedValue();
   findById.mockResolvedValue(taskRow());
@@ -245,7 +249,7 @@ describe('getTaskByNumber', () => {
     findByNumber.mockResolvedValue(taskRow());
     const task = await getTaskByNumber(session, 'ws-1', 7);
     expect(task).toMatchObject({
-      key: '#7',
+      key: 'TM-7',
       dueDate: '2000-01-01',
       isOverdue: false,
       canDelete: false,
@@ -305,7 +309,7 @@ describe('updateTask', () => {
         type: 'task_assigned',
         recipientId: 'user-2',
         actorId: 'user-1',
-        payload: expect.objectContaining({ taskNumber: 7, workspaceSlug: 'team' }),
+        payload: expect.objectContaining({ taskNumber: 7, taskKey: 'TM-7', workspaceSlug: 'team' }),
       }),
     ]);
   });
@@ -356,5 +360,37 @@ describe('deleteTask', () => {
       workspaceSlug: 'team',
     });
     expect(deleteObjects).toHaveBeenCalledWith(['ws/a']);
+  });
+});
+
+describe('resolveTaskRefs', () => {
+  it('finds tasks by unique valid numbers and formats keys', async () => {
+    listByNumbers.mockResolvedValue([
+      {
+        id: 't-42',
+        number: 42,
+        title: 'Вход',
+        assigneeId: 'u2',
+        createdById: 'u1',
+        workspace: { taskKey: 'TSK' },
+      },
+    ]);
+    await expect(resolveTaskRefs('ws-1', [42, 42, 0, -1, 1.5, 7])).resolves.toEqual([
+      {
+        taskId: 't-42',
+        number: 42,
+        key: 'TSK-42',
+        title: 'Вход',
+        assigneeId: 'u2',
+        createdById: 'u1',
+      },
+    ]);
+    expect(listByNumbers).toHaveBeenCalledWith('ws-1', [42, 7]);
+  });
+
+  it('skips the query without numbers', async () => {
+    listByNumbers.mockClear();
+    await expect(resolveTaskRefs('ws-1', [])).resolves.toEqual([]);
+    expect(listByNumbers).not.toHaveBeenCalled();
   });
 });

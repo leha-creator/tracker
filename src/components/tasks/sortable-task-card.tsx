@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { MouseEvent } from 'react';
 
 import { cn } from '@/lib/utils';
+import type { PullRequestBadgeDto } from '@/modules/integrations/github/client';
 import type { BoardCardDto } from '@/modules/tasks/client';
 
 import { TaskCard } from './task-card';
@@ -15,6 +16,7 @@ interface SortableTaskCardProps {
   href: string;
   /** Задача открыта в панели. */
   active?: boolean;
+  pullRequest?: PullRequestBadgeDto;
   /** true сразу после перетаскивания: клик, завершивший перенос, не должен открывать задачу. */
   shouldSuppressClick: () => boolean;
   reduceMotion: boolean;
@@ -29,6 +31,7 @@ export function SortableTaskCard({
   statusId,
   href,
   active,
+  pullRequest,
   shouldSuppressClick,
   reduceMotion,
 }: SortableTaskCardProps) {
@@ -46,6 +49,7 @@ export function SortableTaskCard({
       card={card}
       href={href}
       active={active}
+      pullRequest={pullRequest}
       {...listeners}
       aria-describedby={describedBy}
       aria-roledescription="перетаскиваемая карточка"

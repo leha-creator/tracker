@@ -10,6 +10,7 @@ import { TaskListShell } from '@/components/tasks/task-list/task-list-shell';
 import { TaskListTable } from '@/components/tasks/task-list/task-list-table';
 import { TaskListToolbar } from '@/components/tasks/task-list/task-list-toolbar';
 import { Button } from '@/components/ui/button';
+import { getPullRequestBadges } from '@/modules/integrations/github';
 import { listStatuses } from '@/modules/projects';
 import { hasActiveFilters, listProjectTasks, parseTaskListParams } from '@/modules/tasks';
 import { listMembers } from '@/modules/workspaces';
@@ -59,6 +60,11 @@ async function ListSection({ params, searchParams }: Props) {
     listMembers(session, workspace.id),
   ]);
   const shown = { ...query, page: page.page };
+  const pullRequests = await getPullRequestBadges(
+    session,
+    workspace.id,
+    page.items.map((task) => task.id),
+  );
 
   return (
     <TaskListShell query={shown} scope="project" basePath={basePath}>
@@ -95,6 +101,7 @@ async function ListSection({ params, searchParams }: Props) {
             scope="project"
             basePath={basePath}
             searchParams={raw}
+            pullRequests={pullRequests}
             projectId={project.id}
           />
           <TaskListPagination page={page} query={shown} scope="project" basePath={basePath} />

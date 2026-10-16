@@ -128,7 +128,7 @@ function taskRow() {
     title: 'Задача',
     assigneeId: 'user-assignee' as string | null,
     createdById: 'user-creator' as string | null,
-    workspace: { slug: 'team', name: 'Команда' },
+    workspace: { slug: 'team', name: 'Команда', taskKey: 'TM' },
   };
 }
 

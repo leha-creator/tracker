@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { normalizeTaskKey, taskKeyProblem } from '../../models/task-key';
 import { slugProblem } from '../../models/workspace-slug';
 
 export const WORKSPACE_NAME_MIN_LENGTH = 2;
@@ -29,7 +30,32 @@ const slugField = z
     if (problem) ctx.addIssue({ code: 'custom', message: problem });
   });
 
-export const createWorkspaceSchema = z.object({ name: nameField, slug: slugField });
+/** Ключ задач в верхнем регистре; ошибки — по правилам модели. */
+const taskKeyField = z
+  .string({ error: 'Укажите ключ задач' })
+  .transform(normalizeTaskKey)
+  .superRefine((value, ctx) => {
+    const problem = taskKeyProblem(value);
+    if (problem) ctx.addIssue({ code: 'custom', message: problem });
+  });
+
+/** Пустой ключ при создании → undefined: сервер предложит его из названия. */
+const optionalTaskKeyField = z
+  .string()
+  .optional()
+  .transform((value) => (value?.trim() ? value : undefined))
+  .pipe(taskKeyField.optional());
+
+export const createWorkspaceSchema = z.object({
+  name: nameField,
+  slug: slugField,
+  taskKey: optionalTaskKeyField,
+});
+
+export const updateTaskKeySchema = z.object({
+  workspaceId: workspaceIdField,
+  taskKey: taskKeyField,
+});
 
 export const renameWorkspaceSchema = z.object({ workspaceId: workspaceIdField, name: nameField });
 
@@ -43,3 +69,4 @@ export const deleteWorkspaceSchema = z.object({
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 export type RenameWorkspaceInput = z.infer<typeof renameWorkspaceSchema>;
 export type DeleteWorkspaceInput = z.infer<typeof deleteWorkspaceSchema>;
+export type UpdateTaskKeyInput = z.infer<typeof updateTaskKeySchema>;

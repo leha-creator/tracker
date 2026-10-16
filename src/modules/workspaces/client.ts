@@ -30,13 +30,25 @@ export {
   createWorkspaceAction,
   deleteWorkspaceAction,
   renameWorkspaceAction,
+  updateTaskKeyAction,
 } from './slices/workspace/workspace.actions';
-export type { WorkspaceListItemDto, WorkspaceSummaryDto } from './slices/workspace/workspace.dto';
+export type {
+  WorkspaceListItemDto,
+  WorkspaceSummaryDto,
+  WorkspaceTaskKeyDto,
+} from './slices/workspace/workspace.dto';
 export {
   createWorkspaceSchema,
   WORKSPACE_NAME_MAX_LENGTH,
   WORKSPACE_NAME_MIN_LENGTH,
 } from './slices/workspace/workspace.schema';
 export { SLUG_MAX_LENGTH, slugify } from './models/workspace-slug';
+export {
+  normalizeTaskKey,
+  suggestTaskKey,
+  TASK_KEY_MAX_LENGTH,
+  TASK_KEY_PATTERN,
+  taskKeyProblem,
+} from './models/task-key';
 export type { InvitationState } from './models/invitation';
 export type { FormState } from '@/shared/types';

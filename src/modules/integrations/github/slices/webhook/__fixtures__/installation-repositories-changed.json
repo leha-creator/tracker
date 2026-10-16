@@ -1,0 +1,8 @@
+{
+  "action": "added",
+  "installation": { "id": 77, "account": { "id": 9, "login": "acme", "type": "Organization" } },
+  "repository_selection": "selected",
+  "repositories_added": [{ "id": 7, "full_name": "acme/docs", "private": false }],
+  "repositories_removed": [{ "id": 6, "full_name": "acme/api", "private": false }],
+  "sender": { "id": 1, "login": "octocat" }
+}

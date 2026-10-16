@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { TaskDocumentsSection } from '@/components/documents/task-documents/task-documents-section';
+import { TaskGithubSection } from '@/components/github/task-github-section';
 import { listProjects, listWorkspaceStatuses } from '@/modules/projects';
 import { getTaskByNumber, listTaskComments, type MentionCandidate } from '@/modules/tasks';
 import { listMembers } from '@/modules/workspaces';
@@ -188,6 +189,14 @@ export async function TaskDetailsView({
               />
             </Suspense>
           </section>
+
+          <Suspense fallback={null}>
+            <TaskGithubSection
+              session={session}
+              workspace={{ id: workspace.id }}
+              task={{ id: task.id, key: task.key, title: task.title }}
+            />
+          </Suspense>
 
           <section aria-labelledby="task-comments-heading" className="grid gap-3 border-t pt-5">
             <Suspense fallback={<div className="h-32 animate-pulse rounded-xl bg-muted" />}>

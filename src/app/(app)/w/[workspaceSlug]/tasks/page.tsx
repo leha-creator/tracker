@@ -10,6 +10,7 @@ import { TaskListShell } from '@/components/tasks/task-list/task-list-shell';
 import { TaskListTable } from '@/components/tasks/task-list/task-list-table';
 import { TaskListToolbar } from '@/components/tasks/task-list/task-list-toolbar';
 import { Button } from '@/components/ui/button';
+import { getPullRequestBadges } from '@/modules/integrations/github';
 import { listProjects } from '@/modules/projects';
 import { hasActiveFilters, listTasks, parseTaskListParams } from '@/modules/tasks';
 import { listMembers } from '@/modules/workspaces';
@@ -57,6 +58,11 @@ async function TasksSection({ params, searchParams }: Props) {
   ]);
   // Номер страницы мог быть ограничен последней — показываем фактический.
   const shown = { ...query, page: page.page };
+  const pullRequests = await getPullRequestBadges(
+    session,
+    workspace.id,
+    page.items.map((task) => task.id),
+  );
 
   return (
     <section className="grid gap-4" aria-labelledby="tasks-heading">
@@ -94,6 +100,7 @@ async function TasksSection({ params, searchParams }: Props) {
               scope="workspace"
               basePath={basePath}
               searchParams={raw}
+              pullRequests={pullRequests}
             />
             <TaskListPagination page={page} query={shown} scope="workspace" basePath={basePath} />
           </>

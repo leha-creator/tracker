@@ -8,7 +8,7 @@ import { organization } from 'better-auth/plugins/organization';
 import { memberAc, ownerAc } from 'better-auth/plugins/organization/access';
 
 import { prisma } from '@/shared/db';
-import { getEnv } from '@/shared/env';
+import { getEnv, type Env } from '@/shared/env';
 import { createLogger } from '@/shared/logger';
 
 const log = createLogger('auth');
@@ -45,7 +45,14 @@ function workspacesPlugin() {
     invitationLimit: PENDING_INVITATIONS_LIMIT,
     cancelPendingInvitationsOnReInvite: true,
     schema: {
-      organization: { modelName: 'workspace' },
+      organization: {
+        modelName: 'workspace',
+        additionalFields: {
+          // Ключ задач (TSK-42). input: false — эндпоинты плагина поле не принимают,
+          // его проставляет и меняет только сервис пространств (src/modules/workspaces/slices/workspace).
+          taskKey: { type: 'string', required: false, input: false },
+        },
+      },
       member: {
         modelName: 'workspaceMember',
         fields: { organizationId: 'workspaceId' },
@@ -96,6 +103,16 @@ function workspacesPlugin() {
   });
 }
 
+/** Провайдер GitHub (OAuth GitHub App) или ничего, если интеграция не настроена. */
+function githubProvider(env: Env) {
+  if (!env.GITHUB_ENABLED || !env.GITHUB_APP_CLIENT_ID || !env.GITHUB_APP_CLIENT_SECRET) {
+    return {};
+  }
+  return {
+    github: { clientId: env.GITHUB_APP_CLIENT_ID, clientSecret: env.GITHUB_APP_CLIENT_SECRET },
+  };
+}
+
 function createAuth() {
   const env = getEnv();
 
@@ -109,6 +126,21 @@ function createAuth() {
       minPasswordLength: PASSWORD_MIN_LENGTH,
       maxPasswordLength: PASSWORD_MAX_LENGTH,
       autoSignIn: true,
+    },
+    // Вход через GitHub — только если настроено GitHub App (все GITHUB_*; см. docs/github.md).
+    // Токены пользователя нужны интеграции (проверка доступа к установке), поэтому хранятся
+    // зашифрованными; истёкший токен GitHub App обновляет getAccessToken.
+    socialProviders: githubProvider(env),
+    account: {
+      encryptOAuthTokens: true,
+      accountLinking: {
+        enabled: true,
+        // Email в Tasker не подтверждается: неявная привязка по совпадению email позволила бы
+        // захватить чужой аккаунт. GitHub привязывается только явно, из профиля (linkSocial).
+        disableImplicitLinking: true,
+        // При явной привязке пользователь уже вошёл: email GitHub может отличаться от рабочего.
+        allowDifferentEmails: true,
+      },
     },
     session: {
       expiresIn: SESSION_TTL_SECONDS,

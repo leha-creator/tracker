@@ -61,6 +61,19 @@ export const placementRepository = {
     }
   },
 
+  /** Размещения задач с категорией статуса (для автосмены статуса интеграциями). */
+  listWithCategory(workspaceId: string, taskIds: string[]) {
+    return prisma.taskPlacement.findMany({
+      where: { workspaceId, taskId: { in: taskIds } },
+      select: {
+        taskId: true,
+        projectId: true,
+        statusId: true,
+        status: { select: { category: true } },
+      },
+    });
+  },
+
   find(tx: TransactionClient, workspaceId: string, taskId: string, projectId: string) {
     return tx.taskPlacement.findFirst({
       where: { workspaceId, taskId, projectId },

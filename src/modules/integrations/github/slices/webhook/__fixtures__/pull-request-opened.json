@@ -1,0 +1,22 @@
+{
+  "action": "opened",
+  "number": 12,
+  "pull_request": {
+    "id": 1001,
+    "number": 12,
+    "title": "Fix login [TSK-42]",
+    "body": "Closes OPS-7. See also TSK-1000.",
+    "html_url": "https://github.com/acme/web/pull/12",
+    "state": "open",
+    "draft": false,
+    "merged": false,
+    "merged_at": null,
+    "closed_at": null,
+    "updated_at": "2026-10-16T10:00:00Z",
+    "head": { "ref": "tsk-43-login", "sha": "abc123" },
+    "user": { "id": 501, "login": "dev" }
+  },
+  "repository": { "id": 5, "full_name": "acme/web", "private": true, "default_branch": "main" },
+  "installation": { "id": 77 },
+  "sender": { "id": 501, "login": "dev" }
+}

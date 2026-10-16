@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
+import { GithubAccountSection } from '@/components/github/github-account-section';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { WORKSPACE_ROLE_LABELS } from '@/components/workspaces/role-label';
@@ -13,15 +14,18 @@ export const metadata: Metadata = { title: 'Аккаунт — Tasker' };
 
 const DATE = new Intl.DateTimeFormat('ru', { dateStyle: 'long' });
 
-export default function ProfileAccountPage() {
+export default function ProfileAccountPage({ searchParams }: PageProps<'/profile/account'>) {
   return (
     <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
-      <AccountSection />
+      <AccountSection searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function AccountSection() {
+async function AccountSection({
+  searchParams,
+}: Pick<PageProps<'/profile/account'>, 'searchParams'>) {
+  const { github, error } = await searchParams;
   const session = await requireUserOrRedirect('/profile/account');
   const [profile, workspaces] = await Promise.all([
     getMyProfile(session),
@@ -87,6 +91,12 @@ async function AccountSection() {
           )}
         </CardContent>
       </Card>
+
+      <GithubAccountSection
+        session={session}
+        linked={github === 'linked'}
+        errorCode={typeof error === 'string' ? error : undefined}
+      />
     </div>
   );
 }

@@ -5,6 +5,15 @@ import { z } from 'zod';
 export const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
+const GITHUB_KEYS = [
+  'GITHUB_APP_ID',
+  'GITHUB_APP_SLUG',
+  'GITHUB_APP_PRIVATE_KEY',
+  'GITHUB_APP_CLIENT_ID',
+  'GITHUB_APP_CLIENT_SECRET',
+  'GITHUB_WEBHOOK_SECRET',
+] as const;
+
 const optionalNonEmpty = z
   .string()
   .optional()
@@ -55,11 +64,40 @@ const envSchema = z
     SMTP_USER: optionalNonEmpty,
     SMTP_PASSWORD: optionalNonEmpty,
     MAIL_FROM: z.string().min(3).default('Tasker <no-reply@tasker.local>'),
+
+    /**
+     * GitHub App (docs/github.md). Необязательно: либо все переменные заданы, либо все пусты —
+     * тогда интеграция и вход через GitHub выключены. Ключ — PEM; в .env одной строкой с `\n`.
+     */
+    GITHUB_APP_ID: optionalNonEmpty,
+    GITHUB_APP_SLUG: optionalNonEmpty,
+    GITHUB_APP_PRIVATE_KEY: optionalNonEmpty,
+    GITHUB_APP_CLIENT_ID: optionalNonEmpty,
+    GITHUB_APP_CLIENT_SECRET: optionalNonEmpty,
+    GITHUB_WEBHOOK_SECRET: optionalNonEmpty,
+  })
+  .superRefine((env, ctx) => {
+    const missing = GITHUB_KEYS.filter((key) => env[key] === undefined);
+    // Все или ни одного: частичная настройка — ошибка, а не тихо выключенная интеграция.
+    if (missing.length > 0 && missing.length < GITHUB_KEYS.length) {
+      for (const key of missing) {
+        ctx.addIssue({ code: 'custom', path: [key], message: 'Задайте все переменные GITHUB_*' });
+      }
+    }
+    if (env.GITHUB_APP_ID !== undefined && !/^\d+$/.test(env.GITHUB_APP_ID)) {
+      ctx.addIssue({ code: 'custom', path: ['GITHUB_APP_ID'], message: 'Числовой ID приложения' });
+    }
+    if (env.GITHUB_WEBHOOK_SECRET !== undefined && env.GITHUB_WEBHOOK_SECRET.length < 16) {
+      ctx.addIssue({ code: 'custom', path: ['GITHUB_WEBHOOK_SECRET'], message: 'Не короче 16' });
+    }
   })
   .transform((env) => ({
     ...env,
     LOG_LEVEL: env.LOG_LEVEL ?? (env.NODE_ENV === 'production' ? 'info' : 'debug'),
     S3_PUBLIC_ENDPOINT: env.S3_PUBLIC_ENDPOINT ?? env.S3_ENDPOINT,
+    // `\n` в одной строке .env → настоящие переводы строк PEM.
+    GITHUB_APP_PRIVATE_KEY: env.GITHUB_APP_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    GITHUB_ENABLED: env.GITHUB_APP_ID !== undefined,
   }));
 
 export type Env = z.infer<typeof envSchema>;

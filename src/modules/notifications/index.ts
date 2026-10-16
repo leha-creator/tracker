@@ -1,6 +1,6 @@
 // Публичный API модуля для серверного кода (страницы, Route Handlers, другие модули).
 // Клиентским компонентам — './client' (без server-only кода).
-// Зависимостей от других модулей нет: tasks и workspaces сами вызывают notify / notifyByEmail.
+// Зависимостей от других модулей нет: tasks, workspaces и integrations/github сами вызывают notify / notifyByEmail.
 export * from './client';
 
 export { excerpt as notificationExcerpt } from './models';

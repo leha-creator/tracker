@@ -4,6 +4,9 @@ export const NOTIFICATION_TYPES = [
   'task_assigned',
   'task_comment',
   'workspace_invitation',
+  'pr_linked',
+  'pr_merged',
+  'pr_review',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -48,6 +51,24 @@ export const NOTIFICATION_TYPE_INFO: Record<NotificationType, NotificationTypeIn
     description: 'Вас пригласили в пространство (письмо с приглашением приходит всегда)',
     channels: ['inApp'],
     defaults: { inApp: true, email: false },
+  },
+  pr_linked: {
+    label: 'PR к моим задачам',
+    description: 'К задаче, где вы ответственный, привязан pull request',
+    channels: ['inApp', 'email'],
+    defaults: { inApp: true, email: false },
+  },
+  pr_merged: {
+    label: 'Слияние PR',
+    description: 'Pull request вашей задачи слит',
+    channels: ['inApp', 'email'],
+    defaults: { inApp: true, email: false },
+  },
+  pr_review: {
+    label: 'Ревью моих PR',
+    description: 'Ваш pull request одобрили или запросили изменения (нужен привязанный GitHub)',
+    channels: ['inApp', 'email'],
+    defaults: { inApp: true, email: true },
   },
 };
 

@@ -16,9 +16,20 @@ const taskRef = {
   ...workspaceRef,
   taskNumber: z.number().int().positive(),
   taskTitle: z.string(),
+  /** Ключ для текста (`TSK-42`). Нет в уведомлениях до появления ключей — тогда `#номер`. */
+  taskKey: z.string().min(1).optional(),
 };
 
 const commentRef = { ...taskRef, commentExcerpt: z.string() };
+
+/** PR GitHub, привязанный к задаче: ссылка ведёт на задачу, адрес PR — для письма. */
+const pullRequestRef = {
+  ...taskRef,
+  repositoryFullName: z.string(),
+  pullRequestNumber: z.number().int().positive(),
+  pullRequestTitle: z.string(),
+  pullRequestUrl: z.string(),
+};
 
 /**
  * Снимок данных события по типу: notifications не читает таблицы задач и пространств, поэтому
@@ -29,6 +40,12 @@ export const NOTIFICATION_PAYLOAD_SCHEMAS = {
   task_assigned: z.object(taskRef),
   task_comment: z.object(commentRef),
   workspace_invitation: z.object(workspaceRef),
+  pr_linked: z.object(pullRequestRef),
+  pr_merged: z.object(pullRequestRef),
+  pr_review: z.object({
+    ...pullRequestRef,
+    reviewState: z.enum(['approved', 'changes_requested']),
+  }),
 } satisfies Record<NotificationType, z.ZodType>;
 
 export type NotificationPayloadMap = {
@@ -71,6 +88,9 @@ export function buildNotificationHref(notification: TypedNotification): string {
         ? `/invite/${notification.invitationId}`
         : `/w/${notification.payload.workspaceSlug}`;
     case 'task_assigned':
+    case 'pr_linked':
+    case 'pr_merged':
+    case 'pr_review':
       return `/w/${notification.payload.workspaceSlug}/tasks/${notification.payload.taskNumber}`;
     case 'mention':
     case 'task_comment': {
@@ -116,9 +136,34 @@ export function formatNotificationText(notification: TypedNotification): Notific
         subject: `«${notification.payload.workspaceName}»`,
         excerpt: null,
       };
+    case 'pr_linked':
+      return {
+        title: `PR ${pullRequestName(notification.payload)} привязан к задаче`,
+        subject: taskSubject(notification.payload),
+        excerpt: notification.payload.pullRequestTitle || null,
+      };
+    case 'pr_merged':
+      return {
+        title: `PR ${pullRequestName(notification.payload)} слит`,
+        subject: taskSubject(notification.payload),
+        excerpt: notification.payload.pullRequestTitle || null,
+      };
+    case 'pr_review':
+      return {
+        title:
+          notification.payload.reviewState === 'approved'
+            ? `PR ${pullRequestName(notification.payload)} одобрен`
+            : `В PR ${pullRequestName(notification.payload)} запросили изменения`,
+        subject: taskSubject(notification.payload),
+        excerpt: notification.payload.pullRequestTitle || null,
+      };
   }
 }
 
-function taskSubject(payload: { taskNumber: number; taskTitle: string }): string {
-  return `#${payload.taskNumber} ${payload.taskTitle}`;
+function pullRequestName(payload: { repositoryFullName: string; pullRequestNumber: number }) {
+  return `${payload.repositoryFullName}#${payload.pullRequestNumber}`;
+}
+
+function taskSubject(payload: { taskNumber: number; taskTitle: string; taskKey?: string }): string {
+  return `${payload.taskKey ?? `#${payload.taskNumber}`} ${payload.taskTitle}`;
 }

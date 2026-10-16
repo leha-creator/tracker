@@ -5,7 +5,11 @@ export * from './client';
 
 export { getAttachmentDownload, listTaskAttachments } from './slices/attachment/attachment.service';
 export { listTaskComments } from './slices/comment/comment.service';
-export { getTaskByNumber } from './slices/task/task.service';
+export { getTaskByNumber, resolveTaskRefs, resolveTaskRefsByIds } from './slices/task/task.service';
+export {
+  changePlacementStatusBySystem,
+  listPlacementsForAutomation,
+} from './slices/placement/placement.service';
 export {
   getBoardCards,
   getMemberTaskSummary,

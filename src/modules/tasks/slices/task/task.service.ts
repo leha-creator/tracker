@@ -13,6 +13,7 @@ import {
   assertAssigneeIsMember,
   assertCanDeleteTask,
   canDeleteTask,
+  formatTaskKey,
   normalizeTaskTitle,
   positionAfter,
   toIsoDate,
@@ -21,7 +22,7 @@ import {
 import { attachmentRepository } from '../attachment/attachment.repository';
 import { deleteStoredObjects } from '../attachment/attachment.storage';
 import { placementRepository } from '../placement/placement.repository';
-import type { TaskDto } from './task.dto';
+import type { TaskDto, TaskRefDto } from './task.dto';
 import { toTaskSummary, toUserDto } from './task.mapper';
 import { taskRepository, type TaskRow, type TaskWriteData } from './task.repository';
 
@@ -66,7 +67,12 @@ async function notifyAssignee(input: {
   session: AuthSession;
   workspaceId: string;
   assigneeId: string;
-  task: { id: string; number: number; title: string; workspace: { slug: string; name: string } };
+  task: {
+    id: string;
+    number: number;
+    title: string;
+    workspace: { slug: string; name: string; taskKey: string | null };
+  };
 }): Promise<void> {
   const { session, workspaceId, assigneeId, task } = input;
   log.debug(
@@ -85,6 +91,7 @@ async function notifyAssignee(input: {
         workspaceName: task.workspace.name,
         actorName: session.user.name,
         taskNumber: task.number,
+        taskKey: formatTaskKey(task.number, task.workspace.taskKey),
         taskTitle: task.title,
       },
     },
@@ -286,4 +293,60 @@ export async function deleteTask(
     '[task] deleted',
   );
   return { workspaceSlug: task.workspace.slug };
+}
+
+/** Сколько задач разбирать из одной внешней ссылки (описание PR может упоминать много задач). */
+const TASK_REFS_LIMIT = 50;
+
+/**
+ * Задачи пространства по номерам — системное чтение без сессии для интеграций (ссылки TSK-42 в
+ * GitHub). Вызывающий отвечает за доверие к источнику; несуществующие номера пропускаются.
+ */
+export async function resolveTaskRefs(
+  workspaceId: string,
+  numbers: readonly number[],
+): Promise<TaskRefDto[]> {
+  const unique = [...new Set(numbers)]
+    .filter((number) => Number.isSafeInteger(number) && number > 0)
+    .slice(0, TASK_REFS_LIMIT);
+  if (unique.length === 0) return [];
+  const rows = await taskRepository.listByNumbers(workspaceId, unique);
+  log.debug(
+    { workspaceId, requested: unique.length, found: rows.length },
+    '[task.resolveTaskRefs]',
+  );
+  return rows.map(toTaskRef);
+}
+
+/** Задачи пространства по id — системное чтение для интеграций (связи PR, ветки). */
+export async function resolveTaskRefsByIds(
+  workspaceId: string,
+  taskIds: readonly string[],
+): Promise<TaskRefDto[]> {
+  const ids = [...new Set(taskIds)].filter(isEntityId);
+  if (ids.length === 0) return [];
+  const rows = await taskRepository.listRefsByIds(workspaceId, ids);
+  log.debug(
+    { workspaceId, requested: ids.length, found: rows.length },
+    '[task.resolveTaskRefsByIds]',
+  );
+  return rows.map(toTaskRef);
+}
+
+function toTaskRef(row: {
+  id: string;
+  number: number;
+  title: string;
+  assigneeId: string | null;
+  createdById: string | null;
+  workspace: { taskKey: string | null };
+}): TaskRefDto {
+  return {
+    taskId: row.id,
+    number: row.number,
+    key: formatTaskKey(row.number, row.workspace.taskKey),
+    title: row.title,
+    assigneeId: row.assigneeId,
+    createdById: row.createdById,
+  };
 }

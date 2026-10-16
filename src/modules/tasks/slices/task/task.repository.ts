@@ -16,10 +16,20 @@ const TASK_SELECT = {
   createdById: true,
   createdAt: true,
   updatedAt: true,
-  workspace: { select: { slug: true, name: true } },
+  workspace: { select: { slug: true, name: true, taskKey: true } },
   assignee: { select: { id: true, name: true, image: true } },
   createdBy: { select: { id: true, name: true } },
   placements: PLACEMENT_SELECT,
+} as const satisfies Prisma.TaskSelect;
+
+/** Поля задачи для ссылок из интеграций (TSK-42 в GitHub). */
+const TASK_REF_SELECT = {
+  id: true,
+  number: true,
+  title: true,
+  assigneeId: true,
+  createdById: true,
+  workspace: { select: { taskKey: true } },
 } as const satisfies Prisma.TaskSelect;
 
 export interface TaskWriteData {
@@ -55,7 +65,7 @@ export const taskRepository = {
         id: true,
         number: true,
         title: true,
-        workspace: { select: { slug: true, name: true } },
+        workspace: { select: { slug: true, name: true, taskKey: true } },
       },
     });
   },
@@ -78,6 +88,22 @@ export const taskRepository = {
   async delete(workspaceId: string, taskId: string): Promise<number> {
     const { count } = await prisma.task.deleteMany({ where: { id: taskId, workspaceId } });
     return count;
+  },
+
+  /** Задачи пространства по номерам — для ссылок из интеграций (TSK-42). */
+  listByNumbers(workspaceId: string, numbers: number[]) {
+    return prisma.task.findMany({
+      where: { workspaceId, number: { in: numbers } },
+      select: TASK_REF_SELECT,
+    });
+  },
+
+  /** Задачи пространства по id — для связей из интеграций. */
+  listRefsByIds(workspaceId: string, taskIds: string[]) {
+    return prisma.task.findMany({
+      where: { workspaceId, id: { in: taskIds } },
+      select: TASK_REF_SELECT,
+    });
   },
 };
 

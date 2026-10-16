@@ -2,12 +2,23 @@ import 'server-only';
 
 import { parseWorkspaceRole, requireWorkspaceAccess } from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
-import { InternalError, NotFoundError, ValidationError } from '@/shared/errors';
+import { isUniqueViolation } from '@/shared/db';
+import { ConflictError, InternalError, NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
-import { resolveSlug } from '../../models';
+import {
+  normalizeTaskKey,
+  resolveSlug,
+  suggestTaskKey,
+  taskKeyWithSuffix,
+  validateTaskKey,
+} from '../../models';
 import { callOrganizationApi } from '../../organization-api';
-import type { WorkspaceListItemDto, WorkspaceSummaryDto } from './workspace.dto';
+import type {
+  WorkspaceListItemDto,
+  WorkspaceSummaryDto,
+  WorkspaceTaskKeyDto,
+} from './workspace.dto';
 import { workspaceRepository } from './workspace.repository';
 
 const log = createLogger('workspaces.workspace');
@@ -37,13 +48,58 @@ export async function listMyWorkspaces(session: AuthSession): Promise<WorkspaceL
   });
 }
 
+/** Сколько вариантов с цифрой (TSK2, TSK3…) пробовать, если предложенный ключ занят. */
+const TASK_KEY_ATTEMPTS = 5;
+
+function taskKeyTaken(): ConflictError {
+  const message = 'Этот ключ уже занят другим пространством';
+  return new ConflictError(message, { fieldErrors: { taskKey: [message] } });
+}
+
+/**
+ * Проставляет ключ задач новому пространству: заданный вручную (уже проверен на занятость)
+ * или предложенный, при конфликте — с цифрой. Не бросает: без ключа пространство работает
+ * (задачи — #42), владелец задаст ключ в настройках.
+ */
+async function assignTaskKey(workspaceId: string, base: string): Promise<string | null> {
+  for (let attempt = 0; attempt < TASK_KEY_ATTEMPTS; attempt += 1) {
+    const candidate = attempt === 0 ? base : taskKeyWithSuffix(base, attempt);
+    try {
+      if (attempt > 0 && (await workspaceRepository.isTaskKeyTaken(candidate))) {
+        log.debug({ workspaceId, attempt }, '[workspace.taskKey] candidate taken');
+        continue;
+      }
+      await workspaceRepository.setTaskKey(workspaceId, candidate);
+      log.info({ workspaceId, from: null, to: candidate }, '[workspace] task key set');
+      return candidate;
+    } catch (error) {
+      if (!isUniqueViolation(error)) {
+        log.error({ err: error, workspaceId }, '[workspace.taskKey] assign failed');
+        return null;
+      }
+      log.warn({ workspaceId, attempt }, '[workspace.taskKey] conflict, retry');
+    }
+  }
+  log.error({ workspaceId, base }, '[workspace.taskKey] no free key, left empty');
+  return null;
+}
+
 export async function createWorkspace(
   session: AuthSession,
-  input: { name: string; slug?: string },
+  input: { name: string; slug?: string; taskKey?: string },
 ): Promise<WorkspaceSummaryDto> {
   const userId = session.user.id;
   const slug = resolveSlug(input.name, input.slug);
-  log.debug({ userId, slug }, '[workspace.createWorkspace] start');
+  const taskKey = input.taskKey ?? suggestTaskKey(input.name);
+  log.debug(
+    { userId, slug, taskKey, manualTaskKey: input.taskKey !== undefined },
+    '[workspace.createWorkspace] start',
+  );
+  // Ключ, введённый вручную, проверяем до создания: после — пространство уже существует.
+  if (input.taskKey !== undefined && (await workspaceRepository.isTaskKeyTaken(input.taskKey))) {
+    log.warn({ userId, taskKey: input.taskKey }, '[workspace.createWorkspace] task key taken');
+    throw taskKeyTaken();
+  }
 
   const created = await callOrganizationApi((api, headers) =>
     api.createOrganization({
@@ -54,7 +110,54 @@ export async function createWorkspace(
   if (!created) throw new InternalError('Плагин не вернул созданное пространство');
 
   log.info({ workspaceId: created.id, slug: created.slug, userId }, '[workspace] created');
+  await assignTaskKey(created.id, taskKey);
   return { id: created.id, slug: created.slug, name: created.name };
+}
+
+/** Меняет ключ задач (только владелец). Уже созданные связи с GitHub остаются. */
+export async function updateTaskKey(
+  session: AuthSession,
+  input: { workspaceId: string; taskKey: string },
+): Promise<{ taskKey: string }> {
+  const { workspaceId } = input;
+  await requireWorkspaceAccess(session, workspaceId, 'owner');
+  const taskKey = validateTaskKey(input.taskKey);
+  const workspace = await workspaceRepository.findById(workspaceId);
+  if (!workspace) throw new NotFoundError('Пространство не найдено');
+  log.debug(
+    { userId: session.user.id, workspaceId, from: workspace.taskKey, to: taskKey },
+    '[workspace.updateTaskKey] start',
+  );
+  if (workspace.taskKey === taskKey) return { taskKey };
+
+  try {
+    await workspaceRepository.setTaskKey(workspaceId, taskKey);
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      log.warn({ workspaceId, taskKey }, '[workspace.updateTaskKey] task key taken');
+      throw taskKeyTaken();
+    }
+    throw error;
+  }
+  log.info(
+    { workspaceId, from: workspace.taskKey, to: taskKey, userId: session.user.id },
+    '[workspace] task key changed',
+  );
+  return { taskKey };
+}
+
+/**
+ * Пространства по ключам задач — системное чтение без сессии (вебхуки GitHub):
+ * вызывающий сам отвечает за доверие к источнику. Ключи нормализуются.
+ */
+export async function findWorkspacesByTaskKeys(
+  taskKeys: readonly string[],
+): Promise<WorkspaceTaskKeyDto[]> {
+  const keys = [...new Set(taskKeys.map(normalizeTaskKey))];
+  if (keys.length === 0) return [];
+  const rows = await workspaceRepository.findByTaskKeys(keys);
+  log.debug({ requested: keys.length, found: rows.length }, '[workspace.findByTaskKeys]');
+  return rows.flatMap((row) => (row.taskKey ? [{ ...row, taskKey: row.taskKey }] : []));
 }
 
 export async function renameWorkspace(

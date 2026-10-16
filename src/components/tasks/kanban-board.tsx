@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 
 import { StatusDot } from '@/components/projects/status-badge';
 import { cn } from '@/lib/utils';
+import type { PullRequestBadgesDto } from '@/modules/integrations/github/client';
 import type { ProjectStatusDto } from '@/modules/projects/client';
 import {
   findCardColumn,
@@ -55,6 +56,8 @@ interface KanbanBoardProps {
   projectId: string;
   statuses: ProjectStatusDto[];
   cards: BoardCardsDto;
+  /** Индикаторы PR по id задачи (интеграция GitHub). */
+  pullRequests?: PullRequestBadgesDto;
 }
 
 interface DragOrigin {
@@ -66,7 +69,13 @@ interface DragOrigin {
  * Канбан-доска проекта: колонки — статусы, карточки перетаскиваются внутри колонки и между
  * колонками. Состояние оптимистичное; при ошибке сервера доска возвращается к данным сервера.
  */
-export function KanbanBoard({ workspaceId, projectId, statuses, cards }: KanbanBoardProps) {
+export function KanbanBoard({
+  workspaceId,
+  projectId,
+  statuses,
+  cards,
+  pullRequests = {},
+}: KanbanBoardProps) {
   const dndId = useId();
   const router = useRouter();
   // Карточка открывает задачу в панели справа (`?task=<номер>`) на этой же странице.
@@ -243,6 +252,7 @@ export function KanbanBoard({ workspaceId, projectId, statuses, cards }: KanbanB
               key={status.id}
               status={status}
               cards={columns[status.id] ?? []}
+              pullRequests={pullRequests}
               workspaceId={workspaceId}
               cardHref={cardHref}
               openNumber={openNumber}
@@ -258,6 +268,7 @@ export function KanbanBoard({ workspaceId, projectId, statuses, cards }: KanbanB
           <TaskCard
             card={activeCard}
             href={cardHref(activeCard.number)}
+            pullRequest={pullRequests[activeCard.taskId]}
             tabIndex={-1}
             className="cursor-grabbing shadow-card-hover ring-2 ring-primary/40"
           />
@@ -270,6 +281,7 @@ export function KanbanBoard({ workspaceId, projectId, statuses, cards }: KanbanB
 interface BoardColumnProps {
   status: ProjectStatusDto;
   cards: BoardCardDto[];
+  pullRequests: PullRequestBadgesDto;
   workspaceId: string;
   cardHref: (number: number) => string;
   /** Номер задачи, открытой в панели, — её карточка подсвечена. */
@@ -283,6 +295,7 @@ interface BoardColumnProps {
 function BoardColumn({
   status,
   cards,
+  pullRequests,
   workspaceId,
   cardHref,
   openNumber,
@@ -325,6 +338,7 @@ function BoardColumn({
                 statusId={status.id}
                 href={cardHref(card.number)}
                 active={card.number === openNumber}
+                pullRequest={pullRequests[card.taskId]}
                 shouldSuppressClick={shouldSuppressClick}
                 reduceMotion={reduceMotion}
               />

@@ -218,7 +218,7 @@ function TaskSearch() {
         type="search"
         value={draft}
         maxLength={TASK_LIST_QUERY_MAX_LENGTH}
-        placeholder="Название или #номер"
+        placeholder="Название или номер"
         aria-label="Поиск задач"
         className="h-8 pl-8"
         onChange={(event) => change(event.target.value)}

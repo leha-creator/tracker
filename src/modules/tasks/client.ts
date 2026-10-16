@@ -83,6 +83,7 @@ export type {
   TaskDto,
   TaskListItemDto,
   TaskPlacementDto,
+  TaskRefDto,
   TaskUserDto,
 } from './slices/task/task.dto';
 export { createTaskSchema, taskNumberSchema, updateTaskSchema } from './slices/task/task.schema';

@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 
 import { resolveAuthPageReturnTo } from '@/components/auth/auth-redirect';
 import { FormSkeleton } from '@/components/auth/form-skeleton';
+import { GithubSignIn } from '@/components/auth/github-sign-in';
 import { SignUpForm } from '@/components/auth/sign-up-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -26,5 +27,10 @@ export default function RegisterPage({ searchParams }: PageProps<'/register'>) {
 
 async function SignUpSection({ searchParams }: Pick<PageProps<'/register'>, 'searchParams'>) {
   const returnTo = await resolveAuthPageReturnTo(searchParams);
-  return <SignUpForm returnTo={returnTo} />;
+  return (
+    <div className="grid gap-6">
+      <SignUpForm returnTo={returnTo} />
+      <GithubSignIn returnTo={returnTo} label="Зарегистрироваться через GitHub" />
+    </div>
+  );
 }

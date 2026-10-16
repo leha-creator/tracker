@@ -37,8 +37,12 @@ describe('parseTaskNumber', () => {
 });
 
 describe('formatTaskKey', () => {
-  it('prefixes number with #', () => {
-    expect(formatTaskKey(42)).toBe('#42');
+  it('joins workspace key and number', () => {
+    expect(formatTaskKey(42, 'TSK')).toBe('TSK-42');
+  });
+
+  it('falls back to # without workspace key', () => {
+    expect(formatTaskKey(42, null)).toBe('#42');
   });
 });
 

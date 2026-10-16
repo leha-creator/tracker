@@ -5,6 +5,9 @@ import { UserHoverCard } from '@/components/users/user-hover-card';
 import { cn } from '@/lib/utils';
 import type { BoardCardDto } from '@/modules/tasks/client';
 
+import { PullRequestIndicator } from '@/components/github/pull-request-indicator';
+import type { PullRequestBadgeDto } from '@/modules/integrations/github/client';
+
 import { AssigneeAvatar } from './assignee-avatar';
 import { DueDate } from './due-date';
 import { PriorityBadge } from './priority-badge';
@@ -14,10 +17,12 @@ type TaskCardProps = Omit<ComponentProps<typeof Link>, 'href' | 'children'> & {
   href: string;
   /** Задача открыта в панели справа — карточка подсвечена. */
   active?: boolean;
+  /** PR задачи (интеграция GitHub); нет — без индикатора. */
+  pullRequest?: PullRequestBadgeDto;
 };
 
 /** Карточка задачи на доске: открывает задачу в панели (доп. пропсы — для перетаскивания). */
-export function TaskCard({ card, href, active, className, ...props }: TaskCardProps) {
+export function TaskCard({ card, href, active, pullRequest, className, ...props }: TaskCardProps) {
   return (
     <Link
       href={href}
@@ -37,6 +42,7 @@ export function TaskCard({ card, href, active, className, ...props }: TaskCardPr
       <span className="line-clamp-3 font-medium break-words">{card.title}</span>
       <span className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{card.key}</span>
+        {pullRequest && <PullRequestIndicator badge={pullRequest} />}
         <PriorityBadge priority={card.priority} compact />
         {card.dueDate && <DueDate value={card.dueDate} isOverdue={card.isOverdue} />}
         {card.assignee && (

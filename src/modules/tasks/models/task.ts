@@ -18,9 +18,12 @@ export function parseTaskNumber(raw: string): number | null {
   return TASK_NUMBER_RE.test(raw) ? Number(raw) : null;
 }
 
-/** Ключ задачи для отображения: `#42`. */
-export function formatTaskKey(number: number): string {
-  return `#${number}`;
+/**
+ * Ключ задачи для отображения: `TSK-42` по ключу пространства, без ключа — `#42`
+ * (ключ ещё не проставлен; см. Workspace.taskKey).
+ */
+export function formatTaskKey(number: number, workspaceTaskKey: string | null): string {
+  return workspaceTaskKey ? `${workspaceTaskKey}-${number}` : `#${number}`;
 }
 
 interface TaskActor {

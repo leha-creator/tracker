@@ -13,8 +13,14 @@ import {
   createWorkspaceSchema,
   deleteWorkspaceSchema,
   renameWorkspaceSchema,
+  updateTaskKeySchema,
 } from './workspace.schema';
-import { createWorkspace, deleteWorkspace, renameWorkspace } from './workspace.service';
+import {
+  createWorkspace,
+  deleteWorkspace,
+  renameWorkspace,
+  updateTaskKey,
+} from './workspace.service';
 
 const log = createLogger('workspaces.actions');
 
@@ -30,7 +36,7 @@ export async function createWorkspaceAction(
   } catch (error) {
     return {
       ...toActionError(error, { action: 'createWorkspace' }),
-      values: formValues(formData, ['name', 'slug']),
+      values: formValues(formData, ['name', 'slug', 'taskKey']),
     };
   }
   revalidatePath('/', 'layout');
@@ -74,4 +80,23 @@ export async function deleteWorkspaceAction(
   revalidatePath('/', 'layout');
   log.debug({ to: '/' }, '[workspaces.actions.delete] redirect');
   redirect('/');
+}
+
+export async function updateTaskKeyAction(
+  _prev: FormState<{ taskKey: string }>,
+  formData: FormData,
+): Promise<FormState<{ taskKey: string }>> {
+  try {
+    const input = updateTaskKeySchema.parse(Object.fromEntries(formData));
+    const session = await requireUser();
+    const result = await updateTaskKey(session, input);
+    // Ключ виден в карточках, списке и задачах всего пространства.
+    revalidatePath('/', 'layout');
+    return { ok: true, data: result };
+  } catch (error) {
+    return {
+      ...toActionError(error, { action: 'updateTaskKey' }),
+      values: formValues(formData, ['taskKey']),
+    };
+  }
 }

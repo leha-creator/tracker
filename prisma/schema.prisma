@@ -51,6 +51,8 @@ model User {
   createdDocuments       Document[]         @relation("DocumentCreator")
   updatedDocuments       Document[]         @relation("DocumentUpdater")
   createdTaskDocLinks    TaskDocumentLink[] @relation("TaskDocumentLinkCreator")
+
+  connectedGithubInstallations WorkspaceGithubInstallation[] @relation("GithubInstallationConnector")
 }
 
 model Session {
@@ -113,6 +115,10 @@ model Workspace {
   id        String   @id
   name      String
   slug      String   @unique
+  /// Ключ задач (`TSK` → TSK-42): ссылки на задачи в ветках, PR и коммитах GitHub. Уникален глобально,
+  /// в верхнем регистре. null — ключ не задан (задачи показываются как #42, привязка GitHub не работает).
+  /// Проставляет сервис пространств сразу после создания (поле в плагине с input: false).
+  taskKey   String?  @unique
   logo      String?
   metadata  String?
   createdAt DateTime @default(now())
@@ -127,6 +133,9 @@ model Workspace {
   documentFolders DocumentFolder[]
   documents       Document[]
   documentTags    DocumentTag[]
+
+  githubInstallations WorkspaceGithubInstallation[]
+  githubRepositories  WorkspaceGithubRepository[]
 }
 
 model WorkspaceMember {
@@ -187,10 +196,12 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace  Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdBy  User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  statuses   ProjectStatus[]
-  placements TaskPlacement[]
+  workspace        Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy        User?                    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  statuses         ProjectStatus[]
+  placements       TaskPlacement[]
+  /// Автосмена статуса по PR (таблица модуля integrations/github).
+  githubAutomation GithubProjectAutomation?
 
   @@unique([workspaceId, name])
   @@unique([id, workspaceId])
@@ -210,8 +221,11 @@ model ProjectStatus {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
-  project    Project         @relation(fields: [projectId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  placements TaskPlacement[]
+  project                 Project                   @relation(fields: [projectId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  placements              TaskPlacement[]
+  /// Настройки автосмены статуса, ссылающиеся на этот статус (таблица модуля integrations/github).
+  githubAutomationsOpened GithubProjectAutomation[] @relation("GithubAutomationOpened")
+  githubAutomationsMerged GithubProjectAutomation[] @relation("GithubAutomationMerged")
 
   @@unique([projectId, name])
   @@unique([id, projectId])
@@ -252,14 +266,18 @@ model Task {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  workspace     Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  assignee      User?              @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  createdBy     User?              @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  placements    TaskPlacement[]
-  comments      TaskComment[]
-  attachments   TaskAttachment[]
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee           User?              @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy          User?              @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  placements         TaskPlacement[]
+  comments           TaskComment[]
+  attachments        TaskAttachment[]
   /// Связи с документами (таблица модуля documents).
-  documentLinks TaskDocumentLink[]
+  documentLinks      TaskDocumentLink[]
+  /// PR, ветки и коммиты GitHub (таблицы модуля integrations/github).
+  githubPullRequests TaskPullRequest[]
+  githubBranches     TaskGithubBranch[]
+  githubCommits      TaskGithubCommit[]
 
   @@unique([workspaceId, number])
   @@unique([id, workspaceId])
@@ -403,6 +421,10 @@ enum NotificationType {
   task_assigned
   task_comment
   workspace_invitation
+  /// GitHub: к задаче привязан PR, PR слит, ревью PR (модуль integrations/github).
+  pr_linked
+  pr_merged
+  pr_review
 }
 
 model Notification {
@@ -574,4 +596,249 @@ model TaskDocumentLink {
   @@id([taskId, documentId])
   @@index([documentId])
   @@index([createdById])
+}
+
+// ── GitHub ─────────────────────────────────────────────────────────────────────
+// Таблицы модуля integrations/github; ядро (tasks, projects) о них не знает. Id GitHub — BigInt.
+// Установка GitHub App и репозитории подключаются к пространствам M:N: один репозиторий может
+// обслуживать несколько пространств, ссылку на задачу различает ключ пространства (TSK-42).
+// Удаление установки (вебхук installation.deleted) каскадом удаляет репозитории, PR и связи.
+
+/// Состояние PR: open и draft — открыт (черновик отдельно), merged — слит, closed — закрыт без слияния.
+enum GithubPrState {
+  open
+  draft
+  merged
+  closed
+}
+
+/// Итог ревью PR по последнему ревью каждого ревьюера.
+enum GithubReviewState {
+  none
+  approved
+  changes_requested
+}
+
+/// Итог CI (check suites) для последнего коммита PR.
+enum GithubChecksState {
+  none
+  pending
+  success
+  failure
+}
+
+/// Откуда связь задачи с PR: распознана по ключу или добавлена вручную по ссылке.
+enum GithubLinkSource {
+  auto
+  manual
+}
+
+model GithubInstallation {
+  /// installation.id в GitHub.
+  id           BigInt    @id
+  accountId    BigInt
+  accountLogin String
+  /// "User" | "Organization".
+  accountType  String
+  /// Установка приостановлена в GitHub: события не обрабатываются.
+  suspendedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspaces   WorkspaceGithubInstallation[]
+  repositories GithubRepository[]
+}
+
+/// Установка, подключённая владельцем к пространству (подключение проверено токеном пользователя).
+model WorkspaceGithubInstallation {
+  workspaceId    String
+  installationId BigInt
+  connectedById  String?
+  createdAt      DateTime @default(now())
+
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  installation GithubInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  connectedBy  User?              @relation("GithubInstallationConnector", fields: [connectedById], references: [id], onDelete: SetNull)
+
+  @@id([workspaceId, installationId])
+  @@index([installationId])
+  @@index([connectedById])
+}
+
+model GithubRepository {
+  /// repository.id в GitHub (не меняется при переименовании).
+  id             BigInt   @id
+  installationId BigInt
+  /// owner/name — обновляется по вебхукам.
+  fullName       String
+  private        Boolean
+  defaultBranch  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  installation GithubInstallation          @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  workspaces   WorkspaceGithubRepository[]
+  pullRequests GithubPullRequest[]
+  checkSuites  GithubCheckSuite[]
+  branches     TaskGithubBranch[]
+  commits      TaskGithubCommit[]
+
+  @@index([installationId])
+}
+
+/// Репозиторий, выбранный владельцем для пространства: только его события привязываются к задачам.
+model WorkspaceGithubRepository {
+  workspaceId  String
+  repositoryId BigInt
+  createdAt    DateTime @default(now())
+
+  workspace  Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  repository GithubRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, repositoryId])
+  @@index([repositoryId])
+}
+
+model GithubPullRequest {
+  /// pull_request.id в GitHub.
+  id              BigInt            @id
+  repositoryId    BigInt
+  number          Int
+  title           String
+  url             String
+  state           GithubPrState
+  headRef         String
+  headSha         String
+  authorId        BigInt?
+  authorLogin     String?
+  reviewState     GithubReviewState @default(none)
+  checksState     GithubChecksState @default(none)
+  mergedAt        DateTime?
+  closedAt        DateTime?
+  /// pull_request.updated_at: более старые события не перезаписывают PR (порядок доставки не гарантирован).
+  githubUpdatedAt DateTime
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  repository GithubRepository          @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  reviews    GithubPullRequestReview[]
+  tasks      TaskPullRequest[]
+
+  @@unique([repositoryId, number])
+  @@index([repositoryId, headSha])
+}
+
+/// Последнее ревью каждого ревьюера: из них считается GithubPullRequest.reviewState.
+model GithubPullRequestReview {
+  pullRequestId BigInt
+  reviewerId    BigInt
+  /// "approved" | "changes_requested" | "commented" | "dismissed".
+  state         String
+  submittedAt   DateTime
+
+  pullRequest GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+
+  @@id([pullRequestId, reviewerId])
+}
+
+/// Check suite коммита: из них считается GithubPullRequest.checksState для headSha.
+model GithubCheckSuite {
+  /// check_suite.id в GitHub.
+  id           BigInt   @id
+  repositoryId BigInt
+  headSha      String
+  /// "queued" | "in_progress" | "completed" | …
+  status       String
+  /// "success" | "failure" | "neutral" | …; null — ещё не завершён.
+  conclusion   String?
+  updatedAt    DateTime @updatedAt
+
+  repository GithubRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId, headSha])
+}
+
+/// PR, привязанный к задаче. dismissedAt — отвязан вручную: автоматика его не восстанавливает.
+model TaskPullRequest {
+  taskId        String           @db.Uuid
+  workspaceId   String
+  pullRequestId BigInt
+  source        GithubLinkSource
+  dismissedAt   DateTime?
+  createdAt     DateTime         @default(now())
+
+  task        Task              @relation(fields: [taskId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  pullRequest GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, pullRequestId])
+  @@index([workspaceId, pullRequestId])
+  @@index([pullRequestId])
+}
+
+/// Ветка, в имени которой есть ключ задачи. deletedAt — ветку удалили в GitHub (показывается зачёркнутой).
+model TaskGithubBranch {
+  taskId       String    @db.Uuid
+  workspaceId  String
+  repositoryId BigInt
+  name         String
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  task       Task             @relation(fields: [taskId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  repository GithubRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, repositoryId, name])
+  @@index([workspaceId])
+  @@index([repositoryId, name])
+}
+
+/// Коммит задачи: ключ в тексте коммита или в имени ветки push.
+model TaskGithubCommit {
+  taskId       String   @db.Uuid
+  workspaceId  String
+  repositoryId BigInt
+  sha          String
+  /// Первая строка сообщения, не длиннее 200 символов.
+  message      String
+  url          String
+  authorLogin  String?
+  committedAt  DateTime
+  createdAt    DateTime @default(now())
+
+  task       Task             @relation(fields: [taskId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  repository GithubRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, repositoryId, sha])
+  @@index([taskId, committedAt])
+  @@index([workspaceId])
+  @@index([repositoryId])
+}
+
+/// Принятые доставки вебхуков (X-GitHub-Delivery): повтор не обрабатывается. Старше 7 дней удаляются.
+model GithubWebhookDelivery {
+  id         String   @id
+  event      String
+  receivedAt DateTime @default(now())
+
+  @@index([receivedAt])
+}
+
+/// Автосмена статуса задачи в проекте по событиям PR. Статус удалён — настройка сбрасывается (SetNull).
+/// Принадлежность статусов проекту проверяет сервис (FK на статус — только по id).
+model GithubProjectAutomation {
+  projectId        String   @id @db.Uuid
+  workspaceId      String
+  prOpenedStatusId String?  @db.Uuid
+  prMergedStatusId String?  @db.Uuid
+  updatedAt        DateTime @updatedAt
+
+  project        Project        @relation(fields: [projectId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  prOpenedStatus ProjectStatus? @relation("GithubAutomationOpened", fields: [prOpenedStatusId], references: [id], onDelete: SetNull)
+  prMergedStatus ProjectStatus? @relation("GithubAutomationMerged", fields: [prMergedStatusId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, workspaceId])
+  @@index([workspaceId])
+  @@index([prOpenedStatusId])
+  @@index([prMergedStatusId])
 }

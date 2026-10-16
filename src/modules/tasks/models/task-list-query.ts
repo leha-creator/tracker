@@ -45,7 +45,7 @@ export const TASK_LIST_ME = 'me';
 export type TaskCategoryFilter = StatusCategory | typeof TASK_LIST_NONE;
 
 export interface TaskListQuery {
-  /** Поиск по названию или номеру (`#42`, `42`); пустая строка — без поиска. */
+  /** Поиск по названию или номеру (`#42`, `42`, `TSK-42`); пустая строка — без поиска. */
   q: string;
   /** Статусы проекта (только в проекте). */
   statuses: string[];
@@ -79,7 +79,8 @@ const DEFAULT_DIRECTION: Record<TaskListSort, SortDirection> = {
 
 const USER_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const PAGE_RE = /^[1-9]\d{0,5}$/;
-const TASK_NUMBER_QUERY_RE = /^#?([1-9]\d{0,8})$/;
+/** `42`, `#42` или ключ задачи `TSK-42` (префикс не сверяется: поиск и так в пространстве). */
+const TASK_NUMBER_QUERY_RE = /^(?:#|[a-z][a-z0-9]{1,9}-)?([1-9]\d{0,8})$/i;
 
 export function defaultSortDirection(sort: TaskListSort): SortDirection {
   return DEFAULT_DIRECTION[sort];
@@ -229,7 +230,7 @@ export function clearFilters(query: TaskListQuery, scope: TaskListScope): TaskLi
   return { ...defaultTaskListQuery(scope), sort: query.sort, dir: query.dir };
 }
 
-/** Поиск `#42` или `42` → номер задачи, иначе null. */
+/** Поиск `#42`, `42` или `TSK-42` → номер задачи, иначе null. */
 export function parseTaskNumberQuery(q: string): number | null {
   const match = TASK_NUMBER_QUERY_RE.exec(q.trim());
   return match ? Number(match[1]) : null;

@@ -191,6 +191,11 @@ describe('parseTaskNumberQuery', () => {
     ['#', null],
     ['abc', null],
     ['42 задача', null],
+    ['TSK-42', 42],
+    ['tsk-7', 7],
+    ['WEB2-15', 15],
+    ['2TSK-1', null],
+    ['TSK-', null],
   ])('%j → %j', (q, expected) => {
     expect(parseTaskNumberQuery(q)).toBe(expected);
   });

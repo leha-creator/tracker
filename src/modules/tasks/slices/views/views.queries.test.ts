@@ -81,6 +81,7 @@ function row(
       priority: 'none',
       dueDate: extra.dueDate ?? null,
       assignee: null,
+      workspace: { taskKey: null },
     },
   };
 }
@@ -136,6 +137,7 @@ function listRow(number: number, extra: { dueDate?: Date | null; categories?: st
     priority: 'none',
     dueDate: extra.dueDate ?? null,
     assignee: null,
+    workspace: { taskKey: null },
     placements: (extra.categories ?? []).map((category, index) => ({
       projectId: `p${index}`,
       statusId: `s${index}`,
@@ -239,6 +241,7 @@ describe('getMemberTaskSummary', () => {
           priority: 'none',
           dueDate: null,
           assignee: { id: 'user-2', name: 'Борис', image: null },
+          workspace: { taskKey: 'TSK' },
           placements: [],
         },
       ],
@@ -257,7 +260,7 @@ describe('getMemberTaskSummary', () => {
       commentsCount: 7,
       lastActivityAt: new Date('2026-10-12T10:00:00Z'),
     });
-    expect(summary.openTasks[0]).toMatchObject({ key: '#4', isOverdue: false });
+    expect(summary.openTasks[0]).toMatchObject({ key: 'TSK-4', isOverdue: false });
   });
 
   it('reports no activity', async () => {
@@ -282,11 +285,17 @@ describe('getTaskSummaries', () => {
 
   it('maps keys and done state, skipping malformed ids', async () => {
     listTaskSummaries.mockResolvedValue([
-      { id: T2, number: 42, title: 'Готовая', placements: [{ status: { category: 'done' } }] },
-      { id: T1, number: 7, title: 'Без проекта', placements: [] },
+      {
+        id: T2,
+        number: 42,
+        title: 'Готовая',
+        placements: [{ status: { category: 'done' } }],
+        workspace: { taskKey: 'TSK' },
+      },
+      { id: T1, number: 7, title: 'Без проекта', placements: [], workspace: { taskKey: null } },
     ]);
     await expect(getTaskSummaries(session, 'ws-1', [T1, T2, T1, '../x'])).resolves.toEqual([
-      { id: T2, number: 42, key: '#42', title: 'Готовая', isDone: true },
+      { id: T2, number: 42, key: 'TSK-42', title: 'Готовая', isDone: true },
       { id: T1, number: 7, key: '#7', title: 'Без проекта', isDone: false },
     ]);
     expect(listTaskSummaries).toHaveBeenCalledWith('ws-1', [T1, T2]);

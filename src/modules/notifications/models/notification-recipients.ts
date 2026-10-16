@@ -22,6 +22,9 @@ const TYPE_PRIORITY: Record<NotificationType, number> = {
   task_assigned: 1,
   task_comment: 2,
   workspace_invitation: 3,
+  pr_review: 4,
+  pr_merged: 5,
+  pr_linked: 6,
 };
 
 /**

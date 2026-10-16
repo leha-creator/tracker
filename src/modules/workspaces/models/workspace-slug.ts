@@ -1,4 +1,5 @@
 import { ValidationError } from '@/shared/errors/app-error';
+import { transliterate } from '@/shared/text';
 
 export const SLUG_MIN_LENGTH = 3;
 export const SLUG_MAX_LENGTH = 48;
@@ -16,48 +17,9 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   'workspaces',
 ]);
 
-const CYRILLIC: Record<string, string> = {
-  а: 'a',
-  б: 'b',
-  в: 'v',
-  г: 'g',
-  д: 'd',
-  е: 'e',
-  ё: 'e',
-  ж: 'zh',
-  з: 'z',
-  и: 'i',
-  й: 'y',
-  к: 'k',
-  л: 'l',
-  м: 'm',
-  н: 'n',
-  о: 'o',
-  п: 'p',
-  р: 'r',
-  с: 's',
-  т: 't',
-  у: 'u',
-  ф: 'f',
-  х: 'kh',
-  ц: 'ts',
-  ч: 'ch',
-  ш: 'sh',
-  щ: 'shch',
-  ъ: '',
-  ы: 'y',
-  ь: '',
-  э: 'e',
-  ю: 'yu',
-  я: 'ya',
-};
-
 /** Slug из названия: транслитерация кириллицы, `a-z0-9` и дефисы. Может вернуть пустую строку. */
 export function slugify(name: string): string {
-  const transliterated = [...name.toLowerCase()].map((char) => CYRILLIC[char] ?? char).join('');
-  return transliterated
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
+  return transliterate(name)
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, SLUG_MAX_LENGTH)

@@ -42,7 +42,7 @@ export const commentRepository = {
         title: true,
         assigneeId: true,
         createdById: true,
-        workspace: { select: { slug: true, name: true } },
+        workspace: { select: { slug: true, name: true, taskKey: true } },
       },
     });
   },

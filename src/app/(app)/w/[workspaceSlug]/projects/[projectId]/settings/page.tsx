@@ -2,10 +2,12 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
+import { ProjectAutomationForm } from '@/components/github/project-automation-form';
 import { DeleteProjectDialog } from '@/components/projects/delete-project-dialog';
 import { ProjectSettingsForm } from '@/components/projects/project-settings-form';
 import { StatusList } from '@/components/projects/status-list';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { getProjectAutomation, isGithubEnabled } from '@/modules/integrations/github';
 import { listStatuses } from '@/modules/projects';
 
 import { loadProjectPage } from '../_lib/load-project';
@@ -43,7 +45,11 @@ async function SettingsSection({ params }: Pick<Props, 'params'>) {
   const { session, workspace, project, access } = await loadProjectPage(workspaceSlug, projectId);
   // Без права управления проектами — 404; сервер всё равно проверяет право в каждом action.
   if (!access.permissions.manageProjects) notFound();
-  const statuses = await listStatuses(session, workspace.id, project.id);
+  const githubEnabled = isGithubEnabled();
+  const [statuses, automation] = await Promise.all([
+    listStatuses(session, workspace.id, project.id),
+    githubEnabled ? getProjectAutomation(session, workspace.id, project.id) : null,
+  ]);
 
   return (
     <div className="grid w-full max-w-4xl gap-6">
@@ -67,6 +73,26 @@ async function SettingsSection({ params }: Pick<Props, 'params'>) {
           <StatusList workspaceId={workspace.id} projectId={project.id} statuses={statuses} />
         </CardContent>
       </Card>
+      {automation && (
+        <Card>
+          <CardHeader>
+            <CardTitle>GitHub</CardTitle>
+            <CardDescription>
+              Задачи с привязанным PR переходят в выбранный статус этого проекта. Задача в
+              нескольких проектах меняет статус в каждом по его настройке.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ProjectAutomationForm
+              workspaceId={workspace.id}
+              projectId={project.id}
+              statuses={statuses}
+              prOpenedStatusId={automation.prOpenedStatusId}
+              prMergedStatusId={automation.prMergedStatusId}
+            />
+          </CardContent>
+        </Card>
+      )}
       {/* У Card обводка — ring, а не border. */}
       <Card className="ring-destructive/30">
         <CardHeader>

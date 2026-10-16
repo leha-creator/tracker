@@ -58,6 +58,9 @@ describe('getMyNotificationPreferences', () => {
       ['task_assigned', { inApp: true, email: true }],
       ['task_comment', { inApp: true, email: false }],
       ['workspace_invitation', { inApp: true, email: false }],
+      ['pr_linked', { inApp: true, email: false }],
+      ['pr_merged', { inApp: true, email: false }],
+      ['pr_review', { inApp: true, email: true }],
     ]);
   });
 });
