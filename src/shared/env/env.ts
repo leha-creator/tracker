@@ -5,6 +5,11 @@ import { z } from 'zod';
 export const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
+const optionalNonEmpty = z
+  .string()
+  .optional()
+  .transform((value) => (value === '' ? undefined : value));
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -44,8 +49,9 @@ const envSchema = z
     SMTP_HOST: z.string().min(1).default('127.0.0.1'),
     SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(1025),
     SMTP_SECURE: z.stringbool().default(false),
-    SMTP_USER: z.string().min(1).optional(),
-    SMTP_PASSWORD: z.string().min(1).optional(),
+    // Пустая строка — «не задано»: compose передаёт `${SMTP_USER:-}` как "" для SMTP без авторизации.
+    SMTP_USER: optionalNonEmpty,
+    SMTP_PASSWORD: optionalNonEmpty,
     MAIL_FROM: z.string().min(3).default('Tasker <no-reply@tasker.local>'),
   })
   .transform((env) => ({

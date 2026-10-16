@@ -38,7 +38,11 @@ FROM deps AS builder
 # .dockerignore исключает node_modules, .next, src/generated и .env*,
 # поэтому результаты стейджа deps не перезаписываются.
 COPY . .
+# NEXT_SERVER_ACTIONS_ENCRYPTION_KEY — BuildKit-секрет (в слои и историю образа не попадает):
+# один ключ на все релизы, иначе после деплоя открытые вкладки ловят «Failed to find Server Action».
+# Без секрета (локальная сборка, PR) Next.js генерирует ключ сам.
 RUN --mount=type=cache,id=next-cache,target=/app/.next/cache \
+    --mount=type=secret,id=next_sa_key,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
     pnpm build
 
 # --- migrate: разовое применение миграций -----------------------------------------
@@ -46,9 +50,20 @@ RUN --mount=type=cache,id=next-cache,target=/app/.next/cache \
 # а при нескольких репликах нет гонки за применение миграций. Запускается перед `app`.
 # В контейнере нет .env — `dotenv/config` в prisma.config.ts ничего не загрузит,
 # DATABASE_URL приходит из окружения контейнера.
-FROM deps AS migrate
-# Бинарник Prisma вызывается напрямую: pnpm (corepack) кеширован только для root,
-# а процесс работает от непривилегированного пользователя.
+#
+# Не наследуется от `deps`: там все dev-зависимости (~2 GB), а для `migrate deploy` нужны
+# только Prisma CLI и dotenv (его импортирует prisma.config.ts). Ставятся через npm тех же
+# точных версий, что в package.json; транзитивные зависимости lockfile не фиксирует —
+# CI всё равно прогоняет этот образ на чистом Postgres перед публикацией.
+FROM ${NODE_IMAGE} AS migrate
+WORKDIR /app
+COPY package.json ./app-package.json
+RUN node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('app-package.json','utf8'));const d={...p.dependencies,...p.devDependencies};fs.writeFileSync('package.json',JSON.stringify({private:true,dependencies:{prisma:d.prisma,dotenv:d.dotenv}}))" \
+    && rm app-package.json \
+    && npm install --omit=dev --no-audit --no-fund --loglevel=warn \
+    && npm cache clean --force
+COPY prisma.config.ts ./
+COPY prisma ./prisma
 USER node
 CMD ["./node_modules/.bin/prisma", "migrate", "deploy"]
 

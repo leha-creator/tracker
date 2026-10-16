@@ -94,6 +94,13 @@ describe('parseEnv', () => {
     expect(env.MAIL_FROM).toBe('Tasker <no-reply@tasker.local>');
   });
 
+  it('treats empty SMTP_USER and SMTP_PASSWORD as unset', () => {
+    const env = parseEnv({ ...VALID_ENV, SMTP_USER: '', SMTP_PASSWORD: '' });
+
+    expect(env.SMTP_USER).toBeUndefined();
+    expect(env.SMTP_PASSWORD).toBeUndefined();
+  });
+
   it('parses SMTP_PORT and SMTP_SECURE from strings', () => {
     const env = parseEnv({ ...VALID_ENV, SMTP_PORT: '465', SMTP_SECURE: 'true' });
 

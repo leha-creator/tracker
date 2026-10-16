@@ -1,0 +1,49 @@
+# Сайт Tasker для edge-прокси (deploy/edge). Деплой подставляет домен вместо __DOMAIN__
+# и копирует файл в /opt/edge/sites/tracker.caddy, затем делает `caddy reload`.
+__DOMAIN__ {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# В query presigned-ссылок — подпись и учётка ключа: в access-лог не пишем.
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri query {
+					delete X-Amz-Signature
+					delete X-Amz-Credential
+					delete X-Amz-Security-Token
+				}
+				request>headers>Cookie delete
+				request>headers>Authorization delete
+				resp_headers>Set-Cookie delete
+			}
+		}
+	}
+
+	# Бакет вложений (path-style, имя = S3_BUCKET из /opt/tasker/.env). Браузер загружает
+	# (presigned POST на /tasker-attachments) и скачивает (presigned GET) файлы напрямую.
+	# Host и путь не переписываются — иначе не сойдётся подпись. Остальной API MinIO снаружи
+	# недоступен.
+	@bucket path /tasker-attachments /tasker-attachments/*
+	handle @bucket {
+		reverse_proxy tasker-minio:9000
+	}
+
+	handle {
+		encode zstd gzip
+		reverse_proxy tasker-app:3000
+	}
+
+	# Приложение перезапускается или ещё не развёрнуто.
+	handle_errors 502 503 504 {
+		header Content-Type "text/plain; charset=utf-8"
+		header Retry-After "30"
+		respond "Tasker обновляется, попробуйте через минуту" 503
+	}
+}

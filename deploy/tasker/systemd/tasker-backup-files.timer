@@ -1,0 +1,12 @@
+# Еженедельная копия файлов вложений Tasker (том MinIO).
+[Unit]
+Description=Weekly Tasker files backup
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00
+RandomizedDelaySec=10m
+Persistent=true
+Unit=tasker-backup@files.service
+
+[Install]
+WantedBy=timers.target

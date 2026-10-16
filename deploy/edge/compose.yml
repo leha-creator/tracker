@@ -1,0 +1,48 @@
+# Общий edge-прокси сервера: единственный процесс на портах 80/443, HTTPS для всех проектов.
+#
+# На сервере лежит в /opt/edge рядом с Caddyfile и каталогом sites/. Применяется вручную
+# (см. README.md), а не из CI: конфиг общий для нескольких проектов.
+#
+#   cd /opt/edge
+#   docker compose up -d
+#   docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+#
+# Проекты подключают свои сервисы к сети `edge` (external) и кладут файл сайта
+# в /opt/edge/sites/<project>.caddy — Caddyfile импортирует их все.
+name: edge
+
+services:
+  caddy:
+    image: caddy:2.11.7
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+    networks:
+      - edge
+
+networks:
+  # Создаётся один раз deploy/bootstrap-server.sh (`docker network create edge`) и внешняя
+  # для всех стеков: `docker compose down` любого из них её не удаляет.
+  edge:
+    external: true
+    name: edge
+
+volumes:
+  # Сертификаты и ключи ACME — не удалять без нужды (лимиты Let's Encrypt).
+  caddy_data: {}
+  caddy_config: {}

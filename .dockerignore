@@ -27,7 +27,8 @@ docs
 .playwright-mcp
 .vscode
 
-# Файлы Docker не нужны внутри образа
+# Файлы Docker и конфиги сервера не нужны внутри образа
 Dockerfile
 .dockerignore
 compose*.yml
+deploy
