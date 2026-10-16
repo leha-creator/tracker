@@ -31,4 +31,5 @@ export { STATUS_CATEGORIES, STATUS_CATEGORY_LABELS } from './models/status-categ
 export type { StatusCategory } from './models/status-category';
 export { parseStatusColor, STATUS_COLOR_LABELS, STATUS_COLORS } from './models/status-color';
 export type { StatusColor } from './models/status-color';
+export { reorderStatuses } from './models/status-order';
 export { STATUS_LIMIT, STATUS_NAME_MAX_LENGTH } from './models/status-set';

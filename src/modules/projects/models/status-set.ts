@@ -7,8 +7,6 @@ import type { StatusColor } from './status-color';
 export const STATUS_LIMIT = 20;
 export const STATUS_NAME_MAX_LENGTH = 40;
 
-export type StatusDirection = 'up' | 'down';
-
 export interface StatusFields {
   name: string;
   category: StatusCategory;
@@ -88,13 +86,23 @@ export class StatusSet {
     };
   }
 
-  /** Сдвигает статус на одну позицию. У границы ничего не меняется — возвращает false. */
-  move(id: string, direction: StatusDirection): boolean {
+  /**
+   * Ставит статус сразу после `prevId` (`null` — первым). Возвращает false, если статус уже
+   * стоит на этом месте.
+   */
+  moveAfter(id: string, prevId: string | null): boolean {
     const index = this.indexOf(id);
-    const target = direction === 'up' ? index - 1 : index + 1;
-    if (target < 0 || target >= this.items.length) return false;
-    const items = [...this.items];
-    [items[index], items[target]] = [items[target]!, items[index]!];
+    if (prevId === id) {
+      throw new ValidationError('Статус нельзя поставить после самого себя');
+    }
+    if (prevId !== null) this.indexOf(prevId);
+    const currentPrevId = index === 0 ? null : this.items[index - 1]!.id;
+    if (currentPrevId === prevId) return false;
+
+    const item = this.items[index]!;
+    const items = this.items.filter((_, i) => i !== index);
+    const target = prevId === null ? 0 : items.findIndex((other) => other.id === prevId) + 1;
+    items.splice(target, 0, item);
     this.items = items;
     return true;
   }

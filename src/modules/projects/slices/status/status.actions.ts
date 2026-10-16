@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { requireUser } from '@/shared/access';
 import { toActionError } from '@/shared/errors';
-import { formValues, type FormState } from '@/shared/types';
+import { formValues, type ActionResult, type FormState } from '@/shared/types';
 
 import {
   addStatusSchema,
@@ -51,15 +51,21 @@ export async function updateStatusAction(_prev: FormState, formData: FormData): 
   }
 }
 
-export async function moveStatusAction(_prev: FormState, formData: FormData): Promise<FormState> {
+/** Перестановка статуса перетаскиванием: встаёт сразу после `prevStatusId` (null — в начало). */
+export async function moveStatusAction(raw: {
+  workspaceId: string;
+  projectId: string;
+  statusId: string;
+  prevStatusId: string | null;
+}): Promise<ActionResult<null>> {
   try {
-    const input = moveStatusSchema.parse(Object.fromEntries(formData));
+    const input = moveStatusSchema.parse(raw);
     const session = await requireUser();
     await moveStatus(session, input);
     revalidateWorkspace();
     return { ok: true, data: null };
   } catch (error) {
-    return { ...toActionError(error, { action: 'moveStatus' }), values: {} };
+    return toActionError(error, { action: 'moveStatus' });
   }
 }
 

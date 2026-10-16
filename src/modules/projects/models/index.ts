@@ -17,5 +17,6 @@ export {
   STATUS_COLORS,
 } from './status-color';
 export type { StatusColor } from './status-color';
+export { reorderStatuses } from './status-order';
 export { STATUS_LIMIT, STATUS_NAME_MAX_LENGTH, StatusSet } from './status-set';
-export type { PositionedStatus, StatusDirection, StatusFields, StatusItem } from './status-set';
+export type { PositionedStatus, StatusFields, StatusItem } from './status-set';

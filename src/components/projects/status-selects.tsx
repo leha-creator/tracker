@@ -7,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import {
   STATUS_CATEGORIES,
   STATUS_CATEGORY_LABELS,
@@ -23,10 +24,18 @@ interface SelectProps<T extends string> {
   onChange: (value: T) => void;
   label: string;
   disabled?: boolean;
+  /** Классы триггера; по умолчанию фиксированная ширина. */
+  className?: string;
 }
 
 /** Выбор категории; значение уходит в форму полем `category`. */
-export function CategorySelect({ value, onChange, label, disabled }: SelectProps<StatusCategory>) {
+export function CategorySelect({
+  value,
+  onChange,
+  label,
+  disabled,
+  className,
+}: SelectProps<StatusCategory>) {
   return (
     <Select
       name="category"
@@ -34,7 +43,7 @@ export function CategorySelect({ value, onChange, label, disabled }: SelectProps
       disabled={disabled}
       onValueChange={(next) => onChange(next as StatusCategory)}
     >
-      <SelectTrigger size="sm" aria-label={label} className="w-36">
+      <SelectTrigger size="sm" aria-label={label} className={cn('w-36', className)}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -49,7 +58,13 @@ export function CategorySelect({ value, onChange, label, disabled }: SelectProps
 }
 
 /** Выбор цвета из палитры; значение уходит в форму полем `color`. */
-export function ColorSelect({ value, onChange, label, disabled }: SelectProps<StatusColor>) {
+export function ColorSelect({
+  value,
+  onChange,
+  label,
+  disabled,
+  className,
+}: SelectProps<StatusColor>) {
   return (
     <Select
       name="color"
@@ -57,7 +72,7 @@ export function ColorSelect({ value, onChange, label, disabled }: SelectProps<St
       disabled={disabled}
       onValueChange={(next) => onChange(next as StatusColor)}
     >
-      <SelectTrigger size="sm" aria-label={label} className="w-36">
+      <SelectTrigger size="sm" aria-label={label} className={cn('w-36', className)}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

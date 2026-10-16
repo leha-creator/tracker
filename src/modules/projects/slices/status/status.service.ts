@@ -12,7 +12,6 @@ import {
   StatusSet,
   type StatusCategory,
   type StatusColor,
-  type StatusDirection,
   type StatusFields,
 } from '../../models';
 import type { ProjectStatusDto } from './status.dto';
@@ -39,12 +38,13 @@ function assertIds(ref: ProjectRef, statusId?: string): void {
 /**
  * Общий сценарий изменения набора: право → блокировка проекта → загрузка набора →
  * метод модели → (beforeSave) → сохранение. Нарушение инварианта логируется как WARN.
+ * Если `mutate` вернул false (набор не изменился), сохранение пропускается.
  */
 async function mutateStatusSet(
   session: AuthSession,
   ref: ProjectRef,
   operation: string,
-  mutate: (set: StatusSet, statuses: readonly ProjectStatusDto[]) => void,
+  mutate: (set: StatusSet, statuses: readonly ProjectStatusDto[]) => boolean | void,
   beforeSave?: (tx: TransactionClient) => Promise<void>,
 ): Promise<string[]> {
   const { workspaceId, projectId } = ref;
@@ -59,14 +59,19 @@ async function mutateStatusSet(
       toStatusDto,
     );
     const set = StatusSet.fromPersisted(statuses);
+    let changed: boolean | void;
     try {
-      mutate(set, statuses);
+      changed = mutate(set, statuses);
     } catch (error) {
       log.warn(
         { workspaceId, projectId, operation, err: error },
         '[status] rejected by status set invariant',
       );
       throw error;
+    }
+    if (changed === false) {
+      log.debug({ workspaceId, projectId, operation }, '[status] set unchanged, save skipped');
+      return [];
     }
     await beforeSave?.(tx);
     return statusRepository.saveSet(tx, workspaceId, projectId, set);
@@ -145,20 +150,24 @@ export async function updateStatus(
 
 export async function moveStatus(
   session: AuthSession,
-  input: ProjectRef & { statusId: string; direction: StatusDirection },
+  input: ProjectRef & { statusId: string; prevStatusId: string | null },
 ): Promise<void> {
-  const { workspaceId, projectId, statusId, direction } = input;
+  const { workspaceId, projectId, statusId, prevStatusId } = input;
   assertIds(input, statusId);
+  if (prevStatusId !== null && !isEntityId(prevStatusId)) {
+    throw new NotFoundError('Статус не найден');
+  }
   log.debug(
-    { userId: session.user.id, workspaceId, projectId, statusId, direction },
+    { userId: session.user.id, workspaceId, projectId, statusId, prevStatusId },
     '[status.moveStatus] start',
   );
 
   let moved = false;
   await mutateStatusSet(session, input, 'move', (set) => {
-    moved = set.move(statusId, direction);
+    moved = set.moveAfter(statusId, prevStatusId);
+    return moved;
   });
-  log.info({ projectId, statusId, direction, moved }, '[status] moved');
+  log.info({ projectId, statusId, prevStatusId, moved }, '[status] moved');
 }
 
 /**

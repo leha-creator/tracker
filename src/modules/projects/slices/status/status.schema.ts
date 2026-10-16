@@ -30,7 +30,8 @@ export const updateStatusSchema = addStatusSchema.extend({ statusId: entityIdFie
 export const moveStatusSchema = z.object({
   ...projectRef,
   statusId: entityIdField,
-  direction: z.enum(['up', 'down'], { error: 'Недопустимое направление' }),
+  /** Статус, после которого встаёт перемещаемый; null — в начало. */
+  prevStatusId: entityIdField.nullable(),
 });
 
 /** Статус для переноса задач удаляемого статуса; пусто → не задан (нужен, только если задачи есть). */

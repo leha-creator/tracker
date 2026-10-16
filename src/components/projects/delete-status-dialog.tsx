@@ -26,6 +26,7 @@ import { deleteStatusAction, type ProjectStatusDto } from '@/modules/projects/cl
 import type { FormState } from '@/shared/types';
 
 import { StatusDot } from './status-badge';
+import { tasksLabel } from './tasks-label';
 
 interface DeleteStatusDialogProps {
   workspaceId: string;
@@ -34,14 +35,6 @@ interface DeleteStatusDialogProps {
   /** Остальные статусы проекта — куда перенести задачи. */
   otherStatuses: ProjectStatusDto[];
   trigger: ReactNode;
-}
-
-function tasksLabel(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${count} задача`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} задачи`;
-  return `${count} задач`;
 }
 
 /** Удаление статуса. Если в нём есть задачи — выбор статуса, куда их перенести. */

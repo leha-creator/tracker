@@ -98,21 +98,48 @@ describe('StatusSet.update', () => {
   });
 });
 
-describe('StatusSet.move', () => {
-  it('moves a status up and down', () => {
+describe('StatusSet.moveAfter', () => {
+  it('moves a status to the start', () => {
     const set = persisted();
-    expect(set.move('s-2', 'up')).toBe(true);
-    expect(ids(set)).toEqual(['s-2', 's-1', 's-3']);
-    expect(set.move('s-2', 'down')).toBe(true);
-    expect(ids(set)).toEqual(['s-1', 's-2', 's-3']);
+    expect(set.moveAfter('s-3', null)).toBe(true);
+    expect(ids(set)).toEqual(['s-3', 's-1', 's-2']);
     expect(set.statuses.map((status) => status.position)).toEqual([0, 1, 2]);
   });
 
-  it('is a no-op at the boundaries', () => {
+  it('moves a status to the end', () => {
     const set = persisted();
-    expect(set.move('s-1', 'up')).toBe(false);
-    expect(set.move('s-3', 'down')).toBe(false);
+    expect(set.moveAfter('s-1', 's-3')).toBe(true);
+    expect(ids(set)).toEqual(['s-2', 's-3', 's-1']);
+  });
+
+  it('moves a status down and up through the middle', () => {
+    const set = persisted();
+    expect(set.moveAfter('s-1', 's-2')).toBe(true);
+    expect(ids(set)).toEqual(['s-2', 's-1', 's-3']);
+    expect(set.moveAfter('s-3', 's-2')).toBe(true);
+    expect(ids(set)).toEqual(['s-2', 's-3', 's-1']);
+  });
+
+  it('is a no-op when the status is already in place', () => {
+    const set = persisted();
+    expect(set.moveAfter('s-1', null)).toBe(false);
+    expect(set.moveAfter('s-3', 's-2')).toBe(false);
     expect(ids(set)).toEqual(['s-1', 's-2', 's-3']);
+  });
+
+  it('rejects moving a status after itself', () => {
+    expect(() => persisted().moveAfter('s-2', 's-2')).toThrow(
+      expect.objectContaining({ code: 'VALIDATION_ERROR' }),
+    );
+  });
+
+  it('throws NOT_FOUND for an unknown status or previous status', () => {
+    expect(() => persisted().moveAfter('s-x', null)).toThrow(
+      expect.objectContaining({ code: 'NOT_FOUND' }),
+    );
+    expect(() => persisted().moveAfter('s-1', 's-x')).toThrow(
+      expect.objectContaining({ code: 'NOT_FOUND' }),
+    );
   });
 });
 

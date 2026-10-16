@@ -107,9 +107,25 @@ describe('status mutations', () => {
       moveStatus(session, {
         ...ref,
         statusId: '0192f3a0-0000-7000-8000-0000000000ff',
-        direction: 'up',
+        prevStatusId: null,
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('returns NOT_FOUND for a previous status of another project', async () => {
+    await expect(
+      moveStatus(session, {
+        ...ref,
+        statusId: S1,
+        prevStatusId: '0192f3a0-0000-7000-8000-0000000000ff',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(saveSet).not.toHaveBeenCalled();
+  });
+
+  it('skips saving when the status is already in place', async () => {
+    await moveStatus(session, { ...ref, statusId: S2, prevStatusId: S1 });
+    expect(saveSet).not.toHaveBeenCalled();
   });
 
   it('refuses to delete the last status', async () => {
@@ -130,7 +146,7 @@ describe('status mutations', () => {
   });
 
   it('saves normalized positions after move', async () => {
-    await moveStatus(session, { ...ref, statusId: S2, direction: 'up' });
+    await moveStatus(session, { ...ref, statusId: S2, prevStatusId: null });
     expect(savedSet().statuses.map(({ id, position }) => [id, position])).toEqual([
       [S2, 0],
       [S1, 1],

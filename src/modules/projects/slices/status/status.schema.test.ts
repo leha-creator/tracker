@@ -32,16 +32,17 @@ describe('addStatusSchema', () => {
 });
 
 describe('moveStatusSchema', () => {
-  it.each(['up', 'down'])('accepts direction %s', (direction) => {
-    expect(moveStatusSchema.safeParse({ ...ref, statusId: STATUS_ID, direction }).success).toBe(
+  it.each([null, STATUS_ID])('accepts previous status %s', (prevStatusId) => {
+    expect(moveStatusSchema.safeParse({ ...ref, statusId: STATUS_ID, prevStatusId }).success).toBe(
       true,
     );
   });
 
-  it('rejects unknown direction', () => {
+  it('rejects a garbage or missing previous status', () => {
     expect(
-      moveStatusSchema.safeParse({ ...ref, statusId: STATUS_ID, direction: 'left' }).success,
+      moveStatusSchema.safeParse({ ...ref, statusId: STATUS_ID, prevStatusId: 'abc' }).success,
     ).toBe(false);
+    expect(moveStatusSchema.safeParse({ ...ref, statusId: STATUS_ID }).success).toBe(false);
   });
 });
 

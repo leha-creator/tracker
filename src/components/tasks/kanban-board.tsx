@@ -42,7 +42,7 @@ import { QuickCreateTask } from './quick-create-task';
 import { SortableTaskCard } from './sortable-task-card';
 import { TaskCard } from './task-card';
 import { parseTaskPanelParam, TASK_PANEL_PARAM, taskPanelHref } from './task-panel/task-panel-href';
-import { usePrefersReducedMotion } from './use-prefers-reduced-motion';
+import { usePrefersReducedMotion } from '@/lib/use-prefers-reduced-motion';
 
 const COLUMN_PREFIX = 'column:';
 /** После броска браузер может прислать click по карточке — гасим его в этом окне. */
