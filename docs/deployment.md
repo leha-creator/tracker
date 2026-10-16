@@ -1,8 +1,8 @@
-[← Разработка](development.md) · [Back to README](../README.md)
+[← Разработка](development.md) · [Back to README](../README.md) · [Продакшен →](production.md)
 
 # Docker-образ и CI
 
-Приложение собирается в Docker-образ на базе standalone-сборки Next.js (`output: 'standalone'` в `next.config.ts`). Миграции применяются отдельным одноразовым контейнером. В GitHub Actions на каждый PR и push в `main` запускаются проверки кода, миграции на чистой БД и smoke-тест образа. Образ никуда не публикуется, деплоя пока нет.
+Приложение собирается в Docker-образ на базе standalone-сборки Next.js (`output: 'standalone'` в `next.config.ts`). Миграции применяются отдельным одноразовым контейнером. В GitHub Actions на каждый PR и push в `main` запускаются проверки кода, миграции на чистой БД и smoke-тест образа. На push в `main` образы публикуются в GHCR и деплоятся на сервер — см. [Продакшен](production.md).
 
 ## Образы
 
@@ -13,7 +13,7 @@
 | `base` | Node.js, `corepack enable` (pnpm из `packageManager`), `HUSKY=0`, `NEXT_TELEMETRY_DISABLED=1` |
 | `deps` | `pnpm install --frozen-lockfile` с кешем pnpm-store; `postinstall` генерирует Prisma Client |
 | `builder` | Исходники + `pnpm build` (кеш `.next/cache`) |
-| `migrate` | target на базе `deps`: Prisma CLI и `prisma/migrations`, команда `prisma migrate deploy` |
+| `migrate` | target на базе Node-образа: только npm-пакеты `prisma` и `dotenv` (версии из `package.json`), `prisma.config.ts` и `prisma/`; команда `prisma migrate deploy` |
 | `runner` | target runtime: только `.next/standalone` и `.next/static`, пользователь `node`, порт 3000, `HEALTHCHECK` по `/api/health` |
 
 ```bash
@@ -21,7 +21,9 @@ docker build --target runner  -t tasker:local .
 docker build --target migrate -t tasker-migrate:local .
 ```
 
-В runtime-образе нет `src/`, `pnpm-lock.yaml`, `.env` и Prisma CLI. Он занимает около 320 MB на диске (сжатый — около 80 MB), из них около 245 MB приходится на базовый `node:alpine`. Образ `migrate` большой (около 2 GB), потому что содержит все dev-зависимости, но он запускается разово и в production не работает постоянно.
+В runtime-образе нет `src/`, `pnpm-lock.yaml`, `.env` и Prisma CLI. Он занимает около 320 MB на диске (сжатый — около 80 MB), из них около 245 MB приходится на базовый `node:alpine`. Образ `migrate` занимает около 610 MB: около 250 MB — Prisma CLI с зависимостями. Он не наследуется от `deps`, где лежат все dev-зависимости (около 2 GB). Транзитивные зависимости Prisma CLI в нём не зафиксированы lockfile, но CI прогоняет образ на чистом Postgres перед публикацией.
+
+`NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` можно передать в сборку BuildKit-секретом `next_sa_key` (`docker build --secret id=next_sa_key,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY ...`). В слои и историю образа он не попадает. Без секрета Next.js генерирует ключ сам.
 
 ### Переменные окружения
 
@@ -70,7 +72,7 @@ pnpm app:down   # останавливает контейнерный стек (
 
 ### Несколько реплик
 
-При запуске нескольких экземпляров приложения учитывайте требования Next.js из `node_modules/next/dist/docs/01-app/02-guides/self-hosting.md`. Нужен общий `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`: его задают при сборке, иначе ключ у каждого билда свой. Для защиты от version skew нужен `deploymentId`. Сейчас ни то ни другое не настроено.
+При запуске нескольких экземпляров приложения учитывайте требования Next.js из `node_modules/next/dist/docs/01-app/02-guides/self-hosting.md`. Нужен общий `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`: в CI он передаётся секретом при сборке (см. выше). Для защиты от version skew нужен `deploymentId`, он пока не настроен. В продакшене сейчас работает один экземпляр.
 
 ## Smoke-скрипт
 
@@ -86,23 +88,27 @@ pnpm app:down   # останавливает контейнерный стек (
 
 ## CI (GitHub Actions)
 
-`.github/workflows/ci.yml` запускается на `push` в `main` и на `pull_request`. Для каждой ветки одновременно выполняется только один запуск: новый отменяет предыдущий. Права у workflow — `contents: read`.
+`.github/workflows/ci.yml` запускается на `push` в `main`, на `pull_request` и вручную (`workflow_dispatch`, вход `tag` — откат). Для каждой ветки одновременно выполняется один запуск. В PR новый запуск отменяет предыдущий, на `main` запуски идут по очереди, чтобы не прервать деплой. Права по умолчанию — `contents: read`; `packages: write` есть только у `publish`.
 
 | Джоб | Что делает |
 |------|------------|
 | `check` | `pnpm install --frozen-lockfile` → `pnpm check` → `pnpm build` без `.env`. Кешируются pnpm-store и `.next/cache` |
 | `migrations` | Postgres 17 в `services` → `pnpm db:deploy` → `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code`. Код 2 значит, что схема разошлась с миграциями (забыли `pnpm db:migrate`) |
-| `docker` | После `check`: сборка `runner` и `migrate` через buildx (кеш слоёв `type=gha`), `docker compose -f compose.yml -f compose.app.yml up -d --wait app`, `scripts/smoke-health.sh`. При падении выводятся логи `migrate`, `app` и `minio-init`, в конце всегда выполняется `down -v` |
+| `docker` | После `check`: сборка `runner` и `migrate` через buildx (кеш слоёв `type=gha`), `docker compose config` прод-стека `deploy/tasker/compose.yml` с фиктивными значениями, `docker compose -f compose.yml -f compose.app.yml up -d --wait app`, `scripts/smoke-health.sh`. При падении выводятся логи `migrate`, `app` и `minio-init`, в конце всегда выполняется `down -v` |
+| `publish` | Только `main`: пуш образов в GHCR (`ghcr.io/leha-creator/tracker`, `tracker-migrate`) с тегами `sha-<7>` и `main` |
+| `deploy` | После `publish` или ручной откат: деплой на сервер по SSH, environment `production` — см. [Продакшен](production.md#cd) |
 
-Секреты репозитория не нужны: стек в CI работает на локальных значениях по умолчанию.
+Проверкам (`check`, `migrations`, `docker`) секреты не нужны: стек в CI работает на локальных значениях по умолчанию. `docker` и `publish` передают в сборку `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`: BuildKit не включает секреты в ключ кеша, поэтому слой `pnpm build` в обоих джобах должен собираться с одним и тем же ключом.
 
 Workflow можно проверить локально через [actionlint](https://github.com/rhysd/actionlint):
 
 ```bash
-docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7
+# SC2029: в ssh-командах деплоя переменные намеренно раскрываются на раннере
+docker run --rm -e SHELLCHECK_OPTS="-e SC2029" -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7
 ```
 
 ## See Also
 
+- [Продакшен](production.md): сервер, прод-стек, CD, откат, бэкапы, почта
 - [Конфигурация](configuration.md): переменные приложения и docker-compose
 - [Разработка](development.md): команды `app:*`, `infra:*`, `db:*`

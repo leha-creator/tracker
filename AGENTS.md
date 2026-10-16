@@ -26,7 +26,7 @@ Tasker — простой таск-трекер с рабочими простр
 tasker/
 ├── .ai-factory/              # Контекст AI Factory (описание, архитектура, правила, планы)
 ├── .claude/                  # Скиллы и субагенты
-├── .github/workflows/ci.yml  # CI: pnpm check + build, миграции на чистом Postgres, сборка образа и smoke-тест
+├── .github/workflows/ci.yml  # CI/CD: pnpm check + build, миграции на чистом Postgres, образ и smoke-тест; на main — GHCR и деплой
 ├── prisma/
 │   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …), пространств (Workspace, WorkspaceMember, WorkspaceInvitation), проектов (Project, ProjectStatus), задач (Task, TaskPlacement, WorkspaceTaskCounter, TaskComment, TaskAttachment)
 │   └── migrations/
@@ -74,10 +74,14 @@ tasker/
 │   │   ├── mail/             # sendMail() (nodemailer), escapeHtml()
 │   │   └── health/           # checkHealth() — агрегирует проверки
 │   └── test/                 # Вспомогательное для Vitest
+├── deploy/                   # Сервер (https://tracker.plwedding.ru), см. docs/production.md
+│   ├── bootstrap-server.sh   # Разовая подготовка сервера: /opt/edge, /opt/tasker, сеть edge, ключ деплоя, .env, таймеры бэкапов
+│   ├── edge/                 # Общий edge-прокси (Caddy на 80/443 для всех проектов сервера), применяется вручную
+│   └── tasker/               # Прод-стек: compose.yml, tracker.caddy (сайт), .env.example, backup.sh, systemd/
 ├── scripts/smoke-health.sh   # Ожидание 200 и {"status":"ok"} от /api/health (CI и ручная проверка)
 ├── compose.yml               # Postgres (порт 5433) + MinIO (9000/9001) + создание бакета + Mailpit (1025/8025)
 ├── compose.app.yml           # Оверлей: сервисы migrate (prisma migrate deploy) и app (образ runner)
-├── Dockerfile                # Multi-stage: base → deps → builder → runner; отдельный target migrate
+├── Dockerfile                # Multi-stage: base → deps → builder → runner; отдельный лёгкий target migrate (Prisma CLI)
 ├── .dockerignore
 ├── .env.example              # Шаблон переменных окружения
 ├── eslint.config.mjs         # ESLint + правила архитектурных границ
@@ -107,7 +111,8 @@ tasker/
 | `src/app/api/health/route.ts` | Health check инфраструктуры |
 | `compose.yml` | Локальная инфраструктура |
 | `Dockerfile` / `compose.app.yml` | Образ приложения и миграций, запуск стека в Docker |
-| `.github/workflows/ci.yml` | GitHub Actions |
+| `.github/workflows/ci.yml` | GitHub Actions: проверки, публикация образов, деплой и откат |
+| `deploy/tasker/compose.yml` | Прод-стек на сервере (без портов на хост, сеть `edge`) |
 | `.mcp.json` | Конфигурация MCP-серверов |
 
 ## Команды
@@ -132,6 +137,7 @@ tasker/
 | Логирование и ошибки | `docs/logging-and-errors.md` | `createLogger`, `AppError`, `ActionResult` |
 | Разработка | `docs/development.md` | Команды, линтеры, тесты, Prisma |
 | Docker-образ и CI | `docs/deployment.md` | Dockerfile, `compose.app.yml`, миграции, smoke-скрипт, GitHub Actions |
+| Продакшен | `docs/production.md` | Сервер, edge-прокси, прод-стек, CD и откат, резервные копии, почта |
 
 ## Файлы AI-контекста
 

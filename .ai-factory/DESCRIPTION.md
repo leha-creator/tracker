@@ -41,6 +41,7 @@ Tasker — веб-приложение для управления задача�
 - **Хранение файлов:** S3-совместимое хранилище через `@aws-sdk/client-s3`. Локально — MinIO (образ `pgsty/minio`, официальные образы больше не публикуются). Загрузка из браузера напрямую в хранилище по presigned POST (`@aws-sdk/s3-presigned-post`), скачивание — по presigned GET (`@aws-sdk/s3-request-presigner`) через проверку доступа; `S3_PUBLIC_ENDPOINT` — адрес хранилища для браузера, CORS MinIO — `MINIO_API_CORS_ALLOW_ORIGIN`. Вложения: до 25 МБ, типы по allowlist расширений, до 20 файлов на задачу и 10 на комментарий
 - **Почта:** SMTP через nodemailer (`src/shared/mail`); локально — Mailpit (SMTP 1025, UI 8025) в docker-compose. Используется для приглашений в пространство
 - **Инфраструктура разработки:** pnpm, docker-compose (Postgres 17 на порту 5433, MinIO, Mailpit), Prisma 7 с `@prisma/adapter-pg`, pino, Vitest, ESLint + Prettier, husky + lint-staged
+- **Развёртывание:** один VPS (`https://tracker.plwedding.ru`) с docker compose: Postgres и MinIO на том же сервере, общий edge-прокси Caddy (HTTPS, Let's Encrypt), образы в GHCR, CD из GitHub Actions по SSH; почта — SMTP ящика на домене (`docs/production.md`)
 - **Интеграции:** GitHub (Octokit, GitHub App, webhooks) — в будущем
 
 ## Архитектурные заметки

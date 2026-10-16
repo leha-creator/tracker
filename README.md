@@ -95,5 +95,6 @@ export async function archiveTaskAction(taskId: string): Promise<ActionResult<nu
 | [Логирование и ошибки](docs/logging-and-errors.md) | `createLogger`, `LOG_LEVEL`, `AppError`, `ActionResult` |
 | [Разработка](docs/development.md) | Команды, линтеры, тесты, Prisma, коммиты |
 | [Docker-образ и CI](docs/deployment.md) | Сборка образа, `compose.app.yml`, миграции, GitHub Actions |
+| [Продакшен](docs/production.md) | Сервер, прод-стек, CD и откат, резервные копии, почта |
 
 Контекст для AI-агентов лежит в [AGENTS.md](AGENTS.md) и [`.ai-factory/`](.ai-factory/DESCRIPTION.md).
