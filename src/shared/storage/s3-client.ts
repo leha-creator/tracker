@@ -7,21 +7,26 @@ import { createLogger } from '@/shared/logger';
 
 const log = createLogger('storage');
 
-const globalForS3 = globalThis as unknown as { s3Client?: S3Client };
+const globalForS3 = globalThis as unknown as { s3Client?: S3Client; s3PresignClient?: S3Client };
+
+function createClient(endpoint: string): S3Client {
+  const env = getEnv();
+  return new S3Client({
+    endpoint,
+    region: env.S3_REGION,
+    forcePathStyle: env.S3_FORCE_PATH_STYLE,
+    credentials: {
+      accessKeyId: env.S3_ACCESS_KEY_ID,
+      secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+    },
+  });
+}
 
 /** S3-клиент (singleton). Для MinIO используется path-style адресация. */
 export function getS3Client(): S3Client {
   if (!globalForS3.s3Client) {
     const env = getEnv();
-    globalForS3.s3Client = new S3Client({
-      endpoint: env.S3_ENDPOINT,
-      region: env.S3_REGION,
-      forcePathStyle: env.S3_FORCE_PATH_STYLE,
-      credentials: {
-        accessKeyId: env.S3_ACCESS_KEY_ID,
-        secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-      },
-    });
+    globalForS3.s3Client = createClient(env.S3_ENDPOINT);
     // Ключи доступа не логируем.
     log.info(
       { endpoint: env.S3_ENDPOINT, region: env.S3_REGION, forcePathStyle: env.S3_FORCE_PATH_STYLE },
@@ -29,6 +34,20 @@ export function getS3Client(): S3Client {
     );
   }
   return globalForS3.s3Client;
+}
+
+/**
+ * Клиент для подписи ссылок, которые открывает браузер: адрес — `S3_PUBLIC_ENDPOINT`.
+ * Подпись не требует сети, поэтому клиенту не нужно видеть хранилище с сервера.
+ */
+export function getS3PresignClient(): S3Client {
+  const env = getEnv();
+  if (env.S3_PUBLIC_ENDPOINT === env.S3_ENDPOINT) return getS3Client();
+  if (!globalForS3.s3PresignClient) {
+    globalForS3.s3PresignClient = createClient(env.S3_PUBLIC_ENDPOINT);
+    log.info({ endpoint: env.S3_PUBLIC_ENDPOINT }, '[storage] s3 presign client created');
+  }
+  return globalForS3.s3PresignClient;
 }
 
 /** Имя бакета для вложений. */

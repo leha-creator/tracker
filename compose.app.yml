@@ -19,8 +19,11 @@ services:
   postgres:
     ports: !reset []
 
+  # API MinIO публикуется на отдельном порту: браузер загружает и скачивает вложения напрямую
+  # по presigned-ссылкам (S3_PUBLIC_ENDPOINT у app). Консоль наружу не публикуется.
   minio:
-    ports: !reset []
+    ports: !override
+      - '${APP_MINIO_PORT:-9002}:9000'
 
   # UI Mailpit нужен, чтобы читать письма приглашений из контейнерного стека.
   mailpit:
@@ -60,6 +63,8 @@ services:
       LOG_LEVEL: ${APP_LOG_LEVEL:-info}
       DATABASE_URL: postgresql://${POSTGRES_USER:-tasker}:${POSTGRES_PASSWORD:-tasker}@postgres:5432/${POSTGRES_DB:-tasker}?schema=public
       S3_ENDPOINT: http://minio:9000
+      # Адрес хранилища, как его видит браузер (на него подписываются ссылки вложений).
+      S3_PUBLIC_ENDPOINT: ${APP_S3_PUBLIC_ENDPOINT:-http://localhost:${APP_MINIO_PORT:-9002}}
       S3_REGION: ${S3_REGION:-us-east-1}
       S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-tasker}
       S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-tasker-secret}

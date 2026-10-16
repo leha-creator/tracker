@@ -40,6 +40,7 @@ model User {
   assignedTasks        Task[]                @relation("TaskAssignee")
   createdTasks         Task[]                @relation("TaskCreator")
   taskComments         TaskComment[]         @relation("TaskCommentAuthor")
+  taskAttachments      TaskAttachment[]      @relation("TaskAttachmentUploader")
 }
 
 model Session {
@@ -234,11 +235,12 @@ model Task {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  workspace  Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  assignee   User?           @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  createdBy  User?           @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  placements TaskPlacement[]
-  comments   TaskComment[]
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignee    User?            @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy   User?            @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  placements  TaskPlacement[]
+  comments    TaskComment[]
+  attachments TaskAttachment[]
 
   @@unique([workspaceId, number])
   @@unique([id, workspaceId])
@@ -296,6 +298,59 @@ model TaskComment {
   task   Task  @relation(fields: [taskId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   author User? @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
 
+  attachments TaskAttachment[]
+
+  /// Цель составного FK вложения: файл комментария принадлежит той же задаче.
+  @@unique([id, taskId])
   @@index([taskId, createdAt])
+  @@index([workspaceId])
+}
+
+// ── Вложения ───────────────────────────────────────────────────────────────────
+// Файл лежит в S3/MinIO под ключом ws/<workspaceId>/tasks/<taskId>/<attachmentId>, в БД — метаданные.
+// Составные FK: вложение не окажется в чужом пространстве (taskId, workspaceId) и в комментарии
+// другой задачи (commentId, taskId). Файлы формы нового комментария — черновики: target = comment,
+// commentId = null; при отправке комментария они привязываются к нему.
+// Удаление задачи или комментария удаляет строки каскадом, объекты хранилища удаляет сервис.
+
+enum AttachmentTarget {
+  task
+  comment
+}
+
+enum AttachmentStatus {
+  /// Слот загрузки выдан, файл ещё не подтверждён.
+  pending
+  /// Файл в хранилище проверен.
+  ready
+}
+
+model TaskAttachment {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  workspaceId String
+  taskId      String           @db.Uuid
+  /// Куда прикреплён файл: блок задачи или комментарий.
+  target      AttachmentTarget
+  /// Комментарий; null при target = comment — черновик формы, комментарий ещё не отправлен.
+  commentId   String?          @db.Uuid
+  /// Загрузивший; null — пользователь удалён (файл остаётся).
+  uploaderId  String?
+  /// Имя для показа и Content-Disposition (санитизировано). В ключе хранилища не используется.
+  fileName    String
+  /// MIME по расширению из allowlist, а не из браузера.
+  contentType String
+  size        Int
+  storageKey  String           @unique
+  status      AttachmentStatus @default(pending)
+  createdAt   DateTime         @default(now())
+  uploadedAt  DateTime?
+
+  task     Task         @relation(fields: [taskId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  comment  TaskComment? @relation(fields: [commentId, taskId], references: [id, taskId], onDelete: Cascade)
+  uploader User?        @relation("TaskAttachmentUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, target, status, createdAt])
+  @@index([commentId])
+  @@index([uploaderId, status, createdAt])
   @@index([workspaceId])
 }

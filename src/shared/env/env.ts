@@ -18,6 +18,11 @@ const envSchema = z
     S3_SECRET_ACCESS_KEY: z.string().min(1),
     S3_BUCKET: z.string().min(3),
     S3_FORCE_PATH_STYLE: z.stringbool().default(true),
+    /**
+     * Адрес хранилища, видимый браузеру: на него подписываются ссылки загрузки и скачивания.
+     * По умолчанию — S3_ENDPOINT (в Docker сервер ходит в minio:9000, а браузер — в localhost).
+     */
+    S3_PUBLIC_ENDPOINT: z.url().optional(),
 
     BETTER_AUTH_SECRET: z.string().min(32),
     BETTER_AUTH_URL: z.url(),
@@ -46,6 +51,7 @@ const envSchema = z
   .transform((env) => ({
     ...env,
     LOG_LEVEL: env.LOG_LEVEL ?? (env.NODE_ENV === 'production' ? 'info' : 'debug'),
+    S3_PUBLIC_ENDPOINT: env.S3_PUBLIC_ENDPOINT ?? env.S3_ENDPOINT,
   }));
 
 export type Env = z.infer<typeof envSchema>;

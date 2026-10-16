@@ -22,6 +22,13 @@ describe('parseEnv', () => {
     expect(env.S3_FORCE_PATH_STYLE).toBe(true);
   });
 
+  it('defaults S3_PUBLIC_ENDPOINT to S3_ENDPOINT', () => {
+    expect(parseEnv(VALID_ENV).S3_PUBLIC_ENDPOINT).toBe('http://localhost:9000');
+    expect(
+      parseEnv({ ...VALID_ENV, S3_PUBLIC_ENDPOINT: 'http://localhost:9002' }).S3_PUBLIC_ENDPOINT,
+    ).toBe('http://localhost:9002');
+  });
+
   it('defaults LOG_LEVEL to info in production', () => {
     expect(parseEnv({ ...VALID_ENV, NODE_ENV: 'production' }).LOG_LEVEL).toBe('info');
   });

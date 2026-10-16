@@ -15,6 +15,32 @@ export {
   toIsoDate,
 } from './task';
 export {
+  assertAttachmentLimit,
+  assertAttachmentSize,
+  assertCanDeleteAttachment,
+  assertCanRemoveFromComment,
+  ATTACHMENT_DOWNLOAD_TTL_SECONDS,
+  ATTACHMENT_MAX_SIZE,
+  ATTACHMENT_SIGNATURE_BYTES,
+  ATTACHMENT_STALE_AFTER_MS,
+  ATTACHMENT_TARGETS,
+  ATTACHMENT_UPLOAD_TTL_SECONDS,
+  attachmentStorageKey,
+  attachmentTypeOf,
+  canDeleteAttachment,
+  canViewAttachment,
+  COMMENT_ATTACHMENTS_LIMIT,
+  contentDisposition,
+  fileExtension,
+  isCommentDraft,
+  matchesImageSignature,
+  requiresSignatureCheck,
+  resolveAttachmentType,
+  sanitizeFileName,
+  TASK_ATTACHMENTS_LIMIT,
+} from './task-attachment';
+export type { AttachmentKind, AttachmentTarget } from './task-attachment';
+export {
   assertCanDeleteComment,
   assertCanEditComment,
   canDeleteComment,

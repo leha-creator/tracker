@@ -32,6 +32,9 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-tasker}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-tasker-secret}
+      # Браузер загружает вложения напрямую в хранилище (presigned POST) — разрешаем только
+      # адреса приложения: dev-сервер и контейнерный стек (compose.app.yml).
+      MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_CORS_ALLOW_ORIGIN:-http://localhost:3000,http://localhost:3001}
     ports:
       - '${MINIO_API_PORT:-9000}:9000'
       - '${MINIO_CONSOLE_PORT:-9001}:9001'

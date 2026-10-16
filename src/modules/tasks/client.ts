@@ -9,6 +9,15 @@ export {
   TASK_PLACEMENT_LIMIT,
   TASK_TITLE_MAX_LENGTH,
 } from './models/task';
+export {
+  ATTACHMENT_ACCEPT,
+  ATTACHMENT_MAX_SIZE,
+  COMMENT_ATTACHMENTS_LIMIT,
+  findAttachmentType,
+  formatFileSize,
+  TASK_ATTACHMENTS_LIMIT,
+} from './models/task-attachment';
+export type { AttachmentKind, AttachmentTarget } from './models/task-attachment';
 export { TASK_COMMENT_MAX_LENGTH } from './models/task-comment';
 export {
   clearFilters,
