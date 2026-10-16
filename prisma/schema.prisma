@@ -53,6 +53,8 @@ model User {
   createdTaskDocLinks    TaskDocumentLink[] @relation("TaskDocumentLinkCreator")
 
   connectedGithubInstallations WorkspaceGithubInstallation[] @relation("GithubInstallationConnector")
+
+  apiTokens ApiToken[]
 }
 
 model Session {
@@ -136,6 +138,8 @@ model Workspace {
 
   githubInstallations WorkspaceGithubInstallation[]
   githubRepositories  WorkspaceGithubRepository[]
+
+  apiTokens ApiToken[]
 }
 
 model WorkspaceMember {
@@ -874,4 +878,32 @@ model GithubAppConfig {
   createdById   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+// ── Токены доступа (MCP) ───────────────────────────────────────────────────────
+// Личный токен пользователя для агентов (Claude Code через /api/mcp). Действует с правами
+// владельца в одном пространстве, админских прав не даёт. Членство проверяется при каждом запросе.
+
+model ApiToken {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  userId      String
+  workspaceId String
+  /// Название, которое дал пользователь («Claude Code — backend»).
+  name        String
+  /// Начало токена (`tkr_abcd1234`) — для показа в списке.
+  prefix      String
+  /// SHA-256 токена (hex). Сам токен не хранится и показывается один раз.
+  tokenHash   String    @unique
+  /// null — бессрочный.
+  expiresAt   DateTime?
+  /// Обновляется не чаще раза в минуту.
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([workspaceId])
 }

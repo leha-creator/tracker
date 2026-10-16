@@ -1,14 +1,24 @@
 // Публичный API модуля для серверного кода (страницы, другие модули).
 // Клиентским компонентам — './client' (без server-only кода).
 // Зависимости: tasks → projects, workspaces, notifications (через их index.ts); обратных нет.
+// Сервисы изменения (createTask, changeStatus, createComment…) — для agent-mcp: те же проверки, что у actions.
 export * from './client';
 
 export { getAttachmentDownload, listTaskAttachments } from './slices/attachment/attachment.service';
-export { listTaskComments } from './slices/comment/comment.service';
-export { listSubtasks } from './slices/subtask/subtask.service';
-export { getTaskByNumber, resolveTaskRefs, resolveTaskRefsByIds } from './slices/task/task.service';
+export { createComment, listTaskComments } from './slices/comment/comment.service';
+export { listSubtasks, setTaskParent } from './slices/subtask/subtask.service';
 export {
+  createTask,
+  getTaskByNumber,
+  resolveTaskRefs,
+  resolveTaskRefsByIds,
+  updateTask,
+} from './slices/task/task.service';
+export type { CreateTaskInput, UpdateTaskInput } from './slices/task/task.service';
+export {
+  addToProject,
   changePlacementStatusBySystem,
+  changeStatus,
   listPlacementsForAutomation,
 } from './slices/placement/placement.service';
 export {

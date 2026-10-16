@@ -196,16 +196,32 @@ GITHUB_WEBHOOK_SECRET='<openssl rand -hex 32>'
 
 Edge-прокси пропускает `/api/webhooks/github` как обычный запрос приложения, отдельной настройки Caddy не нужно.
 
+## MCP-сервер для агентов
+
+Claude Code подключается к `https://tracker.plwedding.ru/api/mcp` с личным токеном из **Профиль → Токены доступа** (см. [Claude Code и MCP](agents.md)). Отдельной настройки сервера не нужно:
+
+- сервер работает без сессий и отвечает JSON, без SSE, поэтому длинные соединения и таймауты Caddy его не касаются;
+- заголовок `Authorization` проходит до приложения, а в access-логе Caddy вырезается (`request>headers>Authorization delete` в `tracker.caddy`);
+- переменные окружения не нужны, ссылки на задачи строятся от `BETTER_AUTH_URL`.
+
+Проверка без токена — ожидается `401` с `WWW-Authenticate: Bearer`:
+
+```bash
+curl -si -X POST https://tracker.plwedding.ru/api/mcp -H 'content-type: application/json' -d '{}' | head -5
+```
+
 ## Безопасность
 
 - Снаружи открыты только 22, 80 и 443. Postgres и MinIO наружу не публикуются, из MinIO через прокси доступен только путь бакета. Анонимный доступ к бакету закрыт.
 - Ответы содержат `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`; заголовок `Server` убран. Куки сессии в production — `__Secure-`.
 - Пользователь `deploy` в группе `docker` фактически равен root. Ключ `tasker_deploy` используется только для Tasker и отзывается независимо от ключа maxim (удалить строку `tasker-ci` из `/home/deploy/.ssh/authorized_keys`).
 - Регистрация открыта для всех, у кого есть ссылка. Роль admin получают только адреса из `ADMIN_EMAILS` в момент регистрации.
+- Токены доступа агентов (`/api/mcp`) действуют в одном пространстве с правами владельца и не дают админских прав. В БД хранится только их SHA-256. Отзыв действует сразу.
 
 ## See Also
 
 - [Docker-образ и CI](deployment.md): образы, `compose.app.yml`, джобы проверок
 - [Конфигурация](configuration.md): переменные приложения
 - [Интеграция с GitHub](github.md): создание GitHub App и что делает интеграция
+- [Claude Code и MCP](agents.md): токены доступа и подключение агентов
 - [`deploy/edge/README.md`](../deploy/edge/README.md): edge-прокси и подключение проектов

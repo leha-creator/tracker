@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "tasker": {
+      "type": "http",
+      "url": "https://tracker.plwedding.ru/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${TASKER_TOKEN}"
+      }
+    }
+  }
+}

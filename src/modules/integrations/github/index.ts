@@ -26,6 +26,10 @@ export {
 } from './slices/pull-request/pull-request.service';
 export { listTaskBranchesAndCommits } from './slices/link/link.service';
 export { getProjectAutomation } from './slices/automation/automation.service';
+export { getWorkspaceGithubSummary } from './slices/summary/summary.service';
+export type { WorkspaceGithubSummaryDto } from './slices/summary/summary.service';
+export { findTaskReferences, TASK_REFERENCES_LIMIT } from './models';
+export type { TaskReference } from './models';
 export type { ProjectAutomationDto } from './slices/automation/automation.service';
 export { manifestCallbackSchema } from './slices/app-setup/app-setup.schema';
 export {

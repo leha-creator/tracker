@@ -8,6 +8,7 @@ const TABS = [
   { href: '/profile', label: 'Профиль' },
   { href: '/profile/notifications', label: 'Уведомления' },
   { href: '/profile/account', label: 'Аккаунт' },
+  { href: '/profile/tokens', label: 'Токены доступа' },
 ] as const;
 
 /** Вкладки раздела профиля. */

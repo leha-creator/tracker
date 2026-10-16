@@ -33,6 +33,7 @@ tasker/
 │   │   └── api/
 │   │       ├── auth/[...all]/route.ts         # Better Auth handler
 │   │       ├── documents/[documentId]/file/route.ts # файл документа (302) или Markdown заметки
+│   │       ├── mcp/route.ts                   # MCP-сервер для агентов (Bearer-токен)
 │   │       └── webhooks/github/route.ts       # GitHub webhooks
 │   │
 │   ├── proxy.ts                      # Оптимистичный редирект на /login по cookie (не авторизация)
@@ -117,11 +118,25 @@ tasker/
 │   │           │   ├── pull-request/ # PR, ревью, CI; эффекты после коммита
 │   │           │   ├── link/         # TaskPullRequest, ветки и коммиты задач, ручная привязка
 │   │           │   ├── automation/   # автосмена статуса проекта по PR
+│   │           │   ├── summary/      # сводка интеграции для любого участника (репозитории, автосмена) — для агентов
 │   │           │   └── notify/       # уведомления о PR через notifications
 │   │           ├── models/           # ссылки KEY-N, состояния PR/ревью/CI, правило «только вперёд»
 │   │           ├── github-api.ts     # octokit: App, клиенты установки и пользователя, маппинг ошибок
 │   │           ├── client.ts
 │   │           └── index.ts
+│   │
+│   │   ├── api-tokens/               # Личные токены агентов: tkr_… (SHA-256 в БД), одно пространство
+│   │   │   ├── slices/token/         # выпуск, отзыв, authenticateApiToken → AuthSession (роль user)
+│   │   │   ├── models/               # формат и хеш токена, сроки, фрагменты подключения Claude Code
+│   │   │   ├── client.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── agent-mcp/                # MCP-сервер для агентов (POST /api/mcp, без сессий)
+│   │   │   ├── tools/                # инструменты: чтение, изменение задач, GitHub (preview_github_links)
+│   │   │   ├── models/               # ссылки на задачу, выбор проекта/статуса/участника, правила GitHub, промпты, форматирование
+│   │   │   ├── prompts.ts            # start_task / finish_task
+│   │   │   ├── server.ts, mcp-handler.ts
+│   │   │   └── index.ts
 │   │
 │   ├── components/                   # ── ОБЩИЙ UI ──
 │   │   ├── ui/                       # shadcn/ui (генерируется CLI)
@@ -156,6 +171,7 @@ tasker/
 - ✅ Если модулю нужны клиентские компоненты, он дополнительно экспортирует `client.ts`: actions, Zod-схемы, чистые функции и типы без server-only кода. Клиентские компоненты импортируют `@/modules/<module>/client`, серверный код — `@/modules/<module>`
 - ✅ `tasks` зависит от `projects` и `workspaces` (через их `index.ts`), но не наоборот. Страница доски сама собирает колонки из `projects` и карточки из `tasks`
 - ✅ `integrations/github` зависит от `tasks`, `projects`, `workspaces` и `notifications`, но они не зависят от `integrations/github`; системные функции без сессии (`resolveTaskRefs`, `changePlacementStatusBySystem`, `findWorkspacesByTaskKeys`) вызываются только из обработчиков с проверенной подписью вебхука
+- ✅ `agent-mcp` зависит от `api-tokens`, `tasks`, `projects`, `workspaces` и `integrations/github`; от него не зависит никто. Инструменты вызывают те же сервисы, что Server Actions, с сессией владельца токена; `workspaceId` берётся только из токена
 - ✅ `documents` зависит от `tasks` (краткие данные и поиск задач для связей), но `tasks` не зависит от `documents`: раздел «Документы» в задаче собирает компонент слоя UI (`components/documents/task-documents`)
 - ✅ `admin` зависит от `workspaces` (число пространств, единоличное владение), но не наоборот. Проверки администратора (`requireAdmin`) читают сессию в обход cookie-кеша (`getFreshSession`)
 - ❌ Компоненты и страницы не импортируют `prisma` и репозитории

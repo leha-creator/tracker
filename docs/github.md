@@ -202,3 +202,4 @@ gh webhook forward --repo=owner/repo --events=pull_request,pull_request_review,p
 - [Конфигурация](configuration.md): переменные `GITHUB_*`
 - [Архитектура](architecture.md#интеграция-с-github): модуль `integrations/github` и его границы
 - [Продакшен](production.md#github-app): настройка на сервере
+- [Claude Code и MCP](agents.md): агент сам называет ветки и PR по ключу задачи и проверяет привязку

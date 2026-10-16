@@ -17,9 +17,10 @@ src/
 │   │                   # /w/[workspaceSlug]/tasks (+ /new, /[taskNumber]),
 │   │                   # /w/[workspaceSlug]/members/[userId] (публичный профиль),
 │   │                   # /w/[workspaceSlug]/docs (+ /new, /[documentId], /[documentId]/edit),
-│   │                   # /profile (+ /notifications, /account), /notifications
+│   │                   # /profile (+ /notifications, /account, /tokens), /notifications
 │   └── api/
 │       ├── auth/[...all]/  # Better Auth
+│       ├── mcp/        # POST — MCP-сервер для агентов (Bearer-токен, без сессий)
 │       ├── attachments/[attachmentId]/ # GET — скачивание вложения (302 на presigned-ссылку)
 │       ├── documents/[documentId]/file/ # GET — файл документа (302) или Markdown заметки
 │       ├── users/[userId]/avatar/      # GET — фото профиля (302 на presigned-ссылку)
@@ -38,6 +39,8 @@ src/
 │   ├── documents/      # Документы пространства: папки, Markdown-заметки, файлы, теги, связи с задачами
 │   ├── integrations/
 │   │   └── github/     # GitHub App: установки, репозитории, вебхуки, PR, ветки и коммиты задач, автосмена статуса
+│   ├── api-tokens/     # Личные токены доступа агентов (одно пространство, SHA-256 в БД)
+│   ├── agent-mcp/      # MCP-сервер: инструменты задач, правила GitHub, промпты start_task / finish_task
 │   └── admin/          # Администрирование ресурса: пользователи (блокировка, роли, удаление)
 ├── components/
 │   ├── layout/         # Каркас: PageContainer, разделы пространства в шапке, TabLink, тема, 404, nav-items (чистые функции навигации)
@@ -48,7 +51,7 @@ src/
 │   ├── projects/       # Список проектов, колонки доски, настройки проекта и статусов
 │   ├── tasks/          # Доска, карточка, быстрое создание, поля задачи; task-panel/ — панель и компоновка задачи (?task); task-list/ — список задач; comments/ — комментарии и подсказка @; attachments/ — загрузка и список вложений
 │   ├── users/          # UserAvatar (фото или инициалы), UserHoverCard (карточка участника при наведении)
-│   ├── profile/        # Свой профиль: вкладки, фото, форма «О себе», настройки уведомлений
+│   ├── profile/        # Свой профиль: вкладки, фото, форма «О себе», настройки уведомлений; api-tokens/ — токены доступа
 │   ├── notifications/  # Колокольчик в шапке, элемент и лента уведомлений
 │   ├── documents/      # Раздел «Документы»: дерево папок, список, загрузка, диалоги; markdown/ — безопасный рендер; note-editor/ — редактор заметки; viewers/ — просмотрщики файлов; task-documents/ — раздел в задаче
 │   ├── github/         # Раздел GitHub задачи, индикатор PR, настройки GitHub пространства и проекта, привязка аккаунта и кнопка входа
@@ -97,6 +100,8 @@ app/ → modules/<m>/index.ts → *.actions.ts → *.service.ts → models/, *.r
 | `admin` | `workspaces`, `profiles` | Число пространств, единоличное владение, удаление фото вместе с пользователем |
 | `documents` | `tasks` | Номер, название и поиск задач для связей документ ↔ задача (`getTaskSummaries`, `listTasks`) |
 | `integrations/github` | `tasks`, `projects`, `workspaces`, `notifications` | Задачи по ключу (`resolveTaskRefs`), системная смена статуса, статусы проекта для автоматизации, пространства по ключу (`findWorkspacesByTaskKeys`), уведомления о PR |
+| `api-tokens` | — | Только `shared/` (членство — через `requireWorkspaceAccess`) |
+| `agent-mcp` | `api-tokens`, `tasks`, `projects`, `workspaces`, `integrations/github` | Аутентификация токена, те же сервисы задач, что у Server Actions, сводка GitHub и разбор ключей для правил агента |
 
 `notifications` ни от кого не зависит: данные события (номер и название задачи, slug пространства, имя автора) приходят снимком от вызывающего модуля. Обратных зависимостей нет: страница доски сама собирает колонки из `projects` и карточки из `tasks`, страница профиля участника — данные из `workspaces`, `profiles` и `tasks`, раздел «Документы» в задаче — из `documents` (модуль `tasks` о документах не знает). Так же доска, список и задача берут индикаторы и раздел GitHub из `integrations/github`: ядро о GitHub не знает.
 
@@ -498,6 +503,7 @@ Guard-функции пространства возвращают `WorkspaceAcc
 | `link` | Распознавание `KEY-N`, автосвязи PR, ветки и коммиты, ручная привязка по ссылке, «Отвязать» |
 | `automation` | Настройка проекта и автосмена статуса по переходу PR |
 | `notify` | Уведомления `pr_linked`, `pr_merged`, `pr_review` через `notify()` |
+| `summary` | Сводка для любого участника (`getWorkspaceGithubSummary`): включена ли интеграция, выбранные репозитории, автосмена статуса по проектам — для агентов MCP |
 
 `github-api.ts` — единственная точка работы с GitHub API (пакет `octokit`): ленивый `App` (кеш токенов установок), клиент пользователя, `callGithub()` переводит ошибки Octokit в доменные (404 → `NotFoundError`, 401/403 → `ForbiddenError`), тело ответа GitHub не логируется.
 
@@ -545,6 +551,32 @@ Guard-функции пространства возвращают `WorkspaceAcc
 - **Ограничение.** Проверка «единственный владелец» и удаление не атомарны: плагин не принимает транзакцию. Окно мало и требует действий самого пользователя.
 - Журнала действий администратора нет — только структурированные логи `admin.user.*` (причина блокировки не логируется, email — через `maskEmail()`).
 
+## MCP-сервер для агентов
+
+Агенты (Claude Code) работают с задачами через MCP — `POST /api/mcp`. Для пользователя: [Claude Code и MCP](agents.md).
+
+- **Токены** — модуль `api-tokens`, модель `ApiToken`:
+  - токен `tkr_` + 32 случайных байта (base64url), в БД — SHA-256 (`tokenHash`, уникальный) и префикс для списка;
+  - токен привязан к пользователю и одному пространству, каскадно удаляется вместе с ними;
+  - выпуск и отзыв — Server Actions во вкладке `/profile/tokens`; лимит — 20 действующих токенов на пользователя.
+- **Токен → сессия.** `authenticateApiToken(header)` строит `AuthSession`:
+  - пользователь читается при каждом запросе, блокировка действует сразу;
+  - `role` всегда `user`, поэтому `requireAdmin` для токена не сработает;
+  - `session.id` = `api-token:<id>`;
+  - членство проверяет `requireWorkspaceAccess`, вышедший из пространства получает `401`;
+  - все причины отказа дают одно сообщение, причина пишется в лог (`reason`);
+  - `lastUsedAt` обновляется не чаще раза в минуту, без ожидания.
+
+  `getSession()` и cookie не меняются: bearer принимается только в `/api/mcp`.
+- **Сервер** — модуль `agent-mcp`, `@modelcontextprotocol/sdk`, транспорт `WebStandardStreamableHTTPServerTransport`:
+  - без сессий (`sessionIdGenerator: undefined`), ответы JSON (`enableJsonResponse`), тело до 1 МБ;
+  - на каждый запрос создаётся новый `McpServer`, инструменты замыкают контекст токена;
+  - `workspaceId` берётся только из токена, агент его не передаёт;
+  - инструменты вызывают **те же сервисы**, что Server Actions (`createTask`, `changeStatus`, `addToProject`, `setTaskParent`, `createComment`…), поэтому проверки, уведомления и `@`-упоминания работают одинаково.
+- **Ответы** — компактный Markdown. `runTool` логирует вызов и длительность. `AppError` превращается в `isError: true` с текстом, неожиданная ошибка — в общий текст и `ERROR` в лог.
+- **Правила GitHub для агента** собирают чистые функции `models/github-guide.ts` из `getWorkspaceGithubSummary` (модуль `integrations/github`, доступна любому участнику: выбранные репозитории и автосмена статуса, без установок и секретов). `preview_github_links` использует тот же `findTaskReferences`, что и вебхук.
+- **Промпты** `start_task` и `finish_task` строятся из задачи и автосмены её проектов (`models/prompts.ts`).
+
 ## Раскладка, навигация и тема
 
 - **Ширина страниц.** `PageContainer` (`src/components/layout/page-container.tsx`) задаёт горизонтальные границы: `narrow` (`max-w-3xl`), `default` (`max-w-5xl`), `wide` (`max-w-7xl`), отступы `px-4 sm:px-6`. Шапка, главная, админка и страницы пространства используют `wide`, поэтому края логотипа и контента совпадают. Формы и настройки ограничивают себя сами (`max-w-3xl`, `max-w-md`). `main` всегда с `id="main-content"`, на него ведёт skip-link «Перейти к содержимому».
@@ -583,6 +615,19 @@ Guard-функции пространства возвращают `WorkspaceAcc
 
 Последние 10 уведомлений текущего пользователя и число непрочитанных: `{ items, hasMore, unreadCount }`. Без сессии — `401`. `GET /api/notifications/unread-count` → `{ unreadCount }` для опроса счётчика. Ответы не кешируются.
 
+### `POST /api/mcp`
+
+MCP-сервер (Streamable HTTP, без сессий) для агентов, см. [MCP-сервер для агентов](#mcp-сервер-для-агентов). Заголовок `Authorization: Bearer tkr_…`.
+
+| Ответ | Когда |
+|-------|-------|
+| `200` | JSON-RPC ответ |
+| `401` | Нет токена, неверный, отозван, истёк, пользователь заблокирован или не участник. JSON-RPC ошибка `-32001` и `WWW-Authenticate: Bearer` |
+| `413` | Тело больше 1 МБ |
+| `405` | `GET` и `DELETE` — сервер без сессий и SSE, `Allow: POST` |
+
+Ответы не кешируются (`Cache-Control: no-store`).
+
 ### `POST /api/webhooks/github`
 
 Вебхуки GitHub App. Сессии нет — доверие только подписи `X-Hub-Signature-256` по сырому телу. Интеграция не настроена — `404`, тело больше 10 МБ — `413`, неверная подпись — `401`, некорректные заголовки или JSON — `400`. Иначе `200 { "result": "handled" | "ignored" | "duplicate" }`; ошибка обработки — `500` в едином формате (доставку можно повторить из GitHub). Подробнее — [Интеграция с GitHub](github.md#вебхук).
@@ -613,4 +658,5 @@ Setup URL GitHub App: `installation_id`, `setup_action`, `state`. Без сес�
 - [Конфигурация](configuration.md): SMTP (письма-приглашения и уведомления), настройки плагина `organization`, хранилище и CORS для вложений и фото
 - [Разработка](development.md): линтеры, тесты, ручные правки миграций
 - [Интеграция с GitHub](github.md): GitHub App, вебхуки, связи с задачами
+- [Claude Code и MCP](agents.md): токены доступа, инструменты и промпты агента
 - [`.ai-factory/ARCHITECTURE.md`](../.ai-factory/ARCHITECTURE.md): полные правила и примеры кода
