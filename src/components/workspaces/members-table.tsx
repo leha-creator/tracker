@@ -111,26 +111,30 @@ function MemberRow({
 
   return (
     <TableRow>
-      <TableCell className="whitespace-normal">
+      {/* Имя, «(вы)» и почта не переносятся: при нехватке ширины таблица прокручивается
+          по горизонтали (контейнер Table — overflow-x-auto), а не рвёт строки. */}
+      <TableCell>
         <div className="flex items-center gap-3">
           <UserAvatar user={member} size="sm" />
-          <div className="min-w-0">
-            <Link
-              href={`/w/${workspaceSlug}/members/${member.userId}`}
-              className="font-medium hover:underline focus-visible:underline focus-visible:outline-none"
-            >
-              {member.name}
-            </Link>
-            {member.isCurrentUser && <span className="text-muted-foreground"> (вы)</span>}
+          <div>
+            <div>
+              <Link
+                href={`/w/${workspaceSlug}/members/${member.userId}`}
+                className="font-medium hover:underline focus-visible:underline focus-visible:outline-none"
+              >
+                {member.name}
+              </Link>
+              {member.isCurrentUser && <span className="text-muted-foreground"> (вы)</span>}
+            </div>
             {member.isAgent ? (
               <div className="text-sm text-muted-foreground">Агент для Claude Code</div>
             ) : (
-              <div className="text-sm break-all text-muted-foreground">{member.email}</div>
+              <div className="text-sm text-muted-foreground">{member.email}</div>
             )}
           </div>
         </div>
         {roleError && (
-          <p role="alert" className="mt-1 text-sm text-destructive">
+          <p role="alert" className="mt-1 text-sm whitespace-normal text-destructive">
             {roleError}
           </p>
         )}
