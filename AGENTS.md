@@ -64,7 +64,7 @@ tasker/
 │   │                         # comments/ — комментарии на странице задачи: лента, добавление, правка, удаление, файлы;
 │   │                         # attachments/ — вложения: очередь загрузки (presigned POST), зона перетаскивания, список, миниатюры
 │   │   └── ui/               # shadcn/ui (генерируется CLI, вручную не править)
-│   ├── lib/utils.ts          # cn() для shadcn
+│   ├── lib/                  # utils.ts — cn() для shadcn; use-prefers-reduced-motion.ts — общий хук (доска, статусы)
 │   ├── generated/prisma/     # Сгенерированный Prisma Client (в .gitignore)
 │   ├── shared/               # Сквозная инфраструктура
 │   │   ├── auth/             # Конфиг Better Auth (getAuth), getSession() → DTO, getFreshSession() (в обход cookie-кеша)
@@ -108,7 +108,7 @@ tasker/
 | `src/shared/access/index.ts` | `requireUser()` / `requireAdmin()` / `requireWorkspaceAccess()` / `requireWorkspacePermission()` для сервисов, `requireUserOrRedirect()` / `requireAdminOrNotFound()` / `requireWorkspaceAccessBySlug()` для страниц |
 | `src/shared/mail/index.ts` | `sendMail()` — отправка писем через SMTP |
 | `src/modules/workspaces/index.ts` | Пространства, участники, приглашения: actions и read-функции (`client.ts` — для клиентских компонентов) |
-| `src/modules/projects/index.ts` | Проекты и статусы: actions и read-функции (`listProjects`, `getProject`, `listStatuses`, `listWorkspaceStatuses`; `client.ts` — для клиентских компонентов) |
+| `src/modules/projects/index.ts` | Проекты и статусы: actions и read-функции (`listProjects`, `getProject`, `listStatuses`, `listWorkspaceStatuses`; `client.ts` — для клиентских компонентов, в т.ч. `moveStatusAction` и чистая функция `reorderStatuses`) |
 | `src/modules/tasks/index.ts` | Задачи, размещения, комментарии и вложения: actions и read-функции (`getTaskByNumber`, `listTaskComments`, `listTaskAttachments`, `getAttachmentDownload`, `listTasks`, `listProjectTasks`, `getBoardCards`, `parseTaskListParams`; `client.ts` — для клиентских компонентов, в т.ч. `movePlacementAction` и чистые функции переноса карточек) |
 | `src/modules/admin/index.ts` | Пользователи ресурса: `listAdminUsers`, `parseAdminUserListParams`; actions блокировки, роли, сессий и удаления (`client.ts` — для клиентских компонентов) |
 | `src/modules/auth/index.ts` | `signInAction`, `signUpAction`, `signOutAction`, Zod-схемы форм |
