@@ -28,7 +28,7 @@ tasker/
 ├── .claude/                  # Скиллы и субагенты
 ├── .github/workflows/ci.yml  # CI: pnpm check + build, миграции на чистом Postgres, сборка образа и smoke-тест
 ├── prisma/
-│   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …), пространств (Workspace, WorkspaceMember, WorkspaceInvitation), проектов (Project, ProjectStatus), задач (Task, TaskPlacement, WorkspaceTaskCounter, TaskComment)
+│   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …), пространств (Workspace, WorkspaceMember, WorkspaceInvitation), проектов (Project, ProjectStatus), задач (Task, TaskPlacement, WorkspaceTaskCounter, TaskComment, TaskAttachment)
 │   └── migrations/
 ├── prisma.config.ts          # Подключение Prisma CLI (DATABASE_URL, миграции)
 ├── src/
@@ -41,12 +41,13 @@ tasker/
 │   │   │                     # /w/[workspaceSlug]/tasks (+ new, [taskNumber])
 │   │   └── api/
 │   │       ├── auth/[...all]/ # Better Auth handler
+│   │       ├── attachments/[attachmentId]/ # GET — проверка доступа и 302 на presigned-ссылку файла
 │   │       └── health/       # GET /api/health — состояние БД и хранилища
 │   ├── modules/              # Доменные модули
 │   │   ├── auth/             # Вход, регистрация, выход: Zod-схемы, сервис, Server Actions
 │   │   ├── workspaces/       # Пространства, участники (+ право «Управление проектами»), приглашения (index.ts — сервер, client.ts — клиент)
 │   │   ├── projects/         # Проекты и статусы-колонки: модели (StatusSet), срезы project/status
-│   │   ├── tasks/            # Задачи: модели (TaskPlacement, позиции, запрос списка TaskListQuery, права на комментарии), срезы task/placement/comment/views; зависит от projects и workspaces
+│   │   ├── tasks/            # Задачи: модели (TaskPlacement, позиции, запрос списка TaskListQuery, права на комментарии, правила вложений), срезы task/placement/comment/attachment/views; зависит от projects и workspaces
 │   │   └── admin/            # Администрирование ресурса: модели (правила над пользователями, запрос списка), срез user (чтение — репозиторий, изменения — плагин admin через callAdminApi); зависит от workspaces
 │   ├── components/
 │   │   ├── auth/             # Формы входа/регистрации, меню пользователя
@@ -56,7 +57,8 @@ tasker/
 │   │   ├── projects/         # Список проектов, навигация проекта, настройки проекта и статусов
 │   │   ├── tasks/            # Канбан-доска (dnd-kit), карточка, быстрое создание, страница задачи, размещения;
 │   │                         # task-list/ — список задач: фильтры, сортировка, пагинация (состояние в URL);
-│   │                         # comments/ — комментарии на странице задачи: лента, добавление, правка, удаление
+│   │                         # comments/ — комментарии на странице задачи: лента, добавление, правка, удаление, файлы;
+│   │                         # attachments/ — вложения: очередь загрузки (presigned POST), зона перетаскивания, список, миниатюры
 │   │   └── ui/               # shadcn/ui (генерируется CLI, вручную не править)
 │   ├── lib/utils.ts          # cn() для shadcn
 │   ├── generated/prisma/     # Сгенерированный Prisma Client (в .gitignore)
@@ -68,7 +70,7 @@ tasker/
 │   │   ├── errors/           # AppError, доменные ошибки, toActionError, toErrorResponse
 │   │   ├── types/            # ActionResult<T>, FormState<T> для useActionState
 │   │   ├── db/               # Prisma singleton, checkDatabase(), isUniqueViolation()
-│   │   ├── storage/          # S3-клиент, checkStorage()
+│   │   ├── storage/          # S3-клиенты (сервер и подпись ссылок), presigned POST/GET, HeadObject, удаление пачками, checkStorage()
 │   │   ├── mail/             # sendMail() (nodemailer), escapeHtml()
 │   │   └── health/           # checkHealth() — агрегирует проверки
 │   └── test/                 # Вспомогательное для Vitest
@@ -98,7 +100,7 @@ tasker/
 | `src/shared/mail/index.ts` | `sendMail()` — отправка писем через SMTP |
 | `src/modules/workspaces/index.ts` | Пространства, участники, приглашения: actions и read-функции (`client.ts` — для клиентских компонентов) |
 | `src/modules/projects/index.ts` | Проекты и статусы: actions и read-функции (`listProjects`, `getProject`, `listStatuses`, `listWorkspaceStatuses`; `client.ts` — для клиентских компонентов) |
-| `src/modules/tasks/index.ts` | Задачи, размещения и комментарии: actions и read-функции (`getTaskByNumber`, `listTaskComments`, `listTasks`, `listProjectTasks`, `getBoardCards`, `parseTaskListParams`; `client.ts` — для клиентских компонентов, в т.ч. `movePlacementAction` и чистые функции переноса карточек) |
+| `src/modules/tasks/index.ts` | Задачи, размещения, комментарии и вложения: actions и read-функции (`getTaskByNumber`, `listTaskComments`, `listTaskAttachments`, `getAttachmentDownload`, `listTasks`, `listProjectTasks`, `getBoardCards`, `parseTaskListParams`; `client.ts` — для клиентских компонентов, в т.ч. `movePlacementAction` и чистые функции переноса карточек) |
 | `src/modules/admin/index.ts` | Пользователи ресурса: `listAdminUsers`, `parseAdminUserListParams`; actions блокировки, роли, сессий и удаления (`client.ts` — для клиентских компонентов) |
 | `src/modules/auth/index.ts` | `signInAction`, `signUpAction`, `signOutAction`, Zod-схемы форм |
 | `src/proxy.ts` | Оптимистичный редирект неавторизованных на `/login` |
@@ -125,8 +127,8 @@ tasker/
 |----------|------|----------|
 | README | `README.md` | Лендинг: быстрый старт, возможности |
 | Начало работы | `docs/getting-started.md` | Установка, миграции, первый вход и администратор |
-| Конфигурация | `docs/configuration.md` | Переменные окружения, docker-compose, порты |
-| Архитектура | `docs/architecture.md` | Слои, границы ESLint, аутентификация, пространства, проекты, задачи, доска, список и комментарии, администрирование, доступ, `/api/health` |
+| Конфигурация | `docs/configuration.md` | Переменные окружения, docker-compose, порты, хранилище и CORS |
+| Архитектура | `docs/architecture.md` | Слои, границы ESLint, аутентификация, пространства, проекты, задачи, доска, список, комментарии и вложения, администрирование, доступ, HTTP-эндпоинты |
 | Логирование и ошибки | `docs/logging-and-errors.md` | `createLogger`, `AppError`, `ActionResult` |
 | Разработка | `docs/development.md` | Команды, линтеры, тесты, Prisma |
 | Docker-образ и CI | `docs/deployment.md` | Dockerfile, `compose.app.yml`, миграции, smoke-скрипт, GitHub Actions |

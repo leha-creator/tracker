@@ -146,7 +146,8 @@ Rationale: План покрывает этап целиком: загрузка
 
 ### Phase 2: Сервер
 
-- [ ] Task 4: Срез `attachment`: схема, репозиторий, сервис, actions, DTO (depends on 3)
+- [x] Task 4: Срез `attachment`: схема, репозиторий, сервис, actions, DTO (depends on 3)
+  - **По факту:** ключ хранилища строится из случайного `randomUUID()`, а не из id вложения — id выдаёт БД при вставке, отдельный update не нужен. Добавлены `attachment.select.ts` (`ATTACHMENT_SELECT`, `COMMENT_ATTACHMENTS_SELECT`) и `attachment.mapper.ts`; `findById` — для ссылки скачивания (доступ проверяется по `workspaceId` найденной строки); `commentContent` — для правила «последний файл комментария без текста».
   - `src/modules/tasks/slices/attachment/attachment.schema.ts` (Zod): `requestUploadSchema { workspaceId, taskId, target, fileName, size }`, `completeUploadSchema { workspaceId, taskId, attachmentId }`, `deleteAttachmentSchema` (то же). Переиспользовать `workspaceIdField`, `entityIdField`.
   - `attachment.repository.ts` (`server-only`): `ATTACHMENT_SELECT`; `taskExists`, `countForTarget(workspaceId, taskId, target, uploaderId?)` (для комментария — черновики загрузившего), `createPending`, `find(key)`, `markReady(key, uploadedAt)` → `count`, `delete(key)` → `count`, `listForTask(workspaceId, taskId)`, `findStale(uploaderId, before, take)`, `deleteByIds(ids)`, `bindToComment(tx, { ids, workspaceId, taskId, uploaderId, commentId })` → `count`, `keysForTask(workspaceId, taskId)`, `keysForComment(workspaceId, taskId, commentId)`. Все `where` — с `workspaceId` и `taskId`.
   - `attachment.storage.ts` (`server-only`): `deleteStoredObjects(keys, context)` поверх `deleteObjects` с логированием — общий для сервисов задачи, комментария и вложения.
@@ -165,7 +166,7 @@ Rationale: План покрывает этап целиком: загрузка
     - Имя файла логировать можно только как расширение; подписанные URL и поля политики — никогда.
   - Files: `src/modules/tasks/slices/attachment/{attachment.schema,attachment.schema.test,attachment.repository,attachment.storage,attachment.dto,attachment.service,attachment.service.test,attachment.actions}.ts`, `src/modules/tasks/{index,client}.ts`.
 
-- [ ] Task 5: Вложения в комментариях и очистка объектов при удалении задачи и комментария (depends on 4)
+- [x] Task 5: Вложения в комментариях и очистка объектов при удалении задачи и комментария (depends on 4)
   - `comment.schema.ts`: `body` допускает пустую строку после нормализации; `attachmentIds: z.array(entityIdField).max(COMMENT_ATTACHMENTS_LIMIT).default([])` (в action собирать через `formData.getAll('attachmentId')`).
   - `comment.service.ts`:
     - `createComment` — пустой текст без файлов → `ValidationError` с ошибкой поля `body` «Напишите комментарий или приложите файл»; создание комментария и `bindToComment` в одной `prisma.$transaction`; привязано меньше переданного → `ValidationError('Файлы не найдены — загрузите их заново')`.
@@ -178,7 +179,8 @@ Rationale: План покрывает этап целиком: загрузка
   - Логирование: `info` `[comment] created` дополнить `attachments: n`; `[comment] deleted` и `[task] deleted` — `attachments: n`; сбой очистки — `error` в `attachment.storage.ts`.
   - Files: `src/modules/tasks/slices/comment/{comment.schema,comment.schema.test,comment.repository,comment.service,comment.service.test,comment.actions,comment.dto}.ts`, `src/modules/tasks/slices/task/{task.service,task.service.test}.ts`.
 
-- [ ] Task 6: Route Handler скачивания `GET /api/attachments/[attachmentId]` (depends on 4)
+- [x] Task 6: Route Handler скачивания `GET /api/attachments/[attachmentId]` (depends on 4)
+  - **По факту:** образца тестов route handlers в проекте нет — покрытие через тесты `getAttachmentDownload`. Пустой текст без файлов при создании отсекает схема (`superRefine`, ошибка поля `body`), сервис проверяет это повторно.
   - Перед началом прочитать `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md` и `01-app/02-guides/authentication.md` (раздел о Route Handlers).
   - `src/app/api/attachments/[attachmentId]/route.ts`: `getSession()`; нет сессии → 404 (не раскрываем существование); `getAttachmentDownload(session, attachmentId, { inline: searchParams.get('inline') === '1' })` → `NextResponse.redirect(url, 302)` с `Cache-Control: private, no-store` и `Referrer-Policy: no-referrer`; `NotFoundError` → 404, прочие ошибки — `toErrorResponse`.
   - Тест (если в проекте есть образец тестов route handlers — по нему; иначе покрытие через сервис в Task 4 достаточно).
@@ -189,7 +191,8 @@ Rationale: План покрывает этап целиком: загрузка
 
 ### Phase 3: UI
 
-- [ ] Task 7: Компоненты загрузки и списка вложений, блок «Вложения» на странице задачи (depends on 5, 6)
+- [x] Task 7: Компоненты загрузки и списка вложений, блок «Вложения» на странице задачи (depends on 5, 6)
+  - **По факту:** дополнительно `attachment-icon.tsx` и `upload-row.tsx`; зона перетаскивания и хук `useFileDrop` — в `attachment-dropzone.tsx` (переиспользуется формой комментария). `task-attachments-section.tsx` подаёт серверный список в `AttachmentDropzone` как `children`. Готовая строка загрузки убирается после ответа `completeAttachmentUploadAction` — к этому моменту ревалидированный список уже пришёл. Проверено в Playwright: загрузка 5 файлов (PNG, PDF с кириллицей, TXT — приняты; поддельный PNG отклонён по сигнатуре и удалён из MinIO; `.exe` отклонён на клиенте), миниатюра, 302 на presigned GET с `Content-Disposition`, 404 без сессии. Отдельным скриптом проверено, что MinIO отклоняет POST с другим размером, типом и ключом.
   - Перед началом перечитать `node_modules/next/dist/docs/01-app/02-guides/forms.md` и `server-actions.md`.
   - `src/components/tasks/attachments/use-attachment-upload.ts` (`'use client'`): очередь файлов; для каждого — предпроверка `resolveAttachmentType` и размера на клиенте → `requestAttachmentUploadAction` → `XMLHttpRequest` POST на `url` с `fields` и файлом последним полем (прогресс `upload.onprogress`, отмена `abort()`) → `completeAttachmentUploadAction`. Состояния: `uploading(progress) | done | error(message)`. Ограничение параллелизма — 3 файла. Ответ хранилища с ошибкой (`EntityTooLarge`, 403) → понятное сообщение.
   - `attachment-dropzone.tsx`: кнопка «Прикрепить файлы» (`<input type="file" multiple accept={ATTACHMENT_ACCEPT}>`, скрытый, с `aria-label`) + перетаскивание на блок (подсветка, `onDragOver`/`onDrop`); подпись «до 25 МБ».
@@ -199,7 +202,8 @@ Rationale: План покрывает этап целиком: загрузка
   - Логирование: клиентские компоненты не логируют; ошибки показываются в строке файла, ошибка удаления — в диалоге.
   - Files: `src/components/tasks/attachments/{use-attachment-upload.ts,attachment-dropzone.tsx,attachment-list.tsx,attachment-item.tsx,task-attachments-section.tsx}`, `src/components/ui/progress.tsx` (если добавляется), `src/app/(app)/w/[workspaceSlug]/tasks/[taskNumber]/page.tsx`.
 
-- [ ] Task 8: Файлы в комментариях и ручная проверка (depends on 7)
+- [x] Task 8: Файлы в комментариях и ручная проверка (depends on 7)
+  - **По факту:** черновики формы — те же `UploadRow`; крестик у готового черновика вызывает `deleteAttachmentAction`. Найдено и исправлено при проверке: `addFiles` читал `FileList` в отложенном updater'е `setItems`, а сброс `input.value` его уже очищал — файлы копируются в массив до обновления состояния (и updater без побочных эффектов). У `CommentBodyField` убран `required` (текст необязателен при файлах). Ручная проверка в Playwright (dev, порт 3000): комментарий только из файла (Ctrl+Enter), пустая отправка → ошибка поля, текст + файл, удаление черновика до отправки, запрет удалить последний файл комментария без текста, участник не видит черновик владельца (404) и не может удалять чужие файлы, владелец удаляет файл участника, удаление комментария и задачи убирает объекты из MinIO (в итоге 0 объектов и 0 строк). То же для загрузки и скачивания в `pnpm app:up` (3001, MinIO 9002). Лимиты 25 МБ и 20/10 файлов вручную не проверялись — покрыты тестами модели и сервиса, политику размера MinIO проверил отдельный скрипт. Тестовые данные из dev-БД удалены. `pnpm check` (634 теста) и `pnpm build` зелёные.
   - `comment-form.tsx`: кнопка-скрепка рядом с «Отправить» и перетаскивание на поле текста (тот же `useAttachmentUpload` с `target="comment"`); под полем — чипы черновиков с прогрессом и крестиком (крестик удаляет черновик через `deleteAttachmentAction`); скрытые `<input name="attachmentId">` для готовых; «Отправить» недоступна, пока идёт загрузка; после успеха черновики очищаются, при ошибке — остаются (восстановление из `values.attachmentIds`). `Ctrl/⌘+Enter` работает и без текста, если есть файлы.
   - `comment-item.tsx`: под текстом — `AttachmentList` в компактном виде (миниатюры в ряд, файлы чипами); в режиме правки — удаление отдельных файлов (только `canDelete`). Комментарий только из файлов показывается без пустого абзаца.
   - Проверить вручную (`pnpm infra:up`, `pnpm dev`): загрузка нескольких файлов к задаче с прогрессом; отказ для `.exe` и файла > 25 МБ (на клиенте и, подменив запрос, на сервере/хранилище); PNG, переименованный из `.txt`, отклонён при подтверждении; миниатюры и открытие оригинала; скачивание PDF и файла с кириллицей в имени; ссылка через 60 с больше не работает, а `/api/attachments/<id>` выдаёт новую; неучастник и выход из сессии → 404; удаление файла автором, владельцем, отказ участнику; комментарий только из файлов; удаление комментария и задачи убирает объекты из MinIO (консоль http://localhost:9001); лимит 20 файлов. Затем то же для загрузки в `pnpm app:up` (порт 3001, MinIO 9002).

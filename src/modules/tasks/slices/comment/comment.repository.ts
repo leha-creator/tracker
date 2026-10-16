@@ -3,6 +3,8 @@ import 'server-only';
 import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/db';
 
+import { COMMENT_ATTACHMENTS_SELECT } from '../attachment/attachment.select';
+
 const COMMENT_SELECT = {
   id: true,
   body: true,
@@ -10,6 +12,7 @@ const COMMENT_SELECT = {
   createdAt: true,
   editedAt: true,
   author: { select: { id: true, name: true, image: true } },
+  attachments: COMMENT_ATTACHMENTS_SELECT,
 } as const satisfies Prisma.TaskCommentSelect;
 
 interface CommentKey {
@@ -56,8 +59,11 @@ export const commentRepository = {
     return prisma.taskComment.findFirst({ where: whereKey(key), select: COMMENT_SELECT });
   },
 
-  create(data: { workspaceId: string; taskId: string; authorId: string; body: string }) {
-    return prisma.taskComment.create({ data, select: { id: true } });
+  create(
+    data: { workspaceId: string; taskId: string; authorId: string; body: string },
+    tx: Prisma.TransactionClient = prisma,
+  ) {
+    return tx.taskComment.create({ data, select: { id: true } });
   },
 
   /** Новый текст и отметка правки; возвращает число изменённых строк (0 — не найден). */

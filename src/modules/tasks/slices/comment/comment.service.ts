@@ -3,7 +3,8 @@ import 'server-only';
 import { isEntityId } from '@/modules/projects';
 import { requireWorkspaceAccess, type WorkspaceAccess } from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
-import { NotFoundError } from '@/shared/errors';
+import { prisma } from '@/shared/db';
+import { NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
 import {
@@ -13,9 +14,13 @@ import {
   canEditComment,
   TASK_COMMENTS_PAGE_SIZE,
 } from '../../models';
+import { toAttachmentDto } from '../attachment/attachment.mapper';
+import { attachmentRepository } from '../attachment/attachment.repository';
+import { deleteStoredObjects } from '../attachment/attachment.storage';
 import { toUserDto } from '../task/task.mapper';
 import type { TaskCommentDto, TaskCommentsDto } from './comment.dto';
 import { commentRepository, type CommentRow } from './comment.repository';
+import { EMPTY_COMMENT_MESSAGE } from './comment.schema';
 
 const log = createLogger('tasks.comment');
 
@@ -34,7 +39,14 @@ function toCommentDto(row: CommentRow, access: WorkspaceAccess): TaskCommentDto 
     editedAt: row.editedAt,
     canEdit: canEditComment(row, access),
     canDelete: canDeleteComment(row, access),
+    attachments: row.attachments.map((attachment) => toAttachmentDto(attachment, access)),
   };
+}
+
+function emptyComment(): ValidationError {
+  return new ValidationError(EMPTY_COMMENT_MESSAGE, {
+    fieldErrors: { body: [EMPTY_COMMENT_MESSAGE] },
+  });
 }
 
 function taskNotFound(workspaceId: string, taskId: string): NotFoundError {
@@ -77,23 +89,53 @@ export async function listTaskComments(
   };
 }
 
+/**
+ * Новый комментарий. Файлы — готовые черновики автора в этой задаче; привязываются в той же
+ * транзакции: если часть не найдена, комментарий не создаётся.
+ */
 export async function createComment(
   session: AuthSession,
-  input: { workspaceId: string; taskId: string; body: string },
+  input: { workspaceId: string; taskId: string; body: string; attachmentIds?: string[] },
 ): Promise<{ commentId: string }> {
   const { workspaceId, taskId, body } = input;
+  const attachmentIds = [...new Set(input.attachmentIds ?? [])];
   const access = await requireWorkspaceAccess(session, workspaceId);
   const exists = isEntityId(taskId) && (await commentRepository.taskExists(workspaceId, taskId));
   if (!exists) throw taskNotFound(workspaceId, taskId);
+  if (body === '' && attachmentIds.length === 0) throw emptyComment();
 
-  const { id } = await commentRepository.create({
-    workspaceId,
-    taskId,
-    authorId: access.userId,
-    body,
+  const id = await prisma.$transaction(async (tx) => {
+    const comment = await commentRepository.create(
+      { workspaceId, taskId, authorId: access.userId, body },
+      tx,
+    );
+    if (attachmentIds.length > 0) {
+      const bound = await attachmentRepository.bindToComment(tx, {
+        ids: attachmentIds,
+        workspaceId,
+        taskId,
+        uploaderId: access.userId,
+        commentId: comment.id,
+      });
+      if (bound !== attachmentIds.length) {
+        log.warn(
+          { workspaceId, taskId, userId: access.userId, expected: attachmentIds.length, bound },
+          '[comment.create] attachments not found',
+        );
+        throw new ValidationError('Файлы не найдены — загрузите их заново');
+      }
+    }
+    return comment.id;
   });
   log.info(
-    { workspaceId, taskId, commentId: id, userId: access.userId, length: body.length },
+    {
+      workspaceId,
+      taskId,
+      commentId: id,
+      userId: access.userId,
+      length: body.length,
+      attachments: attachmentIds.length,
+    },
     '[comment] created',
   );
   return { commentId: id };
@@ -114,6 +156,7 @@ export async function updateComment(
     throw error;
   }
 
+  if (body === '' && comment.attachments.length === 0) throw emptyComment();
   if (comment.body === body) {
     log.debug(key, '[comment.update] text unchanged');
     return;
@@ -134,10 +177,22 @@ export async function deleteComment(session: AuthSession, key: CommentKey): Prom
     throw error;
   }
 
+  // Строки файлов удалит каскад, объекты хранилища — после удаления комментария.
+  const storageKeys = await attachmentRepository.keysForComment(
+    key.workspaceId,
+    key.taskId,
+    key.commentId,
+  );
   const count = await commentRepository.delete(key);
   if (count === 0) throw new NotFoundError('Комментарий не найден');
+  await deleteStoredObjects(storageKeys, key);
   log.info(
-    { ...key, userId: access.userId, byOwner: comment.authorId !== access.userId },
+    {
+      ...key,
+      userId: access.userId,
+      byOwner: comment.authorId !== access.userId,
+      attachments: storageKeys.length,
+    },
     '[comment] deleted',
   );
 }

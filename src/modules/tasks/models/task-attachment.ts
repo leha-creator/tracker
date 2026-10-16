@@ -211,13 +211,16 @@ export function contentDisposition(fileName: string, disposition: 'inline' | 'at
   return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encodeRfc5987(fileName)}`;
 }
 
-/** Ключ объекта в хранилище. Имени файла в ключе нет. */
+/**
+ * Ключ объекта в хранилище: префикс пространства и задачи + случайный `objectId`.
+ * Имени файла в ключе нет — нет проблем с кодировкой и обходом путей.
+ */
 export function attachmentStorageKey(
   workspaceId: string,
   taskId: string,
-  attachmentId: string,
+  objectId: string,
 ): string {
-  return `ws/${workspaceId}/tasks/${taskId}/${attachmentId}`;
+  return `ws/${workspaceId}/tasks/${taskId}/${objectId}`;
 }
 
 const SIZE_FORMAT = new Intl.NumberFormat('ru', { maximumFractionDigits: 1 });

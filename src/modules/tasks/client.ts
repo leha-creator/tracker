@@ -12,6 +12,7 @@ export {
 export {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_MAX_SIZE,
+  attachmentLimit,
   COMMENT_ATTACHMENTS_LIMIT,
   findAttachmentType,
   formatFileSize,
@@ -52,6 +53,12 @@ export {
   movePlacementAction,
   removeFromProjectAction,
 } from './slices/placement/placement.actions';
+export {
+  completeAttachmentUploadAction,
+  deleteAttachmentAction,
+  requestAttachmentUploadAction,
+} from './slices/attachment/attachment.actions';
+export type { AttachmentUploadDto, TaskAttachmentDto } from './slices/attachment/attachment.dto';
 export {
   createCommentAction,
   deleteCommentAction,

@@ -19,6 +19,7 @@
 | `S3_SECRET_ACCESS_KEY` | да | — | Секретный ключ |
 | `S3_BUCKET` | да | — | Бакет для вложений (мин. 3 символа) |
 | `S3_FORCE_PATH_STYLE` | нет | `true` | Path-style адресация, нужна для MinIO |
+| `S3_PUBLIC_ENDPOINT` | нет | `S3_ENDPOINT` | Адрес хранилища, который видит браузер. На него подписываются ссылки загрузки и скачивания вложений. Задайте, если сервер ходит в хранилище по внутреннему адресу (в Docker — `http://minio:9000`) |
 | `BETTER_AUTH_SECRET` | да | — | Секрет Better Auth для подписи cookie и токенов, минимум 32 символа. Сгенерировать: `openssl rand -base64 32` |
 | `BETTER_AUTH_URL` | да | — | Публичный URL приложения, локально `http://localhost:3000` |
 | `ADMIN_EMAILS` | нет | пусто | Email через запятую. Пользователь с таким email при регистрации получает глобальную роль `admin`. Регистр и пробелы не важны |
@@ -50,11 +51,12 @@ env.S3_BUCKET; // типизировано
 | `POSTGRES_PORT` | `5433` | Порт на хосте. Не 5432, чтобы не конфликтовать с другими проектами |
 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | `tasker` / `tasker-secret` | Root-учётка MinIO. Локально это и есть `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` |
 | `MINIO_API_PORT` / `MINIO_CONSOLE_PORT` | `9000` / `9001` | Порты MinIO |
+| `MINIO_CORS_ALLOW_ORIGIN` | `http://localhost:3000,http://localhost:3001` | Origin-ы приложения, с которых MinIO принимает загрузку из браузера. Передаётся в `MINIO_API_CORS_ALLOW_ORIGIN`. Без этой переменной MinIO разрешает любой origin |
 | `MAILPIT_SMTP_PORT` / `MAILPIT_UI_PORT` | `1025` / `8025` | Порты Mailpit. При смене SMTP-порта поменяйте и `SMTP_PORT` |
 
 При смене `POSTGRES_PORT` поменяйте порт и в `DATABASE_URL`.
 
-Переменные оверлея `compose.app.yml` (`APP_PORT`, `APP_URL`, `APP_LOG_LEVEL`, теги образов) описаны в разделе [Docker-образ и CI](deployment.md#переменные-composeappyml).
+Переменные оверлея `compose.app.yml` (`APP_PORT`, `APP_URL`, `APP_MINIO_PORT`, `APP_LOG_LEVEL`, теги образов) описаны в разделе [Docker-образ и CI](deployment.md#переменные-composeappyml).
 
 ## Сервисы `compose.yml`
 
@@ -64,6 +66,26 @@ env.S3_BUCKET; // типизировано
 | `minio` | `pgsty/minio:RELEASE.2026-08-04T00-00-00Z` | S3-совместимое хранилище |
 | `minio-init` | `pgsty/mc` (закреплён по digest) | Создаёт приватный бакет и завершается |
 | `mailpit` | `axllent/mailpit:v1.31.5` | SMTP-ловушка для писем, UI на порту 8025 |
+
+## Хранилище для вложений
+
+Браузер загружает файлы прямо в хранилище (presigned POST) и скачивает их оттуда же (presigned GET). Поэтому нужны два условия:
+
+- **Адрес хранилища доступен браузеру.** Ссылки подписываются на `S3_PUBLIC_ENDPOINT`. Локально это `http://localhost:9000`, в контейнерном стеке — `http://localhost:9002`.
+- **CORS разрешает origin приложения.** MinIO настраивается переменной `MINIO_API_CORS_ALLOW_ORIGIN` (в `compose.yml` — через `MINIO_CORS_ALLOW_ORIGIN`). Если запускаете dev-сервер на другом порту, добавьте его адрес в список. Для AWS S3 и других S3-совместимых сервисов задайте CORS-правило бакета:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://tasker.example.com"],
+    "AllowedMethods": ["POST", "GET"],
+    "AllowedHeaders": ["*"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+Бакет остаётся приватным (`minio-init` выполняет `mc anonymous set none`): все ссылки подписанные и короткоживущие.
 
 > Официальные образы `minio/minio` больше не публикуются, поэтому используется сборка MinIO из исходников от Pigsty. Приложение работает с хранилищем только через S3 API, так что MinIO можно заменить любым S3-совместимым сервисом.
 

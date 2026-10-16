@@ -14,6 +14,9 @@ const find = vi.fn<(...args: unknown[]) => Promise<ReturnType<typeof row> | null
 const create = vi.fn<(...args: unknown[]) => Promise<{ id: string }>>();
 const updateBody = vi.fn<(...args: unknown[]) => Promise<number>>();
 const deleteRow = vi.fn<(...args: unknown[]) => Promise<number>>();
+const bindToComment = vi.fn<(...args: unknown[]) => Promise<number>>();
+const keysForComment = vi.fn<(...args: unknown[]) => Promise<string[]>>();
+const deleteStoredObjects = vi.fn<(keys: readonly string[], context: object) => Promise<void>>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
@@ -23,6 +26,19 @@ vi.mock('@/shared/access', async (importOriginal) => ({
 vi.mock('@/modules/projects', () => ({
   isEntityId: (value: string) => /^[0-9a-f-]{36}$/i.test(value),
   parseStatusColor: (value: string) => value,
+}));
+vi.mock('@/shared/db', () => ({
+  prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn({ tx: true }) },
+}));
+vi.mock('../attachment/attachment.repository', () => ({
+  attachmentRepository: {
+    bindToComment: (...args: unknown[]) => bindToComment(...args),
+    keysForComment: (...args: unknown[]) => keysForComment(...args),
+  },
+}));
+vi.mock('../attachment/attachment.storage', () => ({
+  deleteStoredObjects: (keys: readonly string[], context: object) =>
+    deleteStoredObjects(keys, context),
 }));
 vi.mock('./comment.repository', () => ({
   commentRepository: {
@@ -54,7 +70,34 @@ const TASK_ID = '0192f3a0-0000-7000-8000-000000000010';
 const COMMENT_ID = '0192f3a0-0000-7000-8000-0000000000c1';
 const KEY = { workspaceId: 'ws-1', taskId: TASK_ID, commentId: COMMENT_ID };
 
-function row(overrides: Partial<{ id: string; body: string; authorId: string | null }> = {}) {
+const ATTACHMENT_ID = '0192f3a0-0000-7000-8000-0000000000a1';
+
+function attachment(uploaderId: string) {
+  return {
+    id: ATTACHMENT_ID,
+    workspaceId: 'ws-1',
+    taskId: TASK_ID,
+    target: 'comment' as const,
+    commentId: COMMENT_ID,
+    uploaderId,
+    fileName: 'photo.png',
+    contentType: 'image/png',
+    size: 10,
+    storageKey: 'ws/key',
+    status: 'ready' as const,
+    createdAt: new Date('2026-10-16T10:00:00.000Z'),
+    uploader: { id: uploaderId, name: 'Author', image: null },
+  };
+}
+
+function row(
+  overrides: Partial<{
+    id: string;
+    body: string;
+    authorId: string | null;
+    attachments: ReturnType<typeof attachment>[];
+  }> = {},
+) {
   const authorId = overrides.authorId === undefined ? 'user-1' : overrides.authorId;
   return {
     id: overrides.id ?? COMMENT_ID,
@@ -63,6 +106,7 @@ function row(overrides: Partial<{ id: string; body: string; authorId: string | n
     createdAt: new Date('2026-10-16T10:00:00.000Z'),
     editedAt: null,
     author: authorId ? { id: authorId, name: 'Author', image: null } : null,
+    attachments: overrides.attachments ?? [],
   };
 }
 
@@ -87,6 +131,9 @@ beforeEach(() => {
   create.mockResolvedValue({ id: COMMENT_ID });
   updateBody.mockResolvedValue(1);
   deleteRow.mockResolvedValue(1);
+  bindToComment.mockResolvedValue(0);
+  keysForComment.mockResolvedValue([]);
+  deleteStoredObjects.mockResolvedValue();
 });
 
 describe('listTaskComments', () => {
@@ -112,6 +159,21 @@ describe('listTaskComments', () => {
       ['c2', false, false],
     ]);
     expect(result.items[0]?.author).toEqual({ userId: 'user-1', name: 'Author', image: null });
+  });
+
+  it('maps comment files to DTO with delete rights', async () => {
+    listForTask.mockResolvedValue({
+      total: 1,
+      rows: [row({ attachments: [attachment('someone')] })],
+    });
+    const [item] = (await listTaskComments(session, 'ws-1', TASK_ID)).items;
+    expect(item?.attachments).toEqual([
+      expect.objectContaining({
+        id: ATTACHMENT_ID,
+        previewHref: `/api/attachments/${ATTACHMENT_ID}?inline=1`,
+        canDelete: false,
+      }),
+    ]);
   });
 
   it('loads all comments without a limit', async () => {
@@ -142,12 +204,50 @@ describe('createComment', () => {
     await expect(
       createComment(session, { workspaceId: 'ws-1', taskId: TASK_ID, body: 'Привет' }),
     ).resolves.toEqual({ commentId: COMMENT_ID });
-    expect(create).toHaveBeenCalledWith({
+    expect(create).toHaveBeenCalledWith(
+      { workspaceId: 'ws-1', taskId: TASK_ID, authorId: 'user-1', body: 'Привет' },
+      { tx: true },
+    );
+    expect(bindToComment).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty text without files', async () => {
+    await expect(
+      createComment(session, { workspaceId: 'ws-1', taskId: TASK_ID, body: '' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', fieldErrors: { body: expect.any(Array) } });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('binds draft files of the author in the same transaction', async () => {
+    bindToComment.mockResolvedValue(1);
+    await createComment(session, {
       workspaceId: 'ws-1',
       taskId: TASK_ID,
-      authorId: 'user-1',
-      body: 'Привет',
+      body: '',
+      attachmentIds: [ATTACHMENT_ID, ATTACHMENT_ID],
     });
+    expect(bindToComment).toHaveBeenCalledWith(
+      { tx: true },
+      {
+        ids: [ATTACHMENT_ID],
+        workspaceId: 'ws-1',
+        taskId: TASK_ID,
+        uploaderId: 'user-1',
+        commentId: COMMENT_ID,
+      },
+    );
+  });
+
+  it('rolls back when some files are not bound', async () => {
+    bindToComment.mockResolvedValue(0);
+    await expect(
+      createComment(session, {
+        workspaceId: 'ws-1',
+        taskId: TASK_ID,
+        body: 'a',
+        attachmentIds: [ATTACHMENT_ID],
+      }),
+    ).rejects.toThrow('загрузите их заново');
   });
 });
 
@@ -173,6 +273,15 @@ describe('updateComment', () => {
   it('updates the text of own comment', async () => {
     await updateComment(session, { ...KEY, body: 'Новый текст' });
     expect(updateBody).toHaveBeenCalledWith(KEY, 'Новый текст');
+  });
+
+  it('allows empty text only when the comment has files', async () => {
+    await expect(updateComment(session, { ...KEY, body: '' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    find.mockResolvedValue(row({ attachments: [attachment('user-1')] }));
+    await updateComment(session, { ...KEY, body: '' });
+    expect(updateBody).toHaveBeenCalledWith(KEY, '');
   });
 
   it('skips the update when the text is unchanged', async () => {
@@ -202,6 +311,13 @@ describe('deleteComment', () => {
     expect(deleteRow).toHaveBeenCalledWith(KEY);
   });
 
+  it('removes stored objects of comment files after deletion', async () => {
+    keysForComment.mockResolvedValue(['ws/a', 'ws/b']);
+    await deleteComment(session, KEY);
+    expect(keysForComment).toHaveBeenCalledWith('ws-1', TASK_ID, COMMENT_ID);
+    expect(deleteStoredObjects).toHaveBeenCalledWith(['ws/a', 'ws/b'], KEY);
+  });
+
   it('rejects a malformed comment id without a query', async () => {
     await expect(deleteComment(session, { ...KEY, commentId: 'x' })).rejects.toMatchObject({
       code: 'NOT_FOUND',
@@ -212,5 +328,6 @@ describe('deleteComment', () => {
   it('returns NOT_FOUND when the comment disappeared', async () => {
     deleteRow.mockResolvedValue(0);
     await expect(deleteComment(session, KEY)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(deleteStoredObjects).not.toHaveBeenCalled();
   });
 });

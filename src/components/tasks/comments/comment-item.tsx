@@ -13,6 +13,7 @@ import {
 import type { FormState } from '@/shared/types';
 
 import { AssigneeAvatar } from '../assignee-avatar';
+import { AttachmentItem } from '../attachments/attachment-item';
 import { CommentBodyField } from './comment-body-field';
 
 /** Дата, отформатированная на сервере: часовой пояс браузера не влияет на гидратацию. */
@@ -24,7 +25,9 @@ export interface CommentDateLabel {
 export interface CommentItemProps {
   workspaceId: string;
   taskId: string;
-  comment: Omit<TaskCommentDto, 'createdAt' | 'editedAt'>;
+  comment: Omit<TaskCommentDto, 'createdAt' | 'editedAt' | 'attachments'> & {
+    attachments: Omit<TaskCommentDto['attachments'][number], 'createdAt'>[];
+  };
   createdAt: CommentDateLabel;
   editedAt: CommentDateLabel | null;
 }
@@ -129,7 +132,21 @@ export function CommentItem({
       {editing ? (
         <CommentEditForm ids={ids} body={comment.body} onDone={() => setEditing(false)} />
       ) : (
-        <p className="text-sm break-words whitespace-pre-wrap">{comment.body}</p>
+        comment.body && <p className="text-sm break-words whitespace-pre-wrap">{comment.body}</p>
+      )}
+      {comment.attachments.length > 0 && (
+        <ul className="grid gap-2 sm:grid-cols-2" aria-label="Файлы комментария">
+          {comment.attachments.map((attachment) => (
+            <AttachmentItem
+              key={attachment.id}
+              workspaceId={workspaceId}
+              taskId={taskId}
+              attachment={attachment}
+              // Удаление отдельных файлов — в режиме правки, чтобы не путать с удалением комментария.
+              deletable={editing}
+            />
+          ))}
+        </ul>
       )}
     </li>
   );

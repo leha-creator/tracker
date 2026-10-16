@@ -17,6 +17,8 @@ import {
   toIsoDate,
   type TaskPriority,
 } from '../../models';
+import { attachmentRepository } from '../attachment/attachment.repository';
+import { deleteStoredObjects } from '../attachment/attachment.storage';
 import { placementRepository } from '../placement/placement.repository';
 import type { TaskDto } from './task.dto';
 import { toTaskSummary, toUserDto } from './task.mapper';
@@ -222,8 +224,20 @@ export async function deleteTask(
     throw error;
   }
 
+  // Строки вложений удалит каскад, объекты хранилища — после удаления задачи.
+  const storageKeys = await attachmentRepository.keysForTask(workspaceId, taskId);
   const count = await taskRepository.delete(workspaceId, taskId);
   if (count === 0) throw new NotFoundError('Задача не найдена');
-  log.info({ workspaceId, taskId, number: task.number, userId: access.userId }, '[task] deleted');
+  await deleteStoredObjects(storageKeys, { workspaceId, taskId });
+  log.info(
+    {
+      workspaceId,
+      taskId,
+      number: task.number,
+      userId: access.userId,
+      attachments: storageKeys.length,
+    },
+    '[task] deleted',
+  );
   return { workspaceSlug: task.workspace.slug };
 }

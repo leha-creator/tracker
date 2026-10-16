@@ -34,12 +34,16 @@ export function CommentList({ workspaceId, taskId, comments, taskHref }: Comment
         </p>
       )}
       <ol className="grid gap-3">
-        {comments.items.map(({ createdAt, editedAt, ...comment }) => (
+        {comments.items.map(({ createdAt, editedAt, attachments, ...comment }) => (
           <CommentItem
             key={comment.id}
             workspaceId={workspaceId}
             taskId={taskId}
-            comment={comment}
+            // Даты файлов в ленте не показываются: Date в клиентский компонент не передаём.
+            comment={{
+              ...comment,
+              attachments: attachments.map(({ createdAt: _, ...file }) => file),
+            }}
             createdAt={dateLabel(createdAt)}
             editedAt={editedAt ? dateLabel(editedAt) : null}
           />

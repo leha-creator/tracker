@@ -38,7 +38,7 @@ Tasker — веб-приложение для управления задача�
 - **UI:** Tailwind CSS + shadcn/ui; канбан — `@dnd-kit/core` + `@dnd-kit/sortable` (перетаскивание указателем, касанием и с клавиатуры); Tiptap (предлагается) для rich-text (описания задач, документация); пока описание задачи — простой текст
 - **Порядок карточек:** `fractional-indexing` (дробные ключи, колонка `TaskPlacement.position` с `COLLATE "C"`)
 - **Валидация:** Zod (общие схемы для форм и серверных обработчиков)
-- **Хранение файлов:** S3-совместимое хранилище через `@aws-sdk/client-s3`. Локально — MinIO (образ `pgsty/minio`, официальные образы больше не публикуются). Загрузка по presigned URL
+- **Хранение файлов:** S3-совместимое хранилище через `@aws-sdk/client-s3`. Локально — MinIO (образ `pgsty/minio`, официальные образы больше не публикуются). Загрузка из браузера напрямую в хранилище по presigned POST (`@aws-sdk/s3-presigned-post`), скачивание — по presigned GET (`@aws-sdk/s3-request-presigner`) через проверку доступа; `S3_PUBLIC_ENDPOINT` — адрес хранилища для браузера, CORS MinIO — `MINIO_API_CORS_ALLOW_ORIGIN`. Вложения: до 25 МБ, типы по allowlist расширений, до 20 файлов на задачу и 10 на комментарий
 - **Почта:** SMTP через nodemailer (`src/shared/mail`); локально — Mailpit (SMTP 1025, UI 8025) в docker-compose. Используется для приглашений в пространство
 - **Инфраструктура разработки:** pnpm, docker-compose (Postgres 17 на порту 5433, MinIO, Mailpit), Prisma 7 с `@prisma/adapter-pg`, pino, Vitest, ESLint + Prettier, husky + lint-staged
 - **Интеграции:** GitHub (Octokit, GitHub App, webhooks) — в будущем

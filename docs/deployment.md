@@ -43,12 +43,12 @@ sh scripts/smoke-health.sh   # ждёт 200 и {"status":"ok"} от http://local
 pnpm app:down   # останавливает контейнерный стек (тома сохраняются)
 ```
 
-Порядок запуска такой: `postgres` (healthy) → `migrate` (успешно завершился) → `app`, причём `app` дополнительно ждёт `minio-init` и `mailpit`. Внутри сети compose приложение обращается к `postgres:5432`, `http://minio:9000` и `mailpit:1025`. Значения `DATABASE_URL`, `S3_ENDPOINT` и `SMTP_HOST` из `.env` указывают на `localhost`, поэтому здесь они не используются.
+Порядок запуска такой: `postgres` (healthy) → `migrate` (успешно завершился) → `app`, причём `app` дополнительно ждёт `minio-init` и `mailpit`. Внутри сети compose приложение обращается к `postgres:5432`, `http://minio:9000` и `mailpit:1025`. Значения `DATABASE_URL`, `S3_ENDPOINT` и `SMTP_HOST` из `.env` указывают на `localhost`, поэтому здесь они не используются. Браузер загружает и скачивает вложения напрямую из MinIO, поэтому ссылки подписываются на `S3_PUBLIC_ENDPOINT` (`http://localhost:9002`).
 
 Контейнерный стек изолирован от dev-инфраструктуры (`pnpm infra:up`):
 
 - `compose.app.yml` задаёт имя проекта `tasker-app` — свои контейнеры и тома, отдельная БД. `migrate` не трогает базу `pnpm dev`, `pnpm app:down` не останавливает dev-инфраструктуру;
-- порты Postgres и MinIO наружу не публикуются (`!reset []`), UI Mailpit — на `8026`, приложение — на `3001`. Оба стека и `pnpm dev` (порт 3000) могут работать одновременно.
+- порт Postgres наружу не публикуется (`!reset []`). У MinIO публикуется только API — на `9002` (консоль закрыта), UI Mailpit — на `8026`, приложение — на `3001`. Оба стека и `pnpm dev` (порт 3000) могут работать одновременно.
 
 Удалить стек вместе с данными: `docker compose -f compose.yml -f compose.app.yml down -v`.
 
@@ -58,6 +58,8 @@ pnpm app:down   # останавливает контейнерный стек (
 |------------|--------------|----------|
 | `APP_PORT` | `3001` | Порт приложения на хосте |
 | `APP_MAILPIT_UI_PORT` | `8026` | Порт UI Mailpit контейнерного стека на хосте |
+| `APP_MINIO_PORT` | `9002` | Порт API MinIO контейнерного стека на хосте: на него браузер загружает и скачивает вложения |
+| `APP_S3_PUBLIC_ENDPOINT` | `http://localhost:${APP_MINIO_PORT}` | `S3_PUBLIC_ENDPOINT` контейнера. Поменяйте вместе с портом и добавьте origin приложения в `MINIO_CORS_ALLOW_ORIGIN`, если он отличается от `http://localhost:3001` |
 | `APP_URL` | `http://localhost:${APP_PORT}` | Публичный адрес, передаётся в `BETTER_AUTH_URL` |
 | `APP_LOG_LEVEL` | `info` | `LOG_LEVEL` контейнера (не берётся из `LOG_LEVEL` в `.env`, где для dev стоит `debug`) |
 | `APP_IMAGE` / `MIGRATE_IMAGE` | `tasker:local` / `tasker-migrate:local` | Теги образов |

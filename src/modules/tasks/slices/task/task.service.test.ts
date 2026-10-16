@@ -23,6 +23,8 @@ const findStatus =
   >();
 const lastPosition = vi.fn<(...args: unknown[]) => Promise<string | null>>();
 const createPlacement = vi.fn<(...args: unknown[]) => Promise<unknown>>();
+const keysForTask = vi.fn<(...args: unknown[]) => Promise<string[]>>();
+const deleteObjects = vi.fn<(keys: readonly string[]) => Promise<number>>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
@@ -38,6 +40,12 @@ vi.mock('@/modules/projects', () => ({
 }));
 vi.mock('@/shared/db', () => ({
   prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn({}) },
+}));
+vi.mock('../attachment/attachment.repository', () => ({
+  attachmentRepository: { keysForTask: (...args: unknown[]) => keysForTask(...args) },
+}));
+vi.mock('@/shared/storage', () => ({
+  deleteObjects: (keys: readonly string[]) => deleteObjects(keys),
 }));
 vi.mock('./task.repository', () => ({
   taskRepository: {
@@ -117,6 +125,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   accessAs('member');
   isWorkspaceMember.mockResolvedValue(true);
+  keysForTask.mockResolvedValue([]);
+  deleteObjects.mockResolvedValue(0);
   nextNumber.mockResolvedValue(7);
   createRow.mockResolvedValue({ id: TASK_ID, number: 7, workspace: { slug: 'team' } });
   findById.mockResolvedValue(taskRow());
@@ -287,5 +297,15 @@ describe('deleteTask', () => {
       workspaceSlug: 'team',
     });
     expect(deleteRow).toHaveBeenCalledWith('ws-1', TASK_ID);
+  });
+
+  it('removes stored objects of task files; storage failure does not break deletion', async () => {
+    accessAs('owner');
+    keysForTask.mockResolvedValue(['ws/a']);
+    deleteObjects.mockResolvedValue(1);
+    await expect(deleteTask(session, { workspaceId: 'ws-1', taskId: TASK_ID })).resolves.toEqual({
+      workspaceSlug: 'team',
+    });
+    expect(deleteObjects).toHaveBeenCalledWith(['ws/a']);
   });
 });

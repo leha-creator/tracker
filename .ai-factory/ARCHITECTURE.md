@@ -63,7 +63,7 @@ tasker/
 │   │   │   │   ├── task/             # CRUD задачи, номер (#42), срок, приоритет, ответственный
 │   │   │   │   ├── placement/        # размещение задачи в проекте: статус + позиция
 │   │   │   │   ├── comment/
-│   │   │   │   ├── attachment/
+│   │   │   │   ├── attachment/       # вложения задачи и комментариев: слот загрузки (presigned POST), подтверждение с проверкой размера и сигнатуры, ссылка скачивания, удаление объектов
 │   │   │   │   └── views/            # запросы для канбана и списка (read-модели); фильтры/сортировка списка — task-list.prisma.ts
 │   │   │   ├── models/               # правила задачи, TaskPlacement, позиции (fractional-indexing), Priority
 │   │   │   ├── client.ts
@@ -101,7 +101,7 @@ tasker/
 │       ├── auth/                     # Better Auth config, getSession()
 │       ├── access/                   # requireWorkspaceAccess(), requireWorkspacePermission(), requireAdmin()
 │       ├── errors/                   # AppError, NotFoundError, ForbiddenError, toActionError()
-│       ├── storage/                  # S3-клиент, presigned URL
+│       ├── storage/                  # S3-клиенты (S3_ENDPOINT и S3_PUBLIC_ENDPOINT для подписи), presigned POST/GET, удаление объектов
 │       ├── mail/                     # SMTP (nodemailer): sendMail(), escapeHtml()
 │       ├── logger/                   # pino, LOG_LEVEL
 │       ├── env/                      # Zod-валидация переменных окружения (ленивая)
@@ -141,6 +141,7 @@ tasker/
 - **Авторизация:** централизована в `shared/access`. Каждый сервисный метод, работающий с данными пространства, первым делом вызывает `requireWorkspaceAccess(session, workspaceId, minRole)` (неучастнику — `NOT_FOUND`, низкой роли — `FORBIDDEN`). Страницы `/w/[workspaceSlug]/*` используют `requireWorkspaceAccessBySlug(slug, minRole)` → `notFound()`.
 - **Права в пространстве сверх роли.** Владелец имеет все права; участнику владелец выдаёт отдельные права (сейчас — `manageProjects`, флаг `WorkspaceMember.canManageProjects`, объявлен в плагине с `input: false`). Сервисы проверяют их через `requireWorkspacePermission(session, workspaceId, permission)`, страницы — через `access.permissions`. Флаг меняет сервис участников через репозиторий: у плагина нет API для дополнительных полей.
 - **Удаление колонки с задачами.** Жизненный цикл статуса принадлежит `projects`, поэтому `deleteStatus` в той же транзакции переводит размещения удаляемого статуса в выбранный (`statusRepository.reassignPlacements`, меняется только `statusId`) — единственное место, где `projects` пишет в таблицу модуля `tasks`. FK размещения на статус — `NO ACTION`: статус с задачами без переноса не удалить, каскад проекта проходит.
+- **Вложения.** Браузер загружает файл прямо в хранилище по presigned POST (политика фиксирует ключ, тип и размер), сервер только выдаёт слот и подтверждает загрузку. Скачивание — через `GET /api/attachments/[id]`: проверка доступа и 302 на presigned GET. Строки вложений удаляются каскадом вместе с задачей и комментарием, объекты хранилища удаляют сервисы `deleteTask` / `deleteComment` / `deleteAttachment` после удаления строк.
 - **Снятие ответственного при выходе из пространства** — триггер БД на `WorkspaceMember` (миграция `add_tasks`): участника удаляет плагин Better Auth вне транзакций приложения, а модуль `workspaces` не знает о задачах.
 - **Пространства — плагин Better Auth `organization`** под доменными именами (`Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `workspaceId`). Мутации идут через `auth.api.*` плагина (`callOrganizationApi`), чтение — через репозитории модуля. Текущее пространство берётся из URL, а не из `session.activeWorkspaceId`.
 

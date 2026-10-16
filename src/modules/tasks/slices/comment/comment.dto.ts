@@ -1,3 +1,4 @@
+import type { TaskAttachmentDto } from '../attachment/attachment.dto';
 import type { TaskUserDto } from '../task/task.dto';
 
 export interface TaskCommentDto {
@@ -13,6 +14,8 @@ export interface TaskCommentDto {
   canEdit: boolean;
   /** Может ли текущий пользователь удалить (автор или владелец пространства). */
   canDelete: boolean;
+  /** Файлы комментария, от старых к новым. */
+  attachments: TaskAttachmentDto[];
 }
 
 export interface TaskCommentsDto {

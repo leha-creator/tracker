@@ -19,7 +19,10 @@ export async function createCommentAction(
   formData: FormData,
 ): Promise<FormState> {
   try {
-    const input = createCommentSchema.parse(Object.fromEntries(formData));
+    const input = createCommentSchema.parse({
+      ...Object.fromEntries(formData),
+      attachmentIds: formData.getAll('attachmentId'),
+    });
     const session = await requireUser();
     await createComment(session, input);
     revalidateTaskPage();
@@ -27,7 +30,14 @@ export async function createCommentAction(
   } catch (error) {
     return {
       ...toActionError(error, { action: 'createComment' }),
-      values: formValues(formData, ['body']),
+      values: {
+        ...formValues(formData, ['body']),
+        // Черновики файлов остаются в форме после ошибки.
+        attachmentIds: formData
+          .getAll('attachmentId')
+          .filter((value) => typeof value === 'string')
+          .join(','),
+      },
     };
   }
 }

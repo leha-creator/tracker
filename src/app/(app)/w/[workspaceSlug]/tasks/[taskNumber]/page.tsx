@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
+import { TaskAttachmentsSection } from '@/components/tasks/attachments/task-attachments-section';
 import { CommentForm } from '@/components/tasks/comments/comment-form';
 import { CommentList } from '@/components/tasks/comments/comment-list';
 import { AddToProjectForm } from '@/components/tasks/add-to-project-form';
@@ -113,7 +114,7 @@ async function TaskSection({ params, searchParams }: Props) {
               </Button>
             }
             title={`Удалить задачу ${task.key}?`}
-            description="Задача исчезнет со всех досок вместе с комментариями. Действие нельзя отменить."
+            description="Задача исчезнет со всех досок вместе с комментариями и файлами. Действие нельзя отменить."
             confirmLabel="Удалить"
           />
         )}
@@ -152,6 +153,15 @@ async function TaskSection({ params, searchParams }: Props) {
           />
         </section>
       </div>
+
+      <section
+        aria-labelledby="task-attachments-heading"
+        className="grid max-w-3xl content-start gap-3 border-t pt-6"
+      >
+        <Suspense fallback={<div className="h-24 animate-pulse rounded-xl bg-muted" />}>
+          <TaskAttachmentsSection session={session} workspaceId={workspace.id} taskId={task.id} />
+        </Suspense>
+      </section>
 
       <section
         aria-labelledby="task-comments-heading"

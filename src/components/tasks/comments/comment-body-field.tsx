@@ -45,7 +45,6 @@ export function CommentBodyField({
         id={id}
         name="body"
         rows={3}
-        required
         maxLength={TASK_COMMENT_MAX_LENGTH}
         defaultValue={defaultValue}
         autoFocus={autoFocus}
