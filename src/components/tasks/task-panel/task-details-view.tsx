@@ -14,6 +14,9 @@ import { AddToProjectForm } from '../add-to-project-form';
 import { TaskAttachmentsSection } from '../attachments/task-attachments-section';
 import { CommentForm } from '../comments/comment-form';
 import { CommentList } from '../comments/comment-list';
+import { ParentPicker } from '../subtasks/parent-picker';
+import { TaskBreadcrumbs } from '../subtasks/task-breadcrumbs';
+import { TaskSubtasksSection } from '../subtasks/task-subtasks-section';
 import { TaskDescriptionEditor, TaskPropertiesEditor, TaskTitleEditor } from '../task-details-form';
 import { TaskPlacements } from '../task-placements';
 import { TaskPanelNotFound } from './task-panel-not-found';
@@ -38,6 +41,10 @@ export interface TaskDetailsViewProps {
   showAllCommentsHref: string;
   /** Полноэкранная страница задачи. */
   pageHref: string;
+  /** Адрес другой задачи (подзадачи, родителя): в той же панели или на странице. */
+  taskHref: (number: number) => string;
+  /** Форма новой подзадачи этой задачи. */
+  newSubtaskHref: (parent: number) => string;
 }
 
 /**
@@ -54,6 +61,8 @@ export async function TaskDetailsView({
   allComments,
   showAllCommentsHref,
   pageHref,
+  taskHref,
+  newSubtaskHref,
 }: TaskDetailsViewProps) {
   const task = await getTaskByNumber(session, workspace.id, taskNumber).catch((error: unknown) => {
     if (error instanceof NotFoundError) return null;
@@ -98,6 +107,7 @@ export async function TaskDetailsView({
             closeHref={closeHref}
             taskKey={task.key}
             canDelete={task.canDelete}
+            descendantCount={task.descendantCount}
             deleteFields={deleteFields}
           />
         </TaskToolbar>
@@ -108,6 +118,7 @@ export async function TaskDetailsView({
             <Heading id="task-heading" className="sr-only">
               {task.key} {task.title}
             </Heading>
+            <TaskBreadcrumbs ancestors={task.ancestors} taskHref={taskHref} />
             {task.placements.length > 0 && (
               <p className="flex flex-wrap gap-x-1.5 text-sm text-muted-foreground">
                 {task.placements.map((placement, index) => (
@@ -156,6 +167,16 @@ export async function TaskDetailsView({
                 />
               </div>
             </TaskProperty>
+            <TaskProperty labelId="task-parent-label" label="Родитель">
+              <ParentPicker
+                // Другой родитель после сохранения — свежий поиск.
+                key={task.ancestors.at(-1)?.number ?? 'none'}
+                workspaceId={workspace.id}
+                taskId={task.id}
+                parent={task.ancestors.at(-1) ?? null}
+                labelledBy="task-parent-label"
+              />
+            </TaskProperty>
           </TaskPropertyList>
 
           <section aria-labelledby="task-description-heading" className="grid gap-1.5">
@@ -167,6 +188,20 @@ export async function TaskDetailsView({
               task={task}
               labelledBy="task-description-heading"
             />
+          </section>
+
+          <section aria-labelledby="task-subtasks-heading" className="grid gap-2">
+            <Suspense fallback={<div className="h-16 animate-pulse rounded-xl bg-muted" />}>
+              <TaskSubtasksSection
+                session={session}
+                workspaceId={workspace.id}
+                task={task}
+                taskHref={taskHref}
+                newSubtaskHref={newSubtaskHref(task.number)}
+                projects={projects.map(({ id, name }) => ({ id, name }))}
+                statusesByProject={statusesByProject}
+              />
+            </Suspense>
           </section>
 
           <section aria-labelledby="task-attachments-heading" className="grid gap-3">

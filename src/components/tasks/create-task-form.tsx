@@ -42,6 +42,8 @@ interface CreateTaskFormProps {
   returnTo?: string;
   /** «Отмена». */
   closeHref: string;
+  /** Родитель: форма создаёт его подзадачу. */
+  parent?: { id: string; key: string; title: string };
 }
 
 /**
@@ -56,6 +58,7 @@ export function CreateTaskForm({
   defaultProjectId,
   returnTo,
   closeHref,
+  parent,
 }: CreateTaskFormProps) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(createTaskAction, null);
   const failure = state && !state.ok ? state : null;
@@ -82,10 +85,18 @@ export function CreateTaskForm({
     <form action={formAction} className="flex flex-1 flex-col" noValidate>
       <input type="hidden" name="workspaceId" value={workspaceId} />
       {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
+      {parent && <input type="hidden" name="parentId" value={parent.id} />}
 
       <div className="@container grid flex-1 content-start gap-6 px-4 py-5 sm:px-6">
         <FormError message={fieldErrors ? undefined : failure?.error.message} />
         <div className="grid gap-1">
+          {parent && (
+            <p className="flex min-w-0 items-baseline gap-1.5 text-sm text-muted-foreground">
+              Подзадача для
+              <span className="shrink-0 font-mono text-xs tabular-nums">{parent.key}</span>
+              <span className="truncate text-foreground">{parent.title}</span>
+            </p>
+          )}
           <TaskTitleInput
             id="new-task-title"
             name="title"

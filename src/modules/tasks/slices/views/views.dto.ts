@@ -1,4 +1,6 @@
 import type { TaskPriority } from '../../models';
+import type { SubtaskProgress } from '../../models/task-tree';
+import type { TaskAncestorDto } from '../subtask/subtask.dto';
 import type { TaskListItemDto, TaskUserDto } from '../task/task.dto';
 
 /** Карточка задачи на доске проекта. */
@@ -12,6 +14,10 @@ export interface BoardCardDto {
   /** Срок прошёл, а статус в этом проекте — не «Готово». */
   isOverdue: boolean;
   assignee: TaskUserDto | null;
+  /** Родитель подзадачи — метка «↳ TSK-12» над названием. */
+  parent: TaskAncestorDto | null;
+  /** Прогресс подзадач; null — подзадач нет. */
+  subtaskProgress: SubtaskProgress | null;
 }
 
 /** Карточки доски по id статуса (колонки); порядок — по позиции. */

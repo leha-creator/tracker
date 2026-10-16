@@ -52,6 +52,12 @@ describe('buildTaskWhere', () => {
     ).toEqual([{ priority: { in: ['high', 'urgent'] } }]);
   });
 
+  it('top level only excludes subtasks in both scopes', () => {
+    const query = workspaceQuery({ topLevelOnly: true });
+    expect(buildTaskWhere(query, { ...ctx, scope: 'workspace' }).AND).toEqual([{ parentId: null }]);
+    expect(buildTaskWhere(query, { ...ctx, scope: 'project' }).AND).toEqual([{ parentId: null }]);
+  });
+
   it('overdue in workspace excludes done tasks', () => {
     const where = buildTaskWhere(workspaceQuery({ due: 'overdue' }), {
       ...ctx,

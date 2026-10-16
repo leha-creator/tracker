@@ -65,6 +65,14 @@ export {
 } from './task-comment';
 export { assertCanPlace, resolveMovePosition, TaskPlacement } from './task-placement';
 export type { ColumnCard, MovePosition } from './task-placement';
+export {
+  assertCanAddSubtask,
+  assertCanMoveTask,
+  summarizeSubtasks,
+  TASK_MAX_DEPTH,
+  TASK_SUBTASKS_LIMIT,
+} from './task-tree';
+export type { SubtaskProgress } from './task-tree';
 export { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from './task-priority';
 export type { TaskPriority } from './task-priority';
 export {

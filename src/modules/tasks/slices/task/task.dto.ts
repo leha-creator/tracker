@@ -1,6 +1,8 @@
 import type { StatusCategory, StatusColor } from '@/modules/projects';
 
 import type { TaskPriority } from '../../models';
+import type { SubtaskProgress } from '../../models/task-tree';
+import type { TaskAncestorDto } from '../subtask/subtask.dto';
 
 export interface TaskUserDto {
   userId: string;
@@ -36,6 +38,12 @@ export interface TaskDto {
   placements: TaskPlacementDto[];
   /** Может ли текущий пользователь удалить задачу (автор или владелец пространства). */
   canDelete: boolean;
+  /** Предки от корня к родителю; пусто — задача верхнего уровня. */
+  ancestors: TaskAncestorDto[];
+  /** Сколько подзадач всех уровней удалится вместе с задачей. */
+  descendantCount: number;
+  /** Прогресс по прямым подзадачам. */
+  subtaskProgress: SubtaskProgress;
 }
 
 export interface TaskListItemDto {
@@ -48,6 +56,8 @@ export interface TaskListItemDto {
   isOverdue: boolean;
   assignee: TaskUserDto | null;
   placements: TaskPlacementDto[];
+  /** Родитель подзадачи; null — задача верхнего уровня. */
+  parent: TaskAncestorDto | null;
 }
 
 /** Задача, найденная по номеру из внешней ссылки (системное чтение для интеграций). */

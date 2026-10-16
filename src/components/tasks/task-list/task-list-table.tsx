@@ -1,3 +1,4 @@
+import { CornerDownRight } from 'lucide-react';
 import Link from 'next/link';
 
 import { PullRequestIndicator } from '@/components/github/pull-request-indicator';
@@ -83,6 +84,19 @@ export function TaskListTable({
                 </span>
               </TableCell>
               <TableCell className="max-w-80">
+                {task.parent && (
+                  <Link
+                    href={taskPanelHref(basePath, searchParams, task.parent.number)}
+                    scroll={false}
+                    title={`Подзадача ${task.parent.key} «${task.parent.title}»`}
+                    className="flex w-fit max-w-full items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    <CornerDownRight aria-hidden className="size-3 shrink-0" />
+                    <span className="sr-only">Подзадача</span>
+                    <span className="shrink-0 tabular-nums">{task.parent.key}</span>
+                    <span className="truncate">{task.parent.title}</span>
+                  </Link>
+                )}
                 <Link
                   href={taskPanelHref(basePath, searchParams, task.number)}
                   scroll={false}

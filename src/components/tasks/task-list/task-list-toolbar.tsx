@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDownIcon, SearchIcon, XIcon } from 'lucide-react';
+import { ChevronDownIcon, ListTreeIcon, SearchIcon, XIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { StatusDot } from '@/components/projects/status-badge';
@@ -116,6 +116,18 @@ export function TaskListToolbar({ options }: { options: TaskListOptions }) {
         onChange={(assignees) => navigate(patchTaskListQuery(query, { assignees }))}
       />
       <DueFilter />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-pressed={query.topLevelOnly}
+        title="Скрыть подзадачи"
+        className={cn(query.topLevelOnly && 'border-primary/50 bg-primary/5')}
+        onClick={() => navigate(patchTaskListQuery(query, { topLevelOnly: !query.topLevelOnly }))}
+      >
+        <ListTreeIcon className="text-muted-foreground" />
+        Только верхнего уровня
+      </Button>
       {hasActiveFilters(query) && (
         <Button
           type="button"

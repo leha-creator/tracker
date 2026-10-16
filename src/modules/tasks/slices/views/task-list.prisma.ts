@@ -48,6 +48,8 @@ export function buildTaskWhere(query: TaskListQuery, ctx: TaskListContext): Pris
 
   if (query.priorities.length > 0) and.push({ priority: { in: query.priorities } });
 
+  if (query.topLevelOnly) and.push({ parentId: null });
+
   if (query.assignees.length > 0) {
     const ids = query.assignees
       .filter((value) => value !== TASK_LIST_NONE)

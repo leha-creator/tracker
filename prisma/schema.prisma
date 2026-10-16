@@ -263,12 +263,18 @@ model Task {
   /// Участник пространства; снимается триггером при выходе из пространства.
   assigneeId  String?
   createdById String?
+  /// Родительская задача того же пространства; null — задача верхнего уровня. Удаление родителя
+  /// удаляет всё поддерево (каскад), глубина и циклы проверяются в модуле tasks (models/task-tree).
+  parentId    String?      @db.Uuid
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
   workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   assignee           User?              @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   createdBy          User?              @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  /// Составной ключ (parentId, workspaceId): подзадача не может оказаться в чужом пространстве.
+  parent             Task?              @relation("TaskSubtasks", fields: [parentId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  subtasks           Task[]             @relation("TaskSubtasks")
   placements         TaskPlacement[]
   comments           TaskComment[]
   attachments        TaskAttachment[]
@@ -284,6 +290,7 @@ model Task {
   @@index([workspaceId, createdAt])
   @@index([workspaceId, assigneeId])
   @@index([workspaceId, dueDate])
+  @@index([workspaceId, parentId])
 }
 
 model TaskPlacement {

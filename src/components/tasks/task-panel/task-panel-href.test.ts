@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  newTaskPageHref,
   parseTaskPanelParam,
+  parseTaskParentParam,
   taskPageHref,
   taskPanelHref,
   withSearchParam,
@@ -62,6 +64,41 @@ describe('taskPanelHref', () => {
     expect(taskPanelHref('/w/a/b', { status: ['x', 'y'] }, 1)).toBe(
       '/w/a/b?status=x&status=y&task=1',
     );
+  });
+});
+
+describe('taskPanelHref with a parent', () => {
+  it('opens the create form for a subtask', () => {
+    expect(taskPanelHref('/w/a/b', 'q=bug&task=5', 'new', { parent: 5 })).toBe(
+      '/w/a/b?q=bug&task=new&parent=5',
+    );
+  });
+
+  it('drops the parent when opening or closing a task', () => {
+    expect(taskPanelHref('/w/a/b', 'task=new&parent=5', 9)).toBe('/w/a/b?task=9');
+    expect(taskPanelHref('/w/a/b', 'task=new&parent=5', null)).toBe('/w/a/b');
+  });
+
+  it('ignores the parent for an existing task', () => {
+    expect(taskPanelHref('/w/a/b', '', 9, { parent: 5 })).toBe('/w/a/b?task=9');
+  });
+});
+
+describe('parseTaskParentParam', () => {
+  it('parses a task number', () => {
+    expect(parseTaskParentParam('12')).toBe(12);
+    expect(parseTaskParentParam(['3', '4'])).toBe(3);
+  });
+
+  it.each([undefined, '', '0', 'abc', '1.5'])('ignores %j', (value) => {
+    expect(parseTaskParentParam(value)).toBeNull();
+  });
+});
+
+describe('newTaskPageHref', () => {
+  it('builds the create page address with an optional parent', () => {
+    expect(newTaskPageHref('acme')).toBe('/w/acme/tasks/new');
+    expect(newTaskPageHref('acme', 12)).toBe('/w/acme/tasks/new?parent=12');
   });
 });
 

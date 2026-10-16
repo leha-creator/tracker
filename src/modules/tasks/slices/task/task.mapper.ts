@@ -5,7 +5,8 @@ import { parseStatusColor } from '@/modules/projects';
 import { formatTaskKey, isTaskOverdue, toIsoDate } from '../../models';
 import type { TaskRow } from './task.repository';
 import type { TaskListRow } from './task.select';
-import type { TaskPlacementDto, TaskUserDto } from './task.dto';
+import type { TaskAncestorDto } from '../subtask/subtask.dto';
+import type { TaskListItemDto, TaskPlacementDto, TaskUserDto } from './task.dto';
 
 type PlacementRow = TaskRow['placements'][number];
 
@@ -24,6 +25,32 @@ export function toUserDto(
   user: { id: string; name: string; image?: string | null } | null,
 ): TaskUserDto | null {
   return user ? { userId: user.id, name: user.name, image: user.image ?? null } : null;
+}
+
+/** Родитель задачи для метки «↳ TSK-12» на карточке и в списках. */
+export function toParentRef(
+  parent: { number: number; title: string } | null,
+  workspaceTaskKey: string | null,
+): TaskAncestorDto | null {
+  return parent
+    ? {
+        number: parent.number,
+        key: formatTaskKey(parent.number, workspaceTaskKey),
+        title: parent.title,
+      }
+    : null;
+}
+
+/** Строка списка задач (списки пространства, проекта, подзадачи). */
+export function toTaskListItem(row: TaskListRow, today: string): TaskListItemDto {
+  return {
+    id: row.id,
+    number: row.number,
+    title: row.title,
+    priority: row.priority,
+    parent: toParentRef(row.parent, row.workspace.taskKey),
+    ...toTaskSummary(row, today),
+  };
 }
 
 /** Общие поля карточки/строки: ключ, срок, просрочка, размещения. */

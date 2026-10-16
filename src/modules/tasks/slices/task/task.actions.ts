@@ -22,6 +22,7 @@ const TASK_FIELDS = [
   'assigneeId',
   'projectId',
   'statusId',
+  'parentId',
 ] as const;
 
 /** Доска, список задач и страница задачи — под layout пространства. */

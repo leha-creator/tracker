@@ -53,6 +53,8 @@ export type {
   TaskListScope,
   TaskListSort,
 } from './models/task-list-query';
+export { TASK_MAX_DEPTH, TASK_SUBTASKS_LIMIT } from './models/task-tree';
+export type { SubtaskProgress } from './models/task-tree';
 export { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from './models/task-priority';
 export type { TaskPriority } from './models/task-priority';
 export {
@@ -73,6 +75,17 @@ export {
   updateCommentAction,
 } from './slices/comment/comment.actions';
 export type { TaskCommentDto, TaskCommentsDto } from './slices/comment/comment.dto';
+export {
+  searchParentCandidatesAction,
+  setTaskParentAction,
+} from './slices/subtask/subtask.actions';
+export type {
+  SubtaskDto,
+  SubtasksDto,
+  TaskAncestorDto,
+  TaskParentOptionDto,
+} from './slices/subtask/subtask.dto';
+export { PARENT_SEARCH_MAX_LENGTH } from './slices/subtask/subtask.schema';
 export {
   createTaskAction,
   deleteTaskAction,

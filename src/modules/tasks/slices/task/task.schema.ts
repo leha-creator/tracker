@@ -68,6 +68,8 @@ export const createTaskSchema = z
     assigneeId: z.string().optional().transform(emptyToUndefined),
     projectId: optionalId.transform(emptyToUndefined),
     statusId: optionalId.transform(emptyToUndefined),
+    /** Родительская задача: новая задача создаётся её подзадачей. */
+    parentId: optionalId.transform(emptyToUndefined),
   })
   .refine((input) => Boolean(input.projectId) === Boolean(input.statusId), {
     error: 'Выберите и проект, и статус',

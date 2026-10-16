@@ -61,8 +61,20 @@ interface TaskViewActionsProps {
   closeHref: string;
   taskKey: string;
   canDelete: boolean;
+  /** Сколько подзадач всех уровней удалится вместе с задачей. */
+  descendantCount: number;
   /** Скрытые поля удаления: id и адрес возврата (панель закрывается на той же странице). */
   deleteFields: Record<string, string>;
+}
+
+/** Текст подтверждения удаления: с подзадачами — сколько их удалится. */
+function deleteTaskDescription(descendantCount: number): string {
+  const base = 'Задача исчезнет со всех досок вместе с комментариями и файлами.';
+  const subtasks =
+    descendantCount > 0
+      ? ` Подзадачи всех уровней тоже будут удалены (всего: ${descendantCount}).`
+      : '';
+  return `${base}${subtasks} Действие нельзя отменить.`;
 }
 
 /** Действия открытой задачи: статус сохранения, ссылка, развернуть, меню «⋯», закрыть. */
@@ -72,6 +84,7 @@ export function TaskViewActions({
   closeHref,
   taskKey,
   canDelete,
+  descendantCount,
   deleteFields,
 }: TaskViewActionsProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -138,7 +151,7 @@ export function TaskViewActions({
           action={deleteTaskAction}
           fields={deleteFields}
           title={`Удалить задачу ${taskKey}?`}
-          description="Задача исчезнет со всех досок вместе с комментариями и файлами. Действие нельзя отменить."
+          description={deleteTaskDescription(descendantCount)}
           confirmLabel="Удалить"
         />
       )}

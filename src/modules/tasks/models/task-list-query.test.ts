@@ -37,6 +37,7 @@ describe('parseTaskListParams', () => {
         priority: 'high,urgent',
         assignee: 'me,none,user_1',
         due: 'overdue',
+        level: 'top',
         sort: 'due',
         dir: 'desc',
         page: '3',
@@ -51,10 +52,19 @@ describe('parseTaskListParams', () => {
       priorities: ['high', 'urgent'],
       assignees: ['me', 'none', 'user_1'],
       due: 'overdue',
+      topLevelOnly: true,
       sort: 'due',
       dir: 'desc',
       page: 3,
     });
+  });
+
+  it('level: только значение top включает фильтр верхнего уровня', () => {
+    expect(parseTaskListParams({ level: 'top' }, 'project').topLevelOnly).toBe(true);
+    expect(parseTaskListParams({ level: 'all' }, 'workspace').topLevelOnly).toBe(false);
+    expect(hasActiveFilters({ ...defaultTaskListQuery('workspace'), topLevelOnly: true })).toBe(
+      true,
+    );
   });
 
   it('отбрасывает мусорные значения', () => {
@@ -142,7 +152,7 @@ describe('serializeTaskListParams', () => {
   it.each([
     [
       'workspace' as const,
-      'q=%2342&project=none&category=in_progress&priority=low,high&assignee=none&due=none&sort=due&page=4',
+      'q=%2342&project=none&category=in_progress&priority=low,high&assignee=none&due=none&level=top&sort=due&page=4',
     ],
     ['project' as const, `status=${STATUS_ID}&priority=none&sort=number&dir=asc`],
   ])('круговой разбор: %s', (scope, search) => {

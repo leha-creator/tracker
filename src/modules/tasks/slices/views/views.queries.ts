@@ -17,12 +17,12 @@ import {
   pageCountOf,
   TASK_LIST_PAGE_SIZE,
   toIsoDate,
+  type SubtaskProgress,
   type TaskListQuery,
   type TaskListScope,
 } from '../../models';
-import type { TaskListItemDto } from '../task/task.dto';
-import { toTaskSummary, toUserDto } from '../task/task.mapper';
-import type { TaskListRow } from '../task/task.select';
+import { getSubtaskProgress } from '../subtask/subtask.service';
+import { toParentRef, toTaskListItem, toUserDto } from '../task/task.mapper';
 import {
   buildPlacementOrderBy,
   buildPlacementWhere,
@@ -40,17 +40,24 @@ import { viewsRepository, type BoardPlacementRow } from './views.repository';
 
 const log = createLogger('tasks.views');
 
-function toBoardCard(row: BoardPlacementRow, today: string): BoardCardDto {
+function toBoardCard(
+  row: BoardPlacementRow,
+  today: string,
+  progress: Map<string, SubtaskProgress>,
+): BoardCardDto {
   const dueDate = row.task.dueDate ? toIsoDate(row.task.dueDate) : null;
+  const { taskKey } = row.task.workspace;
   return {
     taskId: row.taskId,
     number: row.task.number,
-    key: formatTaskKey(row.task.number, row.task.workspace.taskKey),
+    key: formatTaskKey(row.task.number, taskKey),
     title: row.task.title,
     priority: row.task.priority,
     dueDate,
     isOverdue: isTaskOverdue(dueDate, today, [row.status.category]),
     assignee: toUserDto(row.task.assignee),
+    parent: toParentRef(row.task.parent, taskKey),
+    subtaskProgress: progress.get(row.taskId) ?? null,
   };
 }
 
@@ -65,14 +72,27 @@ export async function getBoardCards(
 
   const rows = await viewsRepository.listBoardPlacements(workspaceId, projectId);
   rows.sort(comparePositions);
+  // Прогресс — одним запросом и только для карточек, у которых есть подзадачи.
+  const withSubtasks = rows.filter((row) => row.task._count.subtasks > 0).map((row) => row.taskId);
+  const progress =
+    withSubtasks.length > 0
+      ? await getSubtaskProgress(workspaceId, withSubtasks)
+      : new Map<string, SubtaskProgress>();
 
   const today = toIsoDate(new Date());
   const cards: BoardCardsDto = {};
   for (const row of rows) {
-    (cards[row.statusId] ??= []).push(toBoardCard(row, today));
+    (cards[row.statusId] ??= []).push(toBoardCard(row, today, progress));
   }
   log.debug(
-    { userId: session.user.id, workspaceId, projectId, cards: rows.length },
+    {
+      userId: session.user.id,
+      workspaceId,
+      projectId,
+      cards: rows.length,
+      withParent: rows.filter((row) => row.task.parent).length,
+      withSubtasks: withSubtasks.length,
+    },
     '[views.getBoardCards]',
   );
   return cards;
@@ -108,6 +128,7 @@ function logList(request: ListRequest, page: TaskListPageDto, clampedFrom?: numb
         priorities: query.priorities.length,
         assignees: query.assignees.length,
         due: query.due,
+        topLevelOnly: query.topLevelOnly,
       },
       hasQuery: query.q !== '',
       sort: query.sort,
@@ -136,16 +157,6 @@ async function loadPage<Row>(
   return { ...last, page: Math.min(pageCount, lastCount), pageCount: lastCount, clamped: true };
 }
 
-function toListItem(row: TaskListRow, today: string): TaskListItemDto {
-  return {
-    id: row.id,
-    number: row.number,
-    title: row.title,
-    priority: row.priority,
-    ...toTaskSummary(row, today),
-  };
-}
-
 /** Список задач пространства: фильтры, сортировка, страница. */
 export async function listTasks(
   session: AuthSession,
@@ -166,7 +177,7 @@ export async function listTasks(
     viewsRepository.listTaskPage({ where, orderBy, skip, take: TASK_LIST_PAGE_SIZE }),
   );
   const page: TaskListPageDto = {
-    items: result.rows.map((row) => toListItem(row, today)),
+    items: result.rows.map((row) => toTaskListItem(row, today)),
     total: result.total,
     page: result.page,
     pageCount: result.pageCount,
@@ -216,7 +227,7 @@ export async function getMemberTaskSummary(
     commentsCount: row.commentsCount,
     lastActivityAt:
       activity.length > 0 ? new Date(Math.max(...activity.map((date) => date.getTime()))) : null,
-    openTasks: row.openTasks.map((task) => toListItem(task, today)),
+    openTasks: row.openTasks.map((task) => toTaskListItem(task, today)),
   };
   log.debug(
     {
@@ -255,7 +266,7 @@ export async function listProjectTasks(
   );
   const page: TaskListPageDto = {
     items: result.rows.map((row) => ({
-      ...toListItem(row.task, today),
+      ...toTaskListItem(row.task, today),
       isOverdue: isTaskOverdue(row.task.dueDate ? toIsoDate(row.task.dueDate) : null, today, [
         row.status.category,
       ]),

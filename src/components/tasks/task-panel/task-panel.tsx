@@ -7,8 +7,10 @@ import { TaskDetailsView } from './task-details-view';
 import { TaskPanelFrame, TaskPanelSkeleton } from './task-panel-frame';
 import {
   parseTaskPanelParam,
+  parseTaskParentParam,
   TASK_COMMENTS_PARAM,
   TASK_PANEL_PARAM,
+  TASK_PARENT_PARAM,
   taskPageHref,
   taskPanelHref,
   withSearchParam,
@@ -98,6 +100,7 @@ async function TaskPanelContent({
         closeHref={closeHref}
         returnTo={closeHref}
         defaultProjectId={defaultProjectId}
+        parentNumber={parseTaskParentParam(raw[TASK_PARENT_PARAM])}
       />
     );
   }
@@ -114,6 +117,8 @@ async function TaskPanelContent({
       allComments={(Array.isArray(comments) ? comments[0] : comments) === 'all'}
       showAllCommentsHref={withSearchParam(basePath, raw, TASK_COMMENTS_PARAM, 'all')}
       pageHref={taskPageHref(workspace.slug, state.number)}
+      taskHref={(number) => taskPanelHref(basePath, raw, number)}
+      newSubtaskHref={(parent) => taskPanelHref(basePath, raw, 'new', { parent })}
     />
   );
 }

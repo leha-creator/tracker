@@ -27,7 +27,7 @@ const findStatus =
   >();
 const lastPosition = vi.fn<(...args: unknown[]) => Promise<string | null>>();
 const createPlacement = vi.fn<(...args: unknown[]) => Promise<unknown>>();
-const keysForTask = vi.fn<(...args: unknown[]) => Promise<string[]>>();
+const keysForTasks = vi.fn<(...args: unknown[]) => Promise<string[]>>();
 const deleteObjects = vi.fn<(keys: readonly string[]) => Promise<number>>();
 const notify =
   vi.fn<(events: { type: string; recipientId: string; payload: object }[]) => Promise<void>>();
@@ -51,7 +51,7 @@ vi.mock('@/shared/db', () => ({
   prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn({}) },
 }));
 vi.mock('../attachment/attachment.repository', () => ({
-  attachmentRepository: { keysForTask: (...args: unknown[]) => keysForTask(...args) },
+  attachmentRepository: { keysForTasks: (...args: unknown[]) => keysForTasks(...args) },
 }));
 vi.mock('@/shared/storage', () => ({
   deleteObjects: (keys: readonly string[]) => deleteObjects(keys),
@@ -76,6 +76,23 @@ vi.mock('../placement/placement.repository', () => ({
 }));
 
 const listByNumbers = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
+const lockTree = vi.fn<(...args: unknown[]) => Promise<void>>();
+const pathIds = vi.fn<(...args: unknown[]) => Promise<string[]>>();
+const countChildren = vi.fn<(...args: unknown[]) => Promise<number>>();
+const subtreeIds = vi.fn<(...args: unknown[]) => Promise<string[]>>();
+const ancestors = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
+const childrenCategories = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
+
+vi.mock('../subtask/subtask.repository', () => ({
+  subtaskRepository: {
+    lockTree: (...args: unknown[]) => lockTree(...args),
+    pathIds: (...args: unknown[]) => pathIds(...args),
+    countChildren: (...args: unknown[]) => countChildren(...args),
+    subtreeIds: (...args: unknown[]) => subtreeIds(...args),
+    ancestors: (...args: unknown[]) => ancestors(...args),
+    childrenCategories: (...args: unknown[]) => childrenCategories(...args),
+  },
+}));
 
 const { createTask, deleteTask, getTaskByNumber, resolveTaskRefs, updateTask } =
   await import('./task.service');
@@ -95,6 +112,7 @@ const session: AuthSession = {
 const TASK_ID = '0192f3a0-0000-7000-8000-000000000010';
 const PROJECT_ID = '0192f3a0-0000-7000-8000-000000000001';
 const STATUS_ID = '0192f3a0-0000-7000-8000-0000000000a1';
+const PARENT_ID = '0192f3a0-0000-7000-8000-000000000020';
 
 function taskRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -105,6 +123,8 @@ function taskRow(overrides: Record<string, unknown> = {}) {
     priority: 'none',
     dueDate: new Date('2000-01-01T00:00:00.000Z'),
     createdById: 'author',
+    parentId: null,
+    _count: { subtasks: 0 },
     createdAt: new Date('2026-10-15T10:00:00.000Z'),
     updatedAt: new Date('2026-10-15T10:00:00.000Z'),
     workspace: { slug: 'team', name: 'Команда', taskKey: 'TM' },
@@ -138,7 +158,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   accessAs('member');
   isWorkspaceMember.mockResolvedValue(true);
-  keysForTask.mockResolvedValue([]);
+  keysForTasks.mockResolvedValue([]);
   deleteObjects.mockResolvedValue(0);
   nextNumber.mockResolvedValue(7);
   createRow.mockResolvedValue({
@@ -153,6 +173,56 @@ beforeEach(() => {
   deleteRow.mockResolvedValue(1);
   findStatus.mockResolvedValue({ id: STATUS_ID, projectId: PROJECT_ID, category: 'todo' });
   lastPosition.mockResolvedValue(null);
+  lockTree.mockResolvedValue();
+  pathIds.mockResolvedValue([PARENT_ID]);
+  countChildren.mockResolvedValue(0);
+  subtreeIds.mockResolvedValue([TASK_ID]);
+  ancestors.mockResolvedValue([]);
+  childrenCategories.mockResolvedValue([]);
+});
+
+describe('createTask with a parent', () => {
+  it('creates a subtask under the tree lock', async () => {
+    await createTask(session, { workspaceId: 'ws-1', title: 'A', parentId: PARENT_ID });
+    expect(lockTree).toHaveBeenCalled();
+    expect(pathIds).toHaveBeenCalledWith('ws-1', PARENT_ID, expect.anything());
+    expect(createRow).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ parentId: PARENT_ID }),
+    );
+  });
+
+  it('creates a top-level task without a parent', async () => {
+    await createTask(session, { workspaceId: 'ws-1', title: 'A' });
+    expect(lockTree).not.toHaveBeenCalled();
+    expect(createRow).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ parentId: null }),
+    );
+  });
+
+  it('returns NOT_FOUND for a parent outside the workspace', async () => {
+    pathIds.mockResolvedValue([]);
+    await expect(
+      createTask(session, { workspaceId: 'ws-1', title: 'A', parentId: PARENT_ID }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(nextNumber).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed parent id without a query', async () => {
+    await expect(
+      createTask(session, { workspaceId: 'ws-1', title: 'A', parentId: 'abc' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(pathIds).not.toHaveBeenCalled();
+  });
+
+  it('rejects a subtask deeper than the limit', async () => {
+    pathIds.mockResolvedValue(Array.from({ length: 10 }, (_, i) => `p${i}`));
+    await expect(
+      createTask(session, { workspaceId: 'ws-1', title: 'A', parentId: PARENT_ID }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(createRow).not.toHaveBeenCalled();
+  });
 });
 
 describe('createTask', () => {
@@ -354,12 +424,52 @@ describe('deleteTask', () => {
 
   it('removes stored objects of task files; storage failure does not break deletion', async () => {
     accessAs('owner');
-    keysForTask.mockResolvedValue(['ws/a']);
+    keysForTasks.mockResolvedValue(['ws/a']);
     deleteObjects.mockResolvedValue(1);
     await expect(deleteTask(session, { workspaceId: 'ws-1', taskId: TASK_ID })).resolves.toEqual({
       workspaceSlug: 'team',
     });
     expect(deleteObjects).toHaveBeenCalledWith(['ws/a']);
+  });
+
+  it('removes stored objects of the whole subtree', async () => {
+    accessAs('owner');
+    const child = '0192f3a0-0000-7000-8000-000000000011';
+    subtreeIds.mockResolvedValue([TASK_ID, child]);
+    keysForTasks.mockResolvedValue(['ws/a', 'ws/b']);
+    deleteObjects.mockResolvedValue(2);
+    await deleteTask(session, { workspaceId: 'ws-1', taskId: TASK_ID });
+    expect(keysForTasks).toHaveBeenCalledWith('ws-1', [TASK_ID, child]);
+    expect(deleteObjects).toHaveBeenCalledWith(['ws/a', 'ws/b']);
+    expect(deleteRow).toHaveBeenCalledWith('ws-1', TASK_ID);
+  });
+});
+
+describe('getTaskByNumber tree fields', () => {
+  it('skips tree queries for a top-level task without subtasks', async () => {
+    findByNumber.mockResolvedValue(taskRow());
+    await expect(getTaskByNumber(session, 'ws-1', 7)).resolves.toMatchObject({
+      ancestors: [],
+      descendantCount: 0,
+      subtaskProgress: { total: 0, done: 0 },
+    });
+    expect(ancestors).not.toHaveBeenCalled();
+    expect(subtreeIds).not.toHaveBeenCalled();
+  });
+
+  it('returns ancestors, descendants and progress', async () => {
+    findByNumber.mockResolvedValue(taskRow({ parentId: PARENT_ID, _count: { subtasks: 2 } }));
+    ancestors.mockResolvedValue([{ id: PARENT_ID, number: 3, title: 'Родитель' }]);
+    subtreeIds.mockResolvedValue([TASK_ID, 'c1', 'c2', 'c3']);
+    childrenCategories.mockResolvedValue([
+      { parentId: TASK_ID, placements: [{ status: { category: 'done' } }] },
+      { parentId: TASK_ID, placements: [] },
+    ]);
+    await expect(getTaskByNumber(session, 'ws-1', 7)).resolves.toMatchObject({
+      ancestors: [{ number: 3, key: 'TM-3', title: 'Родитель' }],
+      descendantCount: 3,
+      subtaskProgress: { total: 2, done: 1 },
+    });
   });
 });
 

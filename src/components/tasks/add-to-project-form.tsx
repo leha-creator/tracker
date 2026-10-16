@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus } from 'lucide-react';
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 
 import { FormError } from '@/components/forms/form-field';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,13 @@ interface AddToProjectFormProps {
   /** Проекты, в которых задачи ещё нет. */
   projects: { id: string; name: string }[];
   statusesByProject: Record<string, ProjectStatusDto[]>;
+  /** Сразу раскрытая форма (в диалоге «Вывести на доску»): «Отмена» вызывает onCancel. */
+  defaultOpen?: boolean;
+  /** Проект, выбранный сразу (статус — первый в нём). */
+  defaultProjectId?: string;
+  onCancel?: () => void;
+  /** После успешного добавления (например, закрыть диалог). */
+  onDone?: () => void;
 }
 
 /**
@@ -36,15 +43,25 @@ export function AddToProjectForm({
   taskId,
   projects,
   statusesByProject,
+  defaultOpen = false,
+  defaultProjectId,
+  onCancel,
+  onDone,
 }: AddToProjectFormProps) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     addToProjectAction,
     null,
   );
-  const [open, setOpen] = useState(false);
-  const [projectId, setProjectId] = useState('');
-  const [statusId, setStatusId] = useState('');
+  const initialProject =
+    defaultProjectId && statusesByProject[defaultProjectId] ? defaultProjectId : '';
+  const [open, setOpen] = useState(defaultOpen);
+  const [projectId, setProjectId] = useState(initialProject);
+  const [statusId, setStatusId] = useState(statusesByProject[initialProject]?.[0]?.id ?? '');
   const failure = state && !state.ok ? state : null;
+
+  useEffect(() => {
+    if (state?.ok) onDone?.();
+  }, [state, onDone]);
   const fieldErrors = failure?.error.fieldErrors;
   const error =
     fieldErrors?.projectId?.join(' ') ?? fieldErrors?.statusId?.join(' ') ?? failure?.error.message;
@@ -96,7 +113,12 @@ export function AddToProjectForm({
         <Button type="submit" size="sm" disabled={pending || !statusId}>
           {pending ? 'Добавляем…' : 'Добавить'}
         </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => (onCancel ? onCancel() : setOpen(false))}
+        >
           Отмена
         </Button>
       </div>

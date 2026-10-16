@@ -1,3 +1,4 @@
+import { CornerDownRight, ListChecks } from 'lucide-react';
 import Link from 'next/link';
 import type { ComponentProps } from 'react';
 
@@ -39,10 +40,31 @@ export function TaskCard({ card, href, active, pullRequest, className, ...props 
         className,
       )}
     >
+      {card.parent && (
+        <span
+          className="-mb-1 flex min-w-0 items-baseline gap-1 text-xs text-muted-foreground"
+          title={`Подзадача ${card.parent.key} «${card.parent.title}»`}
+        >
+          <CornerDownRight aria-hidden className="size-3 shrink-0 self-center" />
+          <span className="sr-only">Подзадача</span>
+          <span className="shrink-0 font-mono text-[11px] tabular-nums">{card.parent.key}</span>
+          <span className="truncate">{card.parent.title}</span>
+        </span>
+      )}
       <span className="line-clamp-3 font-medium break-words">{card.title}</span>
       <span className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{card.key}</span>
         {pullRequest && <PullRequestIndicator badge={pullRequest} />}
+        {card.subtaskProgress && (
+          <span
+            className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground tabular-nums"
+            title={`Подзадачи: выполнено ${card.subtaskProgress.done} из ${card.subtaskProgress.total}`}
+          >
+            <ListChecks aria-hidden className="size-3.5" />
+            {card.subtaskProgress.done}/{card.subtaskProgress.total}
+            <span className="sr-only"> подзадач выполнено</span>
+          </span>
+        )}
         <PriorityBadge priority={card.priority} compact />
         {card.dueDate && <DueDate value={card.dueDate} isOverdue={card.isOverdue} />}
         {card.assignee && (

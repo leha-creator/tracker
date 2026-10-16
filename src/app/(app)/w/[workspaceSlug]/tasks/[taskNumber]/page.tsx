@@ -4,7 +4,11 @@ import { Suspense } from 'react';
 
 import { TaskDetailsView } from '@/components/tasks/task-panel/task-details-view';
 import { TaskPanelSkeleton } from '@/components/tasks/task-panel/task-panel-frame';
-import { taskPageHref, withSearchParam } from '@/components/tasks/task-panel/task-panel-href';
+import {
+  newTaskPageHref,
+  taskPageHref,
+  withSearchParam,
+} from '@/components/tasks/task-panel/task-panel-href';
 import { taskNumberSchema } from '@/modules/tasks';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
 
@@ -41,6 +45,8 @@ async function TaskSection({ params, searchParams }: Props) {
       allComments={raw.comments === 'all'}
       showAllCommentsHref={withSearchParam(pageHref, raw, 'comments', 'all')}
       pageHref={pageHref}
+      taskHref={(number) => taskPageHref(workspace.slug, number)}
+      newSubtaskHref={(parent) => newTaskPageHref(workspace.slug, parent)}
     />
   );
 }

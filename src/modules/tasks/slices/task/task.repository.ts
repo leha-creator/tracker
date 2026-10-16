@@ -14,8 +14,10 @@ const TASK_SELECT = {
   priority: true,
   dueDate: true,
   createdById: true,
+  parentId: true,
   createdAt: true,
   updatedAt: true,
+  _count: { select: { subtasks: true } },
   workspace: { select: { slug: true, name: true, taskKey: true } },
   assignee: { select: { id: true, name: true, image: true } },
   createdBy: { select: { id: true, name: true } },
@@ -57,7 +59,12 @@ export const taskRepository = {
 
   create(
     tx: TransactionClient,
-    data: TaskWriteData & { workspaceId: string; number: number; createdById: string },
+    data: TaskWriteData & {
+      workspaceId: string;
+      number: number;
+      createdById: string;
+      parentId: string | null;
+    },
   ) {
     return tx.task.create({
       data,

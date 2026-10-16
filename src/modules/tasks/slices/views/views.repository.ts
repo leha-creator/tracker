@@ -135,6 +135,8 @@ export const viewsRepository = {
             dueDate: true,
             assignee: { select: { id: true, name: true, image: true } },
             workspace: { select: { taskKey: true } },
+            parent: { select: { number: true, title: true } },
+            _count: { select: { subtasks: true } },
           },
         },
       },

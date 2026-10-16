@@ -5,12 +5,13 @@ import { isEntityId } from '@/modules/projects';
 import { isWorkspaceMember } from '@/modules/workspaces';
 import { requireWorkspaceAccess, type WorkspaceRole } from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
-import { prisma } from '@/shared/db';
+import { prisma, type TransactionClient } from '@/shared/db';
 import { NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
 import {
   assertAssigneeIsMember,
+  assertCanAddSubtask,
   assertCanDeleteTask,
   canDeleteTask,
   formatTaskKey,
@@ -22,6 +23,8 @@ import {
 import { attachmentRepository } from '../attachment/attachment.repository';
 import { deleteStoredObjects } from '../attachment/attachment.storage';
 import { placementRepository } from '../placement/placement.repository';
+import { subtaskRepository } from '../subtask/subtask.repository';
+import { getSubtaskProgress, getTaskAncestors } from '../subtask/subtask.service';
 import type { TaskDto, TaskRefDto } from './task.dto';
 import { toTaskSummary, toUserDto } from './task.mapper';
 import { taskRepository, type TaskRow, type TaskWriteData } from './task.repository';
@@ -37,7 +40,12 @@ function today(): string {
   return toIsoDate(new Date());
 }
 
-function toTaskDto(row: TaskRow, actor: { userId: string; role: WorkspaceRole }): TaskDto {
+type TaskTreeFields = 'ancestors' | 'descendantCount' | 'subtaskProgress';
+
+function toTaskDto(
+  row: TaskRow,
+  actor: { userId: string; role: WorkspaceRole },
+): Omit<TaskDto, TaskTreeFields> {
   return {
     id: row.id,
     number: row.number,
@@ -116,20 +124,55 @@ export interface CreateTaskInput {
   assigneeId?: string;
   /** Сразу разместить в проекте: в конец колонки статуса. */
   placement?: { projectId: string; statusId: string };
+  /** Родительская задача того же пространства: новая задача станет её подзадачей. */
+  parentId?: string;
+}
+
+/**
+ * Проверка родителя новой подзадачи под блокировкой дерева: родитель есть в пространстве,
+ * глубина и число подзадач в пределах лимитов.
+ */
+async function checkNewSubtaskParent(
+  tx: TransactionClient,
+  workspaceId: string,
+  parentId: string,
+): Promise<void> {
+  await subtaskRepository.lockTree(tx, workspaceId);
+  const parentPath = await subtaskRepository.pathIds(workspaceId, parentId, tx);
+  if (parentPath.length === 0) {
+    log.warn({ workspaceId, parentId }, '[task.createTask] parent not found');
+    throw new NotFoundError('Родительская задача не найдена');
+  }
+  const childrenCount = await subtaskRepository.countChildren(workspaceId, parentId, tx);
+  try {
+    assertCanAddSubtask(parentPath.length, childrenCount);
+  } catch (error) {
+    log.warn(
+      { workspaceId, parentId, depth: parentPath.length, childrenCount },
+      '[task.createTask] subtask rejected',
+    );
+    throw error;
+  }
 }
 
 export async function createTask(
   session: AuthSession,
   input: CreateTaskInput,
 ): Promise<{ taskId: string; number: number; workspaceSlug: string }> {
-  const { workspaceId, placement } = input;
+  const { workspaceId, placement, parentId } = input;
   const userId = session.user.id;
   await requireWorkspaceAccess(session, workspaceId);
-  log.debug({ userId, workspaceId, placed: Boolean(placement) }, '[task.createTask] start');
+  log.debug(
+    { userId, workspaceId, placed: Boolean(placement), parentId },
+    '[task.createTask] start',
+  );
 
   if (input.assigneeId) await checkAssignee(workspaceId, input.assigneeId);
   if (placement && (!isEntityId(placement.projectId) || !isEntityId(placement.statusId))) {
     throw new NotFoundError('Статус не найден');
+  }
+  if (parentId !== undefined && !isEntityId(parentId)) {
+    throw new NotFoundError('Родительская задача не найдена');
   }
 
   const data: TaskWriteData = {
@@ -141,12 +184,15 @@ export async function createTask(
   };
 
   const task = await prisma.$transaction(async (tx) => {
+    // Блокировка дерева — до счётчика номеров (тот же порядок, что и при смене родителя).
+    if (parentId) await checkNewSubtaskParent(tx, workspaceId, parentId);
     const number = await taskRepository.nextNumber(tx, workspaceId);
     const created = await taskRepository.create(tx, {
       ...data,
       workspaceId,
       number,
       createdById: userId,
+      parentId: parentId ?? null,
     });
     if (placement) {
       const status = await placementRepository.findStatus(tx, workspaceId, placement.statusId);
@@ -181,7 +227,14 @@ export async function createTask(
   });
 
   log.info(
-    { workspaceId, taskId: task.id, number: task.number, userId, placed: Boolean(placement) },
+    {
+      workspaceId,
+      taskId: task.id,
+      number: task.number,
+      userId,
+      placed: Boolean(placement),
+      parentId,
+    },
     '[task] created',
   );
   if (input.assigneeId) {
@@ -203,7 +256,25 @@ export async function getTaskByNumber(
     log.warn({ workspaceId, number }, '[task.getTaskByNumber] not found');
     throw new NotFoundError('Задача не найдена');
   }
-  return toTaskDto(row, access);
+
+  // Дерево: рекурсивные запросы — только когда есть родитель или подзадачи.
+  const hasSubtasks = row._count.subtasks > 0;
+  const [ancestors, subtreeIds, progress] = await Promise.all([
+    row.parentId ? getTaskAncestors(workspaceId, row.id, row.workspace.taskKey) : [],
+    hasSubtasks ? subtaskRepository.subtreeIds(workspaceId, row.id) : [row.id],
+    hasSubtasks ? getSubtaskProgress(workspaceId, [row.id]) : null,
+  ]);
+  const descendantCount = Math.max(subtreeIds.length - 1, 0);
+  log.debug(
+    { workspaceId, taskId: row.id, depth: ancestors.length + 1, descendants: descendantCount },
+    '[task.getTaskByNumber] tree',
+  );
+  return {
+    ...toTaskDto(row, access),
+    ancestors,
+    descendantCount,
+    subtaskProgress: progress?.get(row.id) ?? { total: 0, done: 0 },
+  };
 }
 
 export interface UpdateTaskInput {
@@ -277,8 +348,14 @@ export async function deleteTask(
     throw error;
   }
 
-  // Строки вложений удалит каскад, объекты хранилища — после удаления задачи.
-  const storageKeys = await attachmentRepository.keysForTask(workspaceId, taskId);
+  // Подзадачи и строки вложений всего поддерева удалит каскад, объекты хранилища — после
+  // удаления задачи.
+  const subtreeIds = await subtaskRepository.subtreeIds(workspaceId, taskId);
+  const storageKeys = await attachmentRepository.keysForTasks(
+    workspaceId,
+    subtreeIds.length > 0 ? subtreeIds : [taskId],
+  );
+  const descendants = Math.max(subtreeIds.length - 1, 0);
   const count = await taskRepository.delete(workspaceId, taskId);
   if (count === 0) throw new NotFoundError('Задача не найдена');
   await deleteStoredObjects(storageKeys, { workspaceId, taskId });
@@ -289,6 +366,7 @@ export async function deleteTask(
       number: task.number,
       userId: access.userId,
       attachments: storageKeys.length,
+      descendants,
     },
     '[task] deleted',
   );

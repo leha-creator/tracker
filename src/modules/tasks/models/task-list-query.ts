@@ -42,6 +42,9 @@ export const TASK_DUE_FILTER_LABELS: Record<TaskDueFilter, string> = {
 export const TASK_LIST_NONE = 'none';
 export const TASK_LIST_ME = 'me';
 
+/** Значение `level` в URL: только задачи верхнего уровня. */
+export const TASK_LIST_LEVEL_TOP = 'top';
+
 export type TaskCategoryFilter = StatusCategory | typeof TASK_LIST_NONE;
 
 export interface TaskListQuery {
@@ -57,6 +60,8 @@ export interface TaskListQuery {
   /** id участников, `me` или `none` (не назначен). */
   assignees: string[];
   due: TaskDueFilter | null;
+  /** Только задачи верхнего уровня (без подзадач), URL `level=top`. */
+  topLevelOnly: boolean;
   sort: TaskListSort;
   dir: SortDirection;
   /** Номер страницы с 1. */
@@ -100,6 +105,7 @@ export function defaultTaskListQuery(scope: TaskListScope): TaskListQuery {
     priorities: [],
     assignees: [],
     due: null,
+    topLevelOnly: false,
     sort,
     dir: DEFAULT_DIRECTION[sort],
     page: 1,
@@ -165,6 +171,7 @@ export function parseTaskListParams(raw: RawParams, scope: TaskListScope): TaskL
 
   const due = first(raw.due);
   query.due = due && isDueFilter(due) ? due : null;
+  query.topLevelOnly = first(raw.level) === TASK_LIST_LEVEL_TOP;
 
   const sort = first(raw.sort);
   if (sort && isSort(sort) && isSortAllowed(sort, scope)) query.sort = sort;
@@ -189,6 +196,7 @@ export function serializeTaskListParams(query: TaskListQuery, scope: TaskListSco
   if (query.priorities.length) params.set('priority', query.priorities.join(','));
   if (query.assignees.length) params.set('assignee', query.assignees.join(','));
   if (query.due) params.set('due', query.due);
+  if (query.topLevelOnly) params.set('level', TASK_LIST_LEVEL_TOP);
   if (query.sort !== DEFAULT_SORT[scope] && isSortAllowed(query.sort, scope)) {
     params.set('sort', query.sort);
   }
@@ -221,7 +229,8 @@ export function hasActiveFilters(query: TaskListQuery): boolean {
     query.projects.length > 0 ||
     query.priorities.length > 0 ||
     query.assignees.length > 0 ||
-    query.due !== null
+    query.due !== null ||
+    query.topLevelOnly
   );
 }
 

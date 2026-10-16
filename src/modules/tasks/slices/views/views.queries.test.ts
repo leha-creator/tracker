@@ -46,6 +46,12 @@ vi.mock('./views.repository', () => ({
   },
 }));
 
+const getSubtaskProgress =
+  vi.fn<(ws: string, ids: readonly string[]) => Promise<Map<string, unknown>>>();
+vi.mock('../subtask/subtask.service', () => ({
+  getSubtaskProgress: (ws: string, ids: readonly string[]) => getSubtaskProgress(ws, ids),
+}));
+
 const { getBoardCards, getMemberTaskSummary, getTaskSummaries, listProjectTasks, listTasks } =
   await import('./views.queries');
 const { defaultTaskListQuery, TASK_LIST_PAGE_SIZE } = await import('../../models');
@@ -68,7 +74,12 @@ function row(
   taskId: string,
   statusId: string,
   position: string,
-  extra: { category?: string; dueDate?: Date | null } = {},
+  extra: {
+    category?: string;
+    dueDate?: Date | null;
+    parent?: { number: number; title: string } | null;
+    subtasks?: number;
+  } = {},
 ) {
   return {
     taskId,
@@ -82,6 +93,8 @@ function row(
       dueDate: extra.dueDate ?? null,
       assignee: null,
       workspace: { taskKey: null },
+      parent: extra.parent ?? null,
+      _count: { subtasks: extra.subtasks ?? 0 },
     },
   };
 }
@@ -119,6 +132,24 @@ describe('getBoardCards', () => {
     const cards = await getBoardCards(session, 'ws-1', PROJECT_ID);
     expect(cards.s1?.[0]).toMatchObject({ isOverdue: true, dueDate: '2000-01-01' });
     expect(cards.s2?.[0]?.isOverdue).toBe(false);
+  });
+
+  it('adds the parent and subtask progress; no progress query without subtasks', async () => {
+    listBoardPlacements.mockResolvedValue([row('t1', 's1', 'a0')]);
+    const plain = await getBoardCards(session, 'ws-1', PROJECT_ID);
+    expect(plain.s1?.[0]).toMatchObject({ parent: null, subtaskProgress: null });
+    expect(getSubtaskProgress).not.toHaveBeenCalled();
+
+    getSubtaskProgress.mockResolvedValue(new Map([['t2', { total: 3, done: 1 }]]));
+    listBoardPlacements.mockResolvedValue([
+      row('t2', 's1', 'a0', { parent: { number: 1, title: 'Эпик' }, subtasks: 3 }),
+    ]);
+    const cards = await getBoardCards(session, 'ws-1', PROJECT_ID);
+    expect(getSubtaskProgress).toHaveBeenCalledWith('ws-1', ['t2']);
+    expect(cards.s1?.[0]).toMatchObject({
+      parent: { number: 1, key: '#1', title: 'Эпик' },
+      subtaskProgress: { total: 3, done: 1 },
+    });
   });
 
   it('returns NOT_FOUND for a malformed project id', async () => {

@@ -156,9 +156,9 @@ export const attachmentRepository = {
     return count;
   },
 
-  /** Ключи всех объектов задачи (включая файлы комментариев и черновики). */
-  keysForTask(workspaceId: string, taskId: string): Promise<string[]> {
-    return keysWhere({ workspaceId, taskId });
+  /** Ключи вложений нескольких задач (поддерево при удалении) — вместе с вложениями комментариев. */
+  keysForTasks(workspaceId: string, taskIds: string[]): Promise<string[]> {
+    return keysWhere({ workspaceId, taskId: { in: taskIds } });
   },
 
   keysForComment(workspaceId: string, taskId: string, commentId: string): Promise<string[]> {

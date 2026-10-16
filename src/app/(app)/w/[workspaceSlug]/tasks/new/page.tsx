@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 
 import { TaskPanelSkeleton } from '@/components/tasks/task-panel/task-panel-frame';
 import { TaskCreateView } from '@/components/tasks/task-panel/task-create-view';
+import { parseTaskParentParam } from '@/components/tasks/task-panel/task-panel-href';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
 
 export const metadata: Metadata = { title: 'Новая задача — Tasker' };
@@ -22,7 +23,7 @@ export default function NewTaskPage({ params, searchParams }: Props) {
 
 async function NewTaskSection({ params, searchParams }: Props) {
   const { workspaceSlug } = await params;
-  const { projectId } = await searchParams;
+  const { projectId, parent } = await searchParams;
   const { session, workspace } = await requireWorkspaceAccessBySlug(workspaceSlug);
 
   return (
@@ -32,6 +33,7 @@ async function NewTaskSection({ params, searchParams }: Props) {
       variant="page"
       closeHref={`/w/${workspace.slug}/tasks`}
       defaultProjectId={typeof projectId === 'string' ? projectId : undefined}
+      parentNumber={parseTaskParentParam(parent)}
     />
   );
 }
