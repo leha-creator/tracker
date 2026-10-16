@@ -1,8 +1,14 @@
 import { getSessionCookie } from 'better-auth/cookies';
 import { NextResponse, type NextRequest } from 'next/server';
 
-/** Пути, доступные без входа. */
-const PUBLIC_PATHS = ['/login', '/register'];
+/** Пути, доступные без входа (/login/two-factor — внутри /login). */
+const PUBLIC_PATHS = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/verify-email',
+];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

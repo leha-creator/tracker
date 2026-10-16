@@ -94,6 +94,14 @@ describe('parseEnv', () => {
     expect(parseEnv(VALID_ENV).ADMIN_EMAILS).toEqual([]);
   });
 
+  it('requires email verification by default', () => {
+    expect(parseEnv(VALID_ENV).AUTH_REQUIRE_EMAIL_VERIFICATION).toBe(true);
+    expect(
+      parseEnv({ ...VALID_ENV, AUTH_REQUIRE_EMAIL_VERIFICATION: 'false' })
+        .AUTH_REQUIRE_EMAIL_VERIFICATION,
+    ).toBe(false);
+  });
+
   it('applies SMTP defaults for local Mailpit', () => {
     const env = parseEnv(VALID_ENV);
 

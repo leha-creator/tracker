@@ -29,6 +29,7 @@ export type {
 export {
   banUserAction,
   deleteUserAction,
+  resetUserTwoFactorAction,
   revokeUserSessionsAction,
   setUserRoleAction,
   unbanUserAction,

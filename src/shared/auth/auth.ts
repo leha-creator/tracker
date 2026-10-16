@@ -6,13 +6,22 @@ import { nextCookies } from 'better-auth/next-js';
 import { admin } from 'better-auth/plugins/admin';
 import { organization } from 'better-auth/plugins/organization';
 import { memberAc, ownerAc } from 'better-auth/plugins/organization/access';
+import { twoFactor } from 'better-auth/plugins/two-factor';
 
 import { prisma } from '@/shared/db';
 import { getEnv } from '@/shared/env';
 import { getGithubAppConfig, type GithubAppConfig } from '@/shared/github-app';
 import { createLogger } from '@/shared/logger';
+import { sendMailInBackground } from '@/shared/mail';
 
 import { allowSessionCreation } from './agent-session-guard';
+import {
+  buildPasswordResetEmail,
+  buildSignUpAttemptEmail,
+  buildVerificationEmail,
+} from './auth-emails';
+import { appUrl, sendPasswordChangedMail } from './auth-mail';
+import { buildAuthRateLimitRules, buildSyntheticUser } from './auth-options';
 
 const log = createLogger('auth');
 
@@ -31,13 +40,18 @@ export const INVITATION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const WORKSPACES_PER_USER_LIMIT = 50;
 const PENDING_INVITATIONS_LIMIT = 100;
 
+/** Срок ссылки сброса пароля. */
+export const PASSWORD_RESET_TTL_SECONDS = 60 * 60;
+/** Срок ссылки подтверждения email. */
+export const EMAIL_VERIFICATION_TTL_SECONDS = 60 * 60 * 24;
+
 /**
  * Плагин organization под доменными именами (см. prisma/schema.prisma):
  * organization → Workspace, member → WorkspaceMember, invitation → WorkspaceInvitation,
  * organizationId → workspaceId. Роли пространства — только owner и member.
  * Дополнительные поля участника canManageProjects и canManageDocuments — тоже в prisma/schema.prisma.
  */
-function workspacesPlugin() {
+function workspacesPlugin(requireEmailVerification: boolean) {
   return organization({
     // Роль admin плагина не регистрируем: пригласить с ней нельзя. ac — встроенный defaultAc.
     roles: { owner: ownerAc, member: memberAc },
@@ -47,6 +61,9 @@ function workspacesPlugin() {
     invitationExpiresIn: INVITATION_TTL_SECONDS,
     invitationLimit: PENDING_INVITATIONS_LIMIT,
     cancelPendingInvitationsOnReInvite: true,
+    // Принять приглашение можно только с подтверждённым email: иначе его принял бы любой,
+    // кто зарегистрировался с адресом приглашённого и получил ссылку.
+    requireEmailVerificationOnInvitation: requireEmailVerification,
     schema: {
       organization: {
         modelName: 'workspace',
@@ -136,7 +153,61 @@ function createAuth(github: GithubAppConfig | null) {
       enabled: true,
       minPasswordLength: PASSWORD_MIN_LENGTH,
       maxPasswordLength: PASSWORD_MAX_LENGTH,
+      // При обязательном подтверждении сессия после регистрации не создаётся (Better Auth).
       autoSignIn: true,
+      requireEmailVerification: env.AUTH_REQUIRE_EMAIL_VERIFICATION,
+      resetPasswordTokenExpiresIn: PASSWORD_RESET_TTL_SECONDS,
+      revokeSessionsOnPasswordReset: true,
+      // Письма — в фоне: время ответа не выдаёт, существует ли аккаунт. Ссылки и токены не логируем.
+      sendResetPassword: ({ user, url }) => {
+        log.info({ userId: user.id }, '[auth.passwordReset] requested');
+        sendMailInBackground(
+          { to: user.email, ...buildPasswordResetEmail({ name: user.name, url }) },
+          'password-reset',
+        );
+        return Promise.resolve();
+      },
+      onPasswordReset: ({ user }) => {
+        log.info({ userId: user.id }, '[auth.passwordReset] completed');
+        sendPasswordChangedMail(user);
+        return Promise.resolve();
+      },
+      // Регистрация на занятый адрес отвечает как успешная; владельцу адреса — письмо.
+      onExistingUserSignUp: ({ user }) => {
+        log.info({ userId: user.id }, '[auth.signUp] existing email attempt');
+        sendMailInBackground(
+          {
+            to: user.email,
+            ...buildSignUpAttemptEmail({
+              name: user.name,
+              loginUrl: `${appUrl()}/login`,
+              forgotPasswordUrl: `${appUrl()}/forgot-password`,
+            }),
+          },
+          'sign-up-attempt',
+        );
+        return Promise.resolve();
+      },
+      customSyntheticUser: buildSyntheticUser,
+    },
+    emailVerification: {
+      sendOnSignUp: env.AUTH_REQUIRE_EMAIL_VERIFICATION,
+      // Вход с неподтверждённым email отклоняется, а письмо уходит повторно.
+      sendOnSignIn: env.AUTH_REQUIRE_EMAIL_VERIFICATION,
+      autoSignInAfterVerification: true,
+      expiresIn: EMAIL_VERIFICATION_TTL_SECONDS,
+      sendVerificationEmail: ({ user, url }) => {
+        log.info({ userId: user.id }, '[auth.emailVerification] sent');
+        sendMailInBackground(
+          { to: user.email, ...buildVerificationEmail({ name: user.name, url }) },
+          'email-verification',
+        );
+        return Promise.resolve();
+      },
+      afterEmailVerification: (user) => {
+        log.info({ userId: user.id }, '[auth.emailVerification] verified');
+        return Promise.resolve();
+      },
     },
     // Вход через GitHub — только если настроено GitHub App (GITHUB_* или админка; см. docs/github.md).
     // Токены пользователя нужны интеграции (проверка доступа к установке), поэтому хранятся
@@ -146,8 +217,9 @@ function createAuth(github: GithubAppConfig | null) {
       encryptOAuthTokens: true,
       accountLinking: {
         enabled: true,
-        // Email в Tasker не подтверждается: неявная привязка по совпадению email позволила бы
-        // захватить чужой аккаунт. GitHub привязывается только явно, из профиля (linkSocial).
+        // Неявная привязка по совпадению email позволила бы захватить аккаунт, зарегистрированный
+        // до подтверждения email или с выключенным AUTH_REQUIRE_EMAIL_VERIFICATION. GitHub
+        // привязывается только явно, из профиля (linkSocial).
         disableImplicitLinking: true,
         // При явной привязке пользователь уже вошёл: email GitHub может отличаться от рабочего.
         allowDifferentEmails: true,
@@ -158,10 +230,15 @@ function createAuth(github: GithubAppConfig | null) {
       updateAge: SESSION_UPDATE_AGE_SECONDS,
       cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_SECONDS },
     },
-    // Встроенный лимит действует только на HTTP-эндпоинты /api/auth/*.
-    // Вызовы auth.api.* из Server Actions его обходят (см. docs/architecture.md).
-    rateLimit: { enabled: true, storage: 'memory' },
-    advanced: { useSecureCookies: env.NODE_ENV === 'production' },
+    // Встроенный лимит действует только на HTTP-эндпоинты /api/auth/*: вызовы auth.api.* из
+    // Server Actions его обходят и ограничиваются своим лимитером (src/shared/rate-limit).
+    // Хранилище — БД: счётчики общие для всех процессов и переживают перезапуск.
+    rateLimit: { enabled: true, storage: 'database', customRules: buildAuthRateLimitRules() },
+    advanced: {
+      useSecureCookies: env.NODE_ENV === 'production',
+      // За edge-Caddy адрес клиента — в X-Forwarded-For (Caddy перезаписывает заголовок).
+      ipAddress: { ipAddressHeaders: ['x-forwarded-for'] },
+    },
     databaseHooks: {
       user: {
         create: {
@@ -200,15 +277,23 @@ function createAuth(github: GithubAppConfig | null) {
     plugins: [
       // Без причины плагин записал бы «No reason»; причину показывает админка.
       admin({ defaultRole: 'user', adminRoles: ['admin'], defaultBanReason: 'Причина не указана' }),
-      workspacesPlugin(),
+      workspacesPlugin(env.AUTH_REQUIRE_EMAIL_VERIFICATION),
+      // 2FA (TOTP + резервные коды) — только для входа по email и паролю (см. docs/architecture.md).
+      twoFactor({
+        issuer: 'Tasker',
+        skipVerificationOnEnable: false,
+        backupCodeOptions: { amount: 10 },
+      }),
       nextCookies(),
     ],
   });
 
   log.info(
     {
-      plugins: ['admin', 'organization', 'next-cookies'],
+      plugins: ['admin', 'organization', 'two-factor', 'next-cookies'],
       sessionTtlSeconds: SESSION_TTL_SECONDS,
+      rateLimitStorage: 'database',
+      emailVerificationRequired: env.AUTH_REQUIRE_EMAIL_VERIFICATION,
       github: github?.source ?? null,
     },
     '[auth] better-auth initialized',

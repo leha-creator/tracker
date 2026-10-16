@@ -43,6 +43,12 @@ export function AdminUsersTable({ items }: { items: AdminUserDto[] }) {
                   {user.isCurrentUser && <Badge variant="outline">Вы</Badge>}
                 </div>
                 <div className="truncate text-sm text-muted-foreground">{user.email}</div>
+                {(!user.emailVerified || user.twoFactorEnabled) && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {!user.emailVerified && <Badge variant="outline">Email не подтверждён</Badge>}
+                    {user.twoFactorEnabled && <Badge variant="outline">2FA</Badge>}
+                  </div>
+                )}
               </TableCell>
               <TableCell>
                 {user.role === 'admin' ? (
@@ -67,6 +73,7 @@ export function AdminUsersTable({ items }: { items: AdminUserDto[] }) {
                       email: user.email,
                       role: user.role,
                       banned: user.ban.kind === 'banned',
+                      twoFactorEnabled: user.twoFactorEnabled,
                     }}
                   />
                 )}

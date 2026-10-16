@@ -4,13 +4,13 @@ import { z } from 'zod';
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
 
-const emailField = z
+export const emailField = z
   .string({ error: 'Укажите email' })
   .trim()
   .toLowerCase()
   .pipe(z.email({ error: 'Некорректный email' }).max(254, { error: 'Слишком длинный email' }));
 
-const returnToField = z.string().optional();
+export const returnToField = z.string().optional();
 
 export const signInSchema = z.object({
   email: emailField,

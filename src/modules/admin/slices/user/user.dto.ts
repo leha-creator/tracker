@@ -17,6 +17,8 @@ export interface AdminUserDto {
   role: GlobalRole;
   ban: AdminUserBanDto;
   workspacesCount: number;
+  emailVerified: boolean;
+  twoFactorEnabled: boolean;
   createdAt: Date;
   isCurrentUser: boolean;
 }

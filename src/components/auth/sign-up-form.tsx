@@ -4,11 +4,18 @@ import Link from 'next/link';
 import { useActionState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { PASSWORD_MIN_LENGTH, signUpAction, type AuthFormState } from '@/modules/auth';
+import { PASSWORD_MIN_LENGTH, signUpAction, type AuthFormState } from '@/modules/auth/client';
 
 import { FormError, FormField } from '@/components/forms/form-field';
 
-export function SignUpForm({ returnTo }: { returnTo: string }) {
+export function SignUpForm({
+  returnTo,
+  emailVerification,
+}: {
+  returnTo: string;
+  /** Регистрация требует подтверждения email по письму. */
+  emailVerification: boolean;
+}) {
   const [state, formAction, pending] = useActionState<AuthFormState, FormData>(signUpAction, null);
   const fieldErrors = state?.error.fieldErrors;
 
@@ -49,6 +56,11 @@ export function SignUpForm({ returnTo }: { returnTo: string }) {
         required
         errors={fieldErrors?.confirmPassword}
       />
+      {emailVerification && (
+        <p className="text-sm text-muted-foreground">
+          После регистрации придёт письмо: подтвердите email по ссылке, чтобы войти.
+        </p>
+      )}
       <Button type="submit" disabled={pending}>
         {pending ? 'Создаём аккаунт…' : 'Зарегистрироваться'}
       </Button>

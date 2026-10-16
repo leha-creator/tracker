@@ -155,7 +155,8 @@ tasker/
 │       ├── access/                   # requireWorkspaceAccess(), requireWorkspacePermission(), requireAdmin()
 │       ├── errors/                   # AppError, NotFoundError, ForbiddenError, toActionError()
 │       ├── storage/                  # S3-клиенты (S3_ENDPOINT и S3_PUBLIC_ENDPOINT для подписи), presigned POST/GET, удаление объектов
-│       ├── mail/                     # SMTP (nodemailer): sendMail(), escapeHtml()
+│       ├── mail/                     # SMTP (nodemailer): sendMail(), sendMailInBackground(), escapeHtml()
+│       ├── rate-limit/               # Лимиты попыток Server Actions (ActionRateLimit), getClientIp()
 │       ├── logger/                   # pino, LOG_LEVEL
 │       ├── env/                      # Zod-валидация переменных окружения (ленивая)
 │       ├── health/                   # checkHealth(): агрегирует checkDatabase/checkStorage для /api/health

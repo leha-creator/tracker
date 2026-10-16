@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  resetUserTwoFactorAction,
   revokeUserSessionsAction,
   setUserRoleAction,
   unbanUserAction,
@@ -23,10 +24,17 @@ import type { GlobalRole } from '@/shared/access/global-role';
 import { BanUserDialog } from './ban-user-dialog';
 import { DeleteUserDialog } from './delete-user-dialog';
 
-type DialogKind = 'ban' | 'unban' | 'role' | 'sessions' | 'delete';
+type DialogKind = 'ban' | 'unban' | 'role' | 'sessions' | 'twoFactor' | 'delete';
 
 interface UserActionsMenuProps {
-  user: { id: string; name: string; email: string; role: GlobalRole; banned: boolean };
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: GlobalRole;
+    banned: boolean;
+    twoFactorEnabled: boolean;
+  };
 }
 
 /**
@@ -66,6 +74,11 @@ export function UserActionsMenu({ user }: UserActionsMenuProps) {
           <DropdownMenuItem onSelect={() => open('sessions')}>
             Завершить все сессии
           </DropdownMenuItem>
+          {user.twoFactorEnabled && (
+            <DropdownMenuItem onSelect={() => open('twoFactor')}>
+              Сбросить двухфакторную аутентификацию
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           {isAdmin ? (
             <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
@@ -129,6 +142,17 @@ export function UserActionsMenu({ user }: UserActionsMenuProps) {
           title={`Завершить все сессии «${user.name}»?`}
           description="Пользователь выйдет на всех устройствах и сможет войти снова."
           confirmLabel="Завершить сессии"
+        />
+      )}
+      {dialog === 'twoFactor' && (
+        <ConfirmActionDialog
+          key={dialogKey}
+          {...dialogProps}
+          action={resetUserTwoFactorAction}
+          fields={{ userId: user.id }}
+          title={`Сбросить 2FA у «${user.name}»?`}
+          description="Для пользователя, который потерял телефон и резервные коды. Секрет и коды удалятся, все сессии завершатся — войти можно будет по одному паролю. Убедитесь, что просьба исходит от самого пользователя."
+          confirmLabel="Сбросить 2FA"
         />
       )}
     </>

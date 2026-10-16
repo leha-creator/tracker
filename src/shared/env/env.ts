@@ -52,9 +52,14 @@ const envSchema = z
           .map((email) => email.trim().toLowerCase())
           .filter(Boolean),
       ),
+    /**
+     * Обязательное подтверждение email: без него нельзя войти паролем и принять приглашение.
+     * `false` — для локальных стендов без почты и e2e. В продакшене нужен настроенный SMTP.
+     */
+    AUTH_REQUIRE_EMAIL_VERIFICATION: z.stringbool().default(true),
 
     /**
-     * SMTP для писем (приглашения). Локально — Mailpit из compose.yml. По умолчанию 127.0.0.1,
+     * SMTP для писем (приглашения, уведомления, подтверждение email, сброс пароля). Локально — Mailpit из compose.yml. По умолчанию 127.0.0.1,
      * а не localhost: nodemailer резолвит имя сам, и на Windows/WSL lookup localhost может зависать.
      */
     SMTP_HOST: z.string().min(1).default('127.0.0.1'),

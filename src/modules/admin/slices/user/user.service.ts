@@ -42,6 +42,8 @@ function toAdminUserDto(
     role: parseGlobalRole(row.role),
     ban: ban.kind === 'active' ? ban : { ...ban, reason: row.banReason || null },
     workspacesCount: context.workspaces.get(row.id) ?? 0,
+    emailVerified: row.emailVerified,
+    twoFactorEnabled: row.twoFactorEnabled,
     createdAt: row.createdAt,
     isCurrentUser: row.id === context.actorId,
   };
@@ -161,6 +163,27 @@ export async function revokeUserSessions(input: { userId: string }): Promise<voi
     api.revokeUserSessions({ headers, body: { userId: target.id } }),
   );
   log.info({ actorId, userId: target.id }, '[admin.user.revokeSessions] revoked');
+}
+
+/**
+ * Сброс 2FA пользователю, который потерял устройство и резервные коды. Все его сессии
+ * завершаются: дальше он входит по паролю и при желании включает 2FA заново.
+ */
+export async function resetUserTwoFactor(input: { userId: string }): Promise<void> {
+  const session = await requireAdmin();
+  const actorId = session.user.id;
+  const target = await loadTarget(actorId, input.userId, 'admin.user.resetTwoFactor');
+  const row = await userRepository.findById(target.id);
+  if (!row?.twoFactorEnabled) {
+    log.warn({ actorId, userId: target.id }, '[admin.user.resetTwoFactor] not enabled');
+    throw new ValidationError('У пользователя не включена двухфакторная аутентификация');
+  }
+
+  await userRepository.resetTwoFactor(target.id);
+  await callAdminApi((api, headers) =>
+    api.revokeUserSessions({ headers, body: { userId: target.id } }),
+  );
+  log.info({ actorId, userId: target.id }, '[admin.user.resetTwoFactor] reset');
 }
 
 export async function deleteUser(input: DeleteUserInput): Promise<void> {

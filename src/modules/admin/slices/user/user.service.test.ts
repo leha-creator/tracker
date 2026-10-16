@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as AccessModule from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
-import { ForbiddenError } from '@/shared/errors';
+import { ForbiddenError, ValidationError } from '@/shared/errors';
 
 interface UserRow {
   id: string;
@@ -11,11 +11,13 @@ interface UserRow {
   banned: boolean | null;
   banExpires: Date | null;
   isAgent: boolean;
+  twoFactorEnabled?: boolean;
 }
 
 const requireAdmin = vi.fn<() => Promise<AuthSession>>();
 const findById = vi.fn<(id: string) => Promise<UserRow | null>>();
 const list = vi.fn();
+const resetTwoFactor = vi.fn<(id: string) => Promise<void>>();
 const countWorkspacesByUsers = vi.fn<(ids: string[]) => Promise<Map<string, number>>>();
 const listSoleOwnedWorkspaces =
   vi.fn<(userId: string) => Promise<{ id: string; name: string; slug: string }[]>>();
@@ -42,6 +44,7 @@ vi.mock('./user.repository', () => ({
   userRepository: {
     findById: (id: string) => findById(id),
     list: (...args: unknown[]) => list(...args) as unknown,
+    resetTwoFactor: (id: string) => resetTwoFactor(id),
   },
 }));
 vi.mock('../../admin-api', () => ({
@@ -58,8 +61,15 @@ vi.mock('../../admin-api', () => ({
     ),
 }));
 
-const { banUser, deleteUser, listAdminUsers, revokeUserSessions, setUserRole, unbanUser } =
-  await import('./user.service');
+const {
+  banUser,
+  deleteUser,
+  listAdminUsers,
+  resetUserTwoFactor,
+  revokeUserSessions,
+  setUserRole,
+  unbanUser,
+} = await import('./user.service');
 const { defaultAdminUserListQuery } = await import('../../models');
 
 const adminSession: AuthSession = {
@@ -278,5 +288,39 @@ describe('deleteUser', () => {
     );
     expect(prepareAvatarCleanup).toHaveBeenCalledWith('user-2');
     expect(cleanupAvatar).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('resetUserTwoFactor', () => {
+  beforeEach(() => {
+    requireAdmin.mockResolvedValue(adminSession);
+    resetTwoFactor.mockReset().mockResolvedValue();
+    revokeUserSessionsApi.mockReset().mockResolvedValue({ success: true });
+  });
+
+  it('rejects non-admins', async () => {
+    requireAdmin.mockRejectedValueOnce(new ForbiddenError());
+    await expect(resetUserTwoFactor({ userId: 'user-2' })).rejects.toBeInstanceOf(ForbiddenError);
+    expect(resetTwoFactor).not.toHaveBeenCalled();
+  });
+
+  it('rejects acting on yourself', async () => {
+    findById.mockResolvedValue(userRow({ id: 'admin-1', twoFactorEnabled: true }));
+    await expect(resetUserTwoFactor({ userId: 'admin-1' })).rejects.toBeInstanceOf(ForbiddenError);
+    expect(resetTwoFactor).not.toHaveBeenCalled();
+  });
+
+  it('rejects when 2FA is off', async () => {
+    findById.mockResolvedValue(userRow({ twoFactorEnabled: false }));
+    await expect(resetUserTwoFactor({ userId: 'user-2' })).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('resets 2FA and revokes sessions', async () => {
+    findById.mockResolvedValue(userRow({ twoFactorEnabled: true }));
+    await resetUserTwoFactor({ userId: 'user-2' });
+    expect(resetTwoFactor).toHaveBeenCalledWith('user-2');
+    expect(revokeUserSessionsApi).toHaveBeenCalledWith(
+      expect.objectContaining({ body: { userId: 'user-2' } }),
+    );
   });
 });

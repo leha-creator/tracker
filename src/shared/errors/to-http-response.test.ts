@@ -3,8 +3,10 @@ import { z } from 'zod';
 
 import {
   ConflictError,
+  formatRetryAfter,
   INTERNAL_ERROR_MESSAGE,
   NotFoundError,
+  RateLimitError,
   UnauthorizedError,
   toErrorResponse,
 } from '@/shared/errors';
@@ -43,5 +45,23 @@ describe('toErrorResponse', () => {
     expect(await readBody(response)).toEqual({
       error: { code: 'INTERNAL_ERROR', message: INTERNAL_ERROR_MESSAGE },
     });
+  });
+});
+
+describe('toErrorResponse with RateLimitError', () => {
+  it('returns 429 with Retry-After', async () => {
+    const response = toErrorResponse(new RateLimitError(90));
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('90');
+    expect(await readBody(response)).toEqual({
+      error: { code: 'RATE_LIMITED', message: 'Слишком много попыток. Повторите через 2 мин.' },
+    });
+  });
+
+  it('formats short waits in seconds', () => {
+    expect(formatRetryAfter(0.2)).toBe('1 с');
+    expect(formatRetryAfter(59)).toBe('59 с');
+    expect(formatRetryAfter(61)).toBe('2 мин');
   });
 });

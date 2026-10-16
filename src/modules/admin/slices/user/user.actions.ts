@@ -6,7 +6,14 @@ import { toActionError } from '@/shared/errors';
 import { formValues, type FormState } from '@/shared/types';
 
 import { banUserSchema, deleteUserSchema, setUserRoleSchema, userIdSchema } from './user.schema';
-import { banUser, deleteUser, revokeUserSessions, setUserRole, unbanUser } from './user.service';
+import {
+  banUser,
+  deleteUser,
+  resetUserTwoFactor,
+  revokeUserSessions,
+  setUserRole,
+  unbanUser,
+} from './user.service';
 
 /** Действия меняют только данные админки. */
 function revalidateAdmin() {
@@ -56,6 +63,19 @@ export async function revokeUserSessionsAction(
     return { ok: true, data: null };
   } catch (error) {
     return { ...toActionError(error, { action: 'revokeUserSessions' }), values: {} };
+  }
+}
+
+export async function resetUserTwoFactorAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  try {
+    await resetUserTwoFactor(userIdSchema.parse(Object.fromEntries(formData)));
+    revalidateAdmin();
+    return { ok: true, data: null };
+  } catch (error) {
+    return { ...toActionError(error, { action: 'resetUserTwoFactor' }), values: {} };
   }
 }
 

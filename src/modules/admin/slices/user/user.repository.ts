@@ -43,6 +43,8 @@ const userSelect = {
   banned: true,
   banReason: true,
   banExpires: true,
+  emailVerified: true,
+  twoFactorEnabled: true,
   createdAt: true,
 } satisfies Prisma.UserSelect;
 
@@ -77,7 +79,16 @@ export const userRepository = {
         banned: true,
         banExpires: true,
         isAgent: true,
+        twoFactorEnabled: true,
       },
     });
+  },
+
+  /** Сброс 2FA: секрет и резервные коды удаляются, флаг снимается — атомарно. */
+  async resetTwoFactor(id: string): Promise<void> {
+    await prisma.$transaction([
+      prisma.twoFactor.deleteMany({ where: { userId: id } }),
+      prisma.user.update({ where: { id }, data: { twoFactorEnabled: false } }),
+    ]);
   },
 };

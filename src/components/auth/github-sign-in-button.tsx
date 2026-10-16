@@ -4,7 +4,7 @@ import { useActionState } from 'react';
 
 import { FormError } from '@/components/forms/form-field';
 import { Button } from '@/components/ui/button';
-import { signInWithGithubAction, type SocialSignInState } from '@/modules/auth';
+import { signInWithGithubAction, type SocialSignInState } from '@/modules/auth/client';
 
 /** «Войти через GitHub»: вход или регистрация (новый email — новый аккаунт). */
 export function GithubSignInButton({

@@ -18,24 +18,28 @@ datasource db {
 // src/shared/auth/auth.ts.
 
 model User {
-  id            String    @id
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id               String    @id
+  name             String
+  email            String    @unique
+  emailVerified    Boolean   @default(false)
+  image            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
   /// Глобальная роль: "user" | "admin" (плагин admin Better Auth).
-  role          String    @default("user")
-  banned        Boolean?  @default(false)
-  banReason     String?
-  banExpires    DateTime?
+  role             String    @default("user")
+  banned           Boolean?  @default(false)
+  banReason        String?
+  banExpires       DateTime?
   /// Служебный пользователь-агент пространства (модуль agents): без пароля и почты, войти не может.
   /// Поле Better Auth с input: false — проставляет только сервис агентов.
-  isAgent       Boolean   @default(false)
+  isAgent          Boolean   @default(false)
+  /// Включена ли двухфакторная аутентификация (плагин twoFactor Better Auth). Меняет только плагин
+  /// и сброс 2FA в админке.
+  twoFactorEnabled Boolean   @default(false)
 
-  sessions Session[]
-  accounts Account[]
+  sessions   Session[]
+  accounts   Account[]
+  twoFactors TwoFactor[]
 
   workspaceMemberships WorkspaceMember[]
   sentInvitations      WorkspaceInvitation[]
@@ -114,6 +118,47 @@ model Verification {
   updatedAt  DateTime @updatedAt
 
   @@index([identifier])
+}
+
+/// TOTP-секрет и резервные коды пользователя (плагин twoFactor Better Auth).
+/// secret и backupCodes плагин хранит зашифрованными; наружу и в логи они не попадают.
+model TwoFactor {
+  id                      String    @id
+  secret                  String
+  backupCodes             String
+  userId                  String
+  /// false — 2FA включена, но ещё не подтверждена первым кодом.
+  verified                Boolean   @default(true)
+  /// Встроенная защита плагина от перебора кодов.
+  failedVerificationCount Int       @default(0)
+  lockedUntil             DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([secret])
+  @@index([userId])
+}
+
+/// Счётчики rate limit Better Auth для HTTP-эндпоинтов /api/auth/* (rateLimit.storage = "database").
+/// Better Auth сам удаляет строки старше своего самого длинного окна.
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  /// Время последнего запроса, мс с эпохи.
+  lastRequest BigInt
+}
+
+/// Счётчики своего rate limit для Server Actions (src/shared/rate-limit): вызовы auth.api.* из
+/// Server Actions лимит Better Auth обходят. Отдельно от RateLimit: Better Auth удаляет строки
+/// старше 60 с, а окна здесь — до часа. Email в key только хешем.
+model ActionRateLimit {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+  expiresAt   DateTime
+
+  @@index([expiresAt])
 }
 
 // ── Рабочие пространства (Better Auth organization) ─────────────────────────────
@@ -216,7 +261,7 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace        Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace        Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy        User?                    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   statuses         ProjectStatus[]
   placements       TaskPlacement[]

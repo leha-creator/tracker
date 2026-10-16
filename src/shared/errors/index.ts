@@ -3,8 +3,10 @@ export {
   ConflictError,
   ERROR_CODES,
   ForbiddenError,
+  formatRetryAfter,
   InternalError,
   NotFoundError,
+  RateLimitError,
   UnauthorizedError,
   ValidationError,
 } from './app-error';

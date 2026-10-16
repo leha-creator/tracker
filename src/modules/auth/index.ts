@@ -14,3 +14,25 @@ export type { SignInInput, SignUpInput } from './slices/credentials/credentials.
 export { signInWithGithubAction } from './slices/social/social.actions';
 export type { SocialSignInState } from './slices/social/social.actions';
 export { githubSignInErrorMessage } from './slices/social/social.messages';
+export { resendVerificationAction } from './slices/verification/verification.actions';
+export type { ResendVerificationState } from './slices/verification/verification.actions';
+export {
+  changePasswordAction,
+  forgotPasswordAction,
+  resetPasswordAction,
+} from './slices/password/password.actions';
+export {
+  confirmEnableTwoFactorAction,
+  disableTwoFactorAction,
+  regenerateBackupCodesAction,
+  startEnableTwoFactorAction,
+  verifyTwoFactorSignInAction,
+} from './slices/two-factor/two-factor.actions';
+export {
+  getMyTwoFactorState,
+  hasPendingTwoFactorSignIn,
+} from './slices/two-factor/two-factor.service';
+export type { MyTwoFactorState, TwoFactorSetup } from './slices/two-factor/two-factor.dto';
+export { revokeOtherSessionsAction, revokeSessionAction } from './slices/session/session.actions';
+export { listMySessions } from './slices/session/session.service';
+export type { MySessionDto } from './slices/session/session.dto';

@@ -28,10 +28,13 @@ export default function LoginPage({ searchParams }: PageProps<'/login'>) {
 
 async function SignInSection({ searchParams }: Pick<PageProps<'/login'>, 'searchParams'>) {
   const returnTo = await resolveAuthPageReturnTo(searchParams);
-  const { error } = await searchParams;
+  const { error, reset } = await searchParams;
   return (
     <div className="grid gap-6">
-      <SignInForm returnTo={returnTo} />
+      <SignInForm
+        returnTo={returnTo}
+        notice={reset === '1' ? 'Пароль изменён. Войдите с новым паролем.' : undefined}
+      />
       <GithubSignIn returnTo={returnTo} errorCode={typeof error === 'string' ? error : undefined} />
     </div>
   );

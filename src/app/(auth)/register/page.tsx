@@ -6,6 +6,7 @@ import { FormSkeleton } from '@/components/auth/form-skeleton';
 import { GithubSignIn } from '@/components/auth/github-sign-in';
 import { SignUpForm } from '@/components/auth/sign-up-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { getEnv } from '@/shared/env';
 
 export const metadata: Metadata = { title: 'Регистрация — Tasker' };
 
@@ -29,7 +30,10 @@ async function SignUpSection({ searchParams }: Pick<PageProps<'/register'>, 'sea
   const returnTo = await resolveAuthPageReturnTo(searchParams);
   return (
     <div className="grid gap-6">
-      <SignUpForm returnTo={returnTo} />
+      <SignUpForm
+        returnTo={returnTo}
+        emailVerification={getEnv().AUTH_REQUIRE_EMAIL_VERIFICATION}
+      />
       <GithubSignIn returnTo={returnTo} label="Зарегистрироваться через GitHub" />
     </div>
   );

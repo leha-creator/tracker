@@ -4,6 +4,7 @@ export const ERROR_CODES = [
   'FORBIDDEN',
   'NOT_FOUND',
   'CONFLICT',
+  'RATE_LIMITED',
   'INTERNAL_ERROR',
 ] as const;
 
@@ -70,6 +71,29 @@ export class NotFoundError extends AppError {
 export class ConflictError extends AppError {
   constructor(message = 'Конфликт данных', options: DomainErrorOptions = {}) {
     super(message, { ...options, code: 'CONFLICT', httpStatus: 409 });
+  }
+}
+
+/** «Повторите через …»: секунды до минуты — секундами, дальше — минутами с округлением вверх. */
+export function formatRetryAfter(seconds: number): string {
+  const safe = Math.max(1, Math.ceil(seconds));
+  if (safe < 60) return `${safe} с`;
+  return `${Math.ceil(safe / 60)} мин`;
+}
+
+/** Превышен лимит попыток (rate limit). retryAfterSeconds — через сколько можно повторить. */
+export class RateLimitError extends AppError {
+  readonly retryAfterSeconds: number;
+
+  constructor(retryAfterSeconds: number, options: Pick<AppErrorOptions, 'details' | 'cause'> = {}) {
+    const retryAfter = Math.max(1, Math.ceil(retryAfterSeconds));
+    super(`Слишком много попыток. Повторите через ${formatRetryAfter(retryAfter)}.`, {
+      ...options,
+      details: { ...options.details, retryAfterSeconds: retryAfter },
+      code: 'RATE_LIMITED',
+      httpStatus: 429,
+    });
+    this.retryAfterSeconds = retryAfter;
   }
 }
 
