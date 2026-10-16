@@ -158,17 +158,24 @@
 }
 
 /*
+ * Next.js (Cache Components) не размонтирует посещённые страницы, а прячет их в <Activity>:
+ * DOM остаётся в документе, у корневых узлов скрытой страницы — инлайн display: none.
+ * Поэтому :has() ниже ищет только видимые маркеры, иначе скрытая доска или панель задачи
+ * меняют вёрстку соседней страницы (например, обрезают карточки настроек проекта).
+ */
+
+/*
  * Доска на sm+ занимает высоту экрана под шапкой: main и оболочка проекта растягиваются,
  * у колонок своя вертикальная прокрутка. На мобильных — обычная высота страницы.
  */
 @media (width >= 40rem) {
-  main:has([data-board]) {
+  main:has([data-board]:not([style*='display: none'], [style*='display: none'] *)) {
     height: calc(100dvh - var(--app-header-h));
     min-height: 32rem;
     grid-template-rows: minmax(0, 1fr);
     align-content: stretch;
   }
-  [data-project-shell]:has([data-board]) {
+  [data-project-shell]:has([data-board]:not([style*='display: none'], [style*='display: none'] *)) {
     grid-template-rows: auto minmax(0, 1fr);
     min-height: 0;
   }
@@ -180,7 +187,7 @@
  * страницы, прокрутка страницы под ней отключена.
  */
 @media (width >= 64rem) {
-  main:has([data-task-panel]) {
+  main:has([data-task-panel]:not([style*='display: none'], [style*='display: none'] *)) {
     width: auto;
     max-width: none;
     margin-left: max(0px, calc((100% - 80rem) / 2));
@@ -188,7 +195,7 @@
   }
 }
 @media (width < 64rem) {
-  html:has([data-task-panel]) {
+  html:has([data-task-panel]:not([style*='display: none'], [style*='display: none'] *)) {
     overflow: hidden;
   }
 }
