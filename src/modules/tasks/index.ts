@@ -4,7 +4,12 @@
 // Сервисы изменения (createTask, changeStatus, createComment…) — для agent-mcp: те же проверки, что у actions.
 export * from './client';
 
-export { getAttachmentDownload, listTaskAttachments } from './slices/attachment/attachment.service';
+export {
+  completeUpload as completeAttachmentUpload,
+  getAttachmentDownload,
+  listTaskAttachments,
+  requestUpload as requestAttachmentUpload,
+} from './slices/attachment/attachment.service';
 export { createComment, listTaskComments } from './slices/comment/comment.service';
 export { listSubtasks, setTaskParent } from './slices/subtask/subtask.service';
 export {

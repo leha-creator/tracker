@@ -6,6 +6,7 @@ import { z } from 'zod';
 import {
   addToProject,
   changeStatus,
+  COMMENT_ATTACHMENTS_LIMIT,
   createComment,
   createTask,
   setTaskParent,
@@ -247,16 +248,22 @@ export async function setTaskParentTool(
 
 export async function addCommentTool(
   ctx: McpContext,
-  args: { task: string | number; body: string },
+  args: { task: string | number; body?: string; attachmentIds?: string[] },
 ): Promise<string> {
   const task = await findTask(ctx, args.task);
+  const attachmentIds = args.attachmentIds ?? [];
   const { commentId } = await createComment(ctx.session, {
     workspaceId: ctx.workspace.id,
     taskId: task.id,
-    body: args.body,
+    body: args.body ?? '',
+    attachmentIds,
   });
-  log.info({ taskId: task.id, commentId, tokenId: ctx.tokenId }, '[mcp.add_comment] created');
-  return `Comment added to ${task.key}.`;
+  log.info(
+    { taskId: task.id, commentId, attachments: attachmentIds.length, tokenId: ctx.tokenId },
+    '[mcp.add_comment] created',
+  );
+  const files = attachmentIds.length ? ` with ${attachmentIds.length} file(s)` : '';
+  return `Comment added to ${task.key}${files}.`;
 }
 
 export function registerWriteTools(server: McpServer, ctx: McpContext): void {
@@ -316,10 +323,20 @@ export function registerWriteTools(server: McpServer, ctx: McpContext): void {
     {
       title: 'Add comment',
       description:
-        'Add a plain-text comment to a task (Markdown is not rendered). Mention members as @Name using exact names from get_workspace_context — they get notified. Use it for progress notes, decisions and the final summary with the PR link.',
+        'Add a plain-text comment to a task (Markdown is not rendered). Mention members as @Name using exact names from get_workspace_context — they get notified. Use it for progress notes, decisions and the final summary with the PR link. To attach files, upload them first with request_attachment_upload (target "comment") and complete_attachment_upload, then pass their ids.',
       inputSchema: {
         task: taskRefArg,
-        body: z.string().trim().min(1).max(TASK_COMMENT_MAX_LENGTH),
+        body: z
+          .string()
+          .trim()
+          .max(TASK_COMMENT_MAX_LENGTH)
+          .optional()
+          .describe('Comment text; may be empty when attachmentIds are given'),
+        attachmentIds: z
+          .array(z.uuid())
+          .max(COMMENT_ATTACHMENTS_LIMIT)
+          .optional()
+          .describe('Uploaded and completed attachments with target "comment"'),
       },
       annotations: { destructiveHint: false, openWorldHint: false },
     },

@@ -576,6 +576,7 @@ Guard-функции пространства возвращают `WorkspaceAcc
 - **Ответы** — компактный Markdown. `runTool` логирует вызов и длительность. `AppError` превращается в `isError: true` с текстом, неожиданная ошибка — в общий текст и `ERROR` в лог.
 - **Правила GitHub для агента** собирают чистые функции `models/github-guide.ts` из `getWorkspaceGithubSummary` (модуль `integrations/github`, доступна любому участнику: выбранные репозитории и автосмена статуса, без установок и секретов). `preview_github_links` использует тот же `findTaskReferences`, что и вебхук.
 - **Промпты** `start_task` и `finish_task` строятся из задачи и автосмены её проектов (`models/prompts.ts`).
+- **Вложения** — тот же путь, что у браузера: `requestAttachmentUpload` (слот и presigned POST) → агент сам отправляет файл `curl` в хранилище → `completeAttachmentUpload` (размер, сигнатура картинок). Файл через MCP не проходит, лимит тела `/api/mcp` его не касается. Команду `curl` собирает `buildUploadCommand` (поля — `--form-string`, файл последним). Скачивание — `getAttachmentDownload`, presigned GET на 60 секунд.
 
 ## Раскладка, навигация и тема
 

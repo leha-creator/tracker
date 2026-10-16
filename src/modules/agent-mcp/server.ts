@@ -5,6 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpContext } from './context';
 import { buildServerInstructions } from './models';
 import { registerPrompts } from './prompts';
+import { registerAttachmentTools } from './tools/attachment-tools';
 import { registerGithubTools } from './tools/github-tools';
 import { registerReadTools } from './tools/read-tools';
 import { registerWriteTools } from './tools/write-tools';
@@ -21,6 +22,7 @@ export function createTaskerMcpServer(ctx: McpContext): McpServer {
   });
   registerReadTools(server, ctx);
   registerWriteTools(server, ctx);
+  registerAttachmentTools(server, ctx);
   registerGithubTools(server, ctx);
   registerPrompts(server, ctx);
   return server;

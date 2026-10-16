@@ -4,6 +4,7 @@ import type {
 } from '@/modules/integrations/github/client';
 import type {
   SubtasksDto,
+  TaskAttachmentDto,
   TaskCommentsDto,
   TaskDto,
   TaskListItemDto,
@@ -12,6 +13,7 @@ import type {
 } from '@/modules/tasks/client';
 
 import type { CatalogMember, CatalogProject } from './catalog';
+import { humanSize } from './upload';
 
 /**
  * Ответы инструментов — компактный Markdown: агенту его легче читать, чем JSON, а id
@@ -62,6 +64,11 @@ function at(date: Date): string {
   return `${DATE_TIME.format(date)} UTC`;
 }
 
+function attachmentLine(file: TaskAttachmentDto): string {
+  const by = file.uploader ? `, by ${file.uploader.name}` : '';
+  return `- ${file.fileName} (${humanSize(file.size)}, ${file.contentType}${by}) — attachmentId ${file.id}`;
+}
+
 export interface TaskDetailsInput {
   task: TaskDto;
   url: string;
@@ -70,6 +77,7 @@ export interface TaskDetailsInput {
   comments: TaskCommentsDto;
   pullRequests: TaskPullRequestDto[];
   branchesAndCommits: TaskBranchesAndCommitsDto;
+  attachments: TaskAttachmentDto[];
 }
 
 export function formatTaskDetails(input: TaskDetailsInput): string {
@@ -126,15 +134,20 @@ export function formatTaskDetails(input: TaskDetailsInput): string {
     lines.push(`(${branchesAndCommits.commitsTotal} commits in total)`);
   }
 
+  lines.push('', `## Attachments (${input.attachments.length})`);
+  if (input.attachments.length === 0) lines.push('_No files._');
+  else lines.push(...input.attachments.map(attachmentLine));
+  lines.push('_Download with get_attachment_url(attachmentId)._');
+
   lines.push('', `## Comments (${comments.total})`);
   if (comments.items.length === 0) lines.push('_No comments._');
   if (comments.truncated) lines.push(`_Showing the latest ${comments.items.length}._`);
   for (const comment of comments.items) {
-    const files = comment.attachments.length ? ` [${comment.attachments.length} file(s)]` : '';
     lines.push(
       '',
-      `**${comment.author?.name ?? 'deleted user'}** · ${at(comment.createdAt)}${files}`,
+      `**${comment.author?.name ?? 'deleted user'}** · ${at(comment.createdAt)}`,
       comment.body || '_(attachments only)_',
+      ...comment.attachments.map(attachmentLine),
     );
   }
   return lines.join('\n');

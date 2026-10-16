@@ -51,6 +51,7 @@ export function buildServerInstructions(input: {
     `Tasker is the task tracker for this repository (workspace "${input.workspaceName}"). Tasks are referenced as ${example}.`,
     'Start with get_workspace_context (projects, statuses, members, GitHub setup), then use get_task / list_tasks.',
     'Use the tools to create tasks, change status, add comments and organise subtasks instead of keeping a separate TODO list.',
+    'Attach files (logs as .txt, screenshots, reports) with request_attachment_upload + complete_attachment_upload; read files people attached with get_attachment_url.',
   ];
   if (key) {
     lines.push(

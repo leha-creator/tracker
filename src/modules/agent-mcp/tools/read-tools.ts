@@ -11,6 +11,7 @@ import {
 import {
   listProjectTasks,
   listSubtasks,
+  listTaskAttachments,
   listTaskComments,
   listTasks,
   parseTaskListParams,
@@ -179,11 +180,12 @@ export async function getTaskTool(
 ): Promise<string> {
   const task = await findTask(ctx, args.task);
   const workspaceId = ctx.workspace.id;
-  const [subtasks, comments, pullRequests, branchesAndCommits] = await Promise.all([
+  const [subtasks, comments, pullRequests, branchesAndCommits, attachments] = await Promise.all([
     listSubtasks(ctx.session, workspaceId, task.id),
     listTaskComments(ctx.session, workspaceId, task.id),
     listTaskPullRequests(ctx.session, workspaceId, task.id),
     listTaskBranchesAndCommits(ctx.session, workspaceId, task.id),
+    listTaskAttachments(ctx.session, workspaceId, task.id),
   ]);
   return formatTaskDetails({
     task,
@@ -193,6 +195,7 @@ export async function getTaskTool(
     comments,
     pullRequests,
     branchesAndCommits,
+    attachments,
   });
 }
 

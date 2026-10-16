@@ -21,6 +21,9 @@ const setTaskParent = vi.fn<(...args: unknown[]) => Promise<void>>();
 const createComment = vi.fn<(...args: unknown[]) => Promise<{ commentId: string }>>();
 const resolveTaskRefs = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
 const getSummary = vi.fn<(...args: unknown[]) => Promise<unknown>>();
+const requestUpload = vi.fn<(...args: unknown[]) => Promise<unknown>>();
+const completeUpload = vi.fn<(...args: unknown[]) => Promise<{ target: string }>>();
+const getDownload = vi.fn<(...args: unknown[]) => Promise<{ url: string }>>();
 
 const P_DEV = '0199e5a0-0000-7000-8000-000000000001';
 const P_OPS = '0199e5a0-0000-7000-8000-000000000002';
@@ -43,6 +46,10 @@ vi.mock('@/modules/tasks', async (importOriginal) => ({
   setTaskParent: (...args: unknown[]) => setTaskParent(...args),
   createComment: (...args: unknown[]) => createComment(...args),
   resolveTaskRefs: (...args: unknown[]) => resolveTaskRefs(...args),
+  requestAttachmentUpload: (...args: unknown[]) => requestUpload(...args),
+  completeAttachmentUpload: (...args: unknown[]) => completeUpload(...args),
+  getAttachmentDownload: (...args: unknown[]) => getDownload(...args),
+  listTaskAttachments: () => Promise.resolve([]),
 }));
 vi.mock('@/modules/projects', async (importOriginal) => ({
   ...(await importOriginal<typeof ProjectsModule>()),
@@ -80,6 +87,8 @@ const { listTasksTool } = await import('./read-tools');
 const { createTaskTool, setTaskParentTool, setTaskStatusTool, updateTaskTool, addCommentTool } =
   await import('./write-tools');
 const { previewGithubLinksTool } = await import('./github-tools');
+const { completeUploadTool, getAttachmentUrlTool, requestUploadTool } =
+  await import('./attachment-tools');
 
 const ctx: McpContext = {
   session: {
@@ -313,7 +322,19 @@ describe('set_task_parent и add_comment', () => {
       workspaceId: 'ws-1',
       taskId: 'task-42',
       body: 'Готово, @Борис',
+      attachmentIds: [],
     });
+  });
+
+  it('комментарий из одних файлов: пустой текст и id вложений', async () => {
+    const text = await addCommentTool(ctx, { task: 42, attachmentIds: ['att-1', 'att-2'] });
+    expect(createComment).toHaveBeenCalledWith(ctx.session, {
+      workspaceId: 'ws-1',
+      taskId: 'task-42',
+      body: '',
+      attachmentIds: ['att-1', 'att-2'],
+    });
+    expect(text).toContain('with 2 file(s)');
   });
 });
 
@@ -386,5 +407,84 @@ describe('preview_github_links', () => {
     resolveTaskRefs.mockResolvedValue([]);
     const text = await previewGithubLinksTool(ctx, { text: 'fix-login' });
     expect(text).toContain('No task key found. Add it, e.g. "TSK-42"');
+  });
+});
+
+describe('вложения', () => {
+  beforeEach(() => {
+    requestUpload.mockResolvedValue({
+      attachmentId: 'att-1',
+      url: 'http://localhost:9000/tasker-attachments',
+      fields: { key: 'ws/1/file', 'Content-Type': 'text/plain' },
+    });
+  });
+
+  it('слот: по умолчанию к задаче, команда curl и следующий шаг', async () => {
+    const text = await requestUploadTool(ctx, {
+      task: 'TSK-42',
+      fileName: 'build.txt',
+      size: 2048,
+    });
+    expect(requestUpload).toHaveBeenCalledWith(ctx.session, {
+      workspaceId: 'ws-1',
+      taskId: 'task-42',
+      target: 'task',
+      fileName: 'build.txt',
+      size: 2048,
+    });
+    expect(text).toContain('attachmentId: att-1');
+    expect(text).toContain("--form-string 'key=ws/1/file'");
+    expect(text).toContain('exactly 2048 bytes');
+    expect(text).toContain(
+      'complete_attachment_upload with task "TSK-42" and attachmentId "att-1"',
+    );
+  });
+
+  it('слот для комментария подсказывает add_comment с attachmentIds', async () => {
+    const text = await requestUploadTool(ctx, {
+      task: 42,
+      fileName: 'shot.png',
+      size: 10,
+      target: 'comment',
+    });
+    expect(requestUpload.mock.calls[0]![1]).toMatchObject({ target: 'comment' });
+    expect(text).toContain('attachmentIds: ["att-1"]');
+  });
+
+  it('подтверждение: в задачу — готово, для комментария — напоминание о черновике', async () => {
+    completeUpload.mockResolvedValueOnce({ target: 'task' });
+    expect(await completeUploadTool(ctx, { task: 42, attachmentId: 'att-1' })).toBe(
+      'File attached to TSK-42.',
+    );
+    expect(completeUpload).toHaveBeenCalledWith(ctx.session, {
+      workspaceId: 'ws-1',
+      taskId: 'task-42',
+      attachmentId: 'att-1',
+    });
+
+    completeUpload.mockResolvedValueOnce({ target: 'comment' });
+    expect(await completeUploadTool(ctx, { task: 42, attachmentId: 'att-1' })).toContain(
+      'draft visible only to you',
+    );
+  });
+
+  it('ошибка проверки файла приходит агенту текстом', async () => {
+    completeUpload.mockRejectedValueOnce(
+      new ValidationError('Содержимое файла не соответствует его типу'),
+    );
+    const result = await runTool(ctx, 'complete_attachment_upload', () =>
+      completeUploadTool(ctx, { task: 42, attachmentId: 'att-1' }),
+    );
+    expect(result).toEqual({
+      isError: true,
+      content: [{ type: 'text', text: 'Содержимое файла не соответствует его типу' }],
+    });
+  });
+
+  it('ссылка скачивания через проверку доступа сервиса', async () => {
+    getDownload.mockResolvedValue({ url: 'http://localhost:9000/signed' });
+    const text = await getAttachmentUrlTool(ctx, { attachmentId: 'att-1' });
+    expect(getDownload).toHaveBeenCalledWith(ctx.session, 'att-1');
+    expect(text).toContain('http://localhost:9000/signed');
   });
 });

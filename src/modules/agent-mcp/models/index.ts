@@ -18,3 +18,5 @@ export type { GithubGuideInput, ProjectAutomationView } from './github-guide';
 export { buildFinishTaskPrompt, buildStartTaskPrompt } from './prompts';
 export type { PromptTask } from './prompts';
 export { parseTaskRef, taskKeyOf, taskUrl } from './task-ref';
+export { buildUploadCommand, humanSize } from './upload';
+export type { UploadSlot } from './upload';

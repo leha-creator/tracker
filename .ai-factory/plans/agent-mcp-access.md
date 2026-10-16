@@ -68,7 +68,7 @@ Rationale: В `.ai-factory/ROADMAP.md` нет подходящего этапа.
 
   По умолчанию подзадача не размещена ни в одном проекте. Поэтому `set_task_status` для неразмещённой задачи требует `project`. Агент работает в ветке своей подзадачи и ставит в ветке и PR **только её ключ**: ключ родителя в тексте PR привяжет PR и к родителю.
 - **Миграция** `add_api_tokens` получила метку `20261017090000` — позже уже закоммиченной `add_task_parent`, чтобы на сервере миграции шли по порядку.
-- **Вне рамок** (записать в docs как ограничения): удаление задач и вложения через агента, отметка «создано агентом» в интерфейсе, rate limiting токенов, OAuth-авторизация MCP (вместо bearer-токена).
+- **Вне рамок** (записать в docs как ограничения): удаление задач и вложений через агента (прикрепление и чтение файлов добавлены в Task 11), отметка «создано агентом» в интерфейсе, rate limiting токенов, OAuth-авторизация MCP (вместо bearer-токена).
 
 ## Commit Plan
 
@@ -263,3 +263,17 @@ Rationale: В `.ai-factory/ROADMAP.md` нет подходящего этапа.
   - `README.md`: пункт «Работа с задачами из Claude Code (MCP)» в возможностях.
   - Этап в `.ai-factory/ROADMAP.md` — через `/aif-roadmap`, не вручную.
   - Логирование: не требуется.
+
+### Фаза 5. Вложения (дополнение после реализации)
+
+- [x] **Task 11: Прикрепление и чтение файлов через MCP** (зависит от Task 6)
+  - Путь тот же, что у браузера: файл не проходит через MCP, агент отправляет его в хранилище сам.
+  - `tasks/index.ts`: экспорт `requestAttachmentUpload` и `completeAttachmentUpload` (алиасы `requestUpload` / `completeUpload`).
+  - `agent-mcp/tools/attachment-tools.ts`:
+    - `request_attachment_upload(task, fileName, size, target)` — слот presigned POST и готовая команда `curl` (`models/upload.ts`: поля через `--form-string`, файл последним);
+    - `complete_attachment_upload(task, attachmentId)` — проверка размера и сигнатуры сервисом;
+    - `get_attachment_url(attachmentId)` — presigned GET на 60 секунд.
+  - `add_comment` принимает `attachmentIds`, текст при файлах необязателен. `get_task` показывает вложения задачи и комментариев с id.
+  - Логирование: INFO `[mcp.request_attachment_upload] slot issued` и `[mcp.complete_attachment_upload] uploaded` (`taskId`, `attachmentId`, `target`, `size`), DEBUG `[mcp.get_attachment_url] issued`. Адреса и поля подписи не логируются.
+  - Тесты: `models/upload.test.ts` (кавычки shell, порядок полей), инструменты вложений и `add_comment` с файлами в `tools.test.ts`, список инструментов в `mcp-handler.test.ts`.
+  - Документация: `docs/agents.md` (раздел «Вложения», частые проблемы), `docs/architecture.md`, `AGENTS.md`, `docs/agents/CLAUDE.snippet.md`.

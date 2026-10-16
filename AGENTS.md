@@ -66,7 +66,7 @@ tasker/
 │   │   ├── documents/        # Документы пространства: папки (дерево), Markdown-заметки (версия), файлы (presigned POST, квота), теги, связи с задачами; зависит от tasks
 │   │   ├── integrations/github/ # GitHub App (пакет octokit): установки и репозитории, вебхуки, PR (ревью, CI), ветки и коммиты задач, ручная привязка, автосмена статуса, уведомления о PR, привязка GitHub-аккаунта, создание GitHub App из админки по манифесту (app-setup); зависит от tasks, projects, workspaces, notifications
 │   │   ├── api-tokens/       # Личные токены доступа агентов: выпуск, отзыв, authenticateApiToken → AuthSession (роль user, одно пространство); зависит только от shared
-│   │   ├── agent-mcp/        # MCP-сервер: инструменты задач (чтение, создание, статус, родитель, комментарии), правила GitHub, preview_github_links, промпты start_task/finish_task; зависит от api-tokens, tasks, projects, workspaces, integrations/github
+│   │   ├── agent-mcp/        # MCP-сервер: инструменты задач (чтение, создание, статус, родитель, комментарии, вложения через presigned POST и curl), правила GitHub, preview_github_links, промпты start_task/finish_task; зависит от api-tokens, tasks, projects, workspaces, integrations/github
 │   │   └── admin/            # Администрирование ресурса: модели (правила над пользователями, запрос списка), срез user (чтение — репозиторий, изменения — плагин admin через callAdminApi); зависит от workspaces и profiles
 │   ├── components/
 │   │   ├── layout/           # Каркас: PageContainer (ширина страниц), WorkspaceSections и TabLink (навигация),

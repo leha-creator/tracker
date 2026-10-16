@@ -92,12 +92,15 @@ describe('POST /api/mcp', () => {
     ).json()) as { result: { tools: { name: string }[] } };
     expect(tools.result.tools.map((tool) => tool.name).sort()).toEqual([
       'add_comment',
+      'complete_attachment_upload',
       'create_task',
+      'get_attachment_url',
       'get_github_conventions',
       'get_task',
       'get_workspace_context',
       'list_tasks',
       'preview_github_links',
+      'request_attachment_upload',
       'set_task_parent',
       'set_task_status',
       'update_task',
