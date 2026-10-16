@@ -17,6 +17,9 @@ const isMember = vi.fn<(ws: string, userId: string) => Promise<boolean>>();
 const countByUsers = vi.fn<(userIds: string[]) => Promise<Map<string, number>>>();
 const listSoleOwned =
   vi.fn<(userId: string) => Promise<{ id: string; name: string; slug: string }[]>>();
+const findByUser = vi.fn<(ws: string, userId: string) => Promise<unknown>>();
+const listIdentities = vi.fn<(ws: string) => Promise<unknown[]>>();
+const sharesWorkspaceRepo = vi.fn<(a: string, b: string) => Promise<boolean>>();
 const updateMemberRole = vi.fn();
 const removeMember = vi.fn();
 const leaveOrganization = vi.fn();
@@ -36,6 +39,10 @@ vi.mock('./member.repository', () => ({
     isMember: (...args: Parameters<typeof isMember>) => isMember(...args),
     countByUsers: (...args: Parameters<typeof countByUsers>) => countByUsers(...args),
     listSoleOwnedWorkspaces: (...args: Parameters<typeof listSoleOwned>) => listSoleOwned(...args),
+    findByUser: (...args: Parameters<typeof findByUser>) => findByUser(...args),
+    listIdentities: (...args: Parameters<typeof listIdentities>) => listIdentities(...args),
+    sharesWorkspace: (...args: Parameters<typeof sharesWorkspaceRepo>) =>
+      sharesWorkspaceRepo(...args),
   },
 }));
 vi.mock('../../organization-api', () => ({
@@ -46,7 +53,10 @@ vi.mock('../../organization-api', () => ({
 const {
   changeMemberRole,
   countWorkspacesByUsers,
+  getMember,
   isWorkspaceMember,
+  listMemberIdentities,
+  sharesWorkspace,
   listSoleOwnedWorkspaces,
   leaveWorkspace,
   removeMember: removeMemberService,
@@ -234,5 +244,72 @@ describe('listSoleOwnedWorkspaces', () => {
       { id: 'ws-1', name: 'Альфа', slug: 'alfa' },
     ]);
     expect(listSoleOwned).toHaveBeenCalledWith('user-1');
+  });
+});
+
+describe('getMember', () => {
+  const row = {
+    id: 'm-2',
+    role: 'member',
+    canManageProjects: false,
+    createdAt: new Date('2026-02-01'),
+    user: {
+      id: 'user-2',
+      name: 'Борис',
+      email: 'boris@example.com',
+      image: null,
+      createdAt: new Date('2026-01-01'),
+    },
+  };
+
+  it('returns the member of the workspace', async () => {
+    accessAs('member');
+    findByUser.mockResolvedValue(row);
+    const member = await getMember(session, 'ws-1', 'user-2');
+    expect(findByUser).toHaveBeenCalledWith('ws-1', 'user-2');
+    expect(member).toMatchObject({
+      memberId: 'm-2',
+      userId: 'user-2',
+      role: 'member',
+      canManageProjects: false,
+      isCurrentUser: false,
+    });
+  });
+
+  it('owners always manage projects', async () => {
+    accessAs('member');
+    findByUser.mockResolvedValue({ ...row, role: 'owner' });
+    expect((await getMember(session, 'ws-1', 'user-2')).canManageProjects).toBe(true);
+  });
+
+  it('hides non-members', async () => {
+    accessAs('member');
+    findByUser.mockResolvedValue(null);
+    await expect(getMember(session, 'ws-1', 'stranger')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+});
+
+describe('listMemberIdentities', () => {
+  it('maps users', async () => {
+    listIdentities.mockResolvedValue([
+      { user: { id: 'u1', name: 'Анна', email: 'anna@example.com', image: null } },
+    ]);
+    expect(await listMemberIdentities('ws-1')).toEqual([
+      { userId: 'u1', name: 'Анна', email: 'anna@example.com', image: null },
+    ]);
+  });
+});
+
+describe('sharesWorkspace', () => {
+  it('is true for yourself without a query', async () => {
+    expect(await sharesWorkspace('u1', 'u1')).toBe(true);
+    expect(sharesWorkspaceRepo).not.toHaveBeenCalled();
+  });
+
+  it('asks the repository for other users', async () => {
+    sharesWorkspaceRepo.mockResolvedValue(false);
+    expect(await sharesWorkspace('u1', 'u2')).toBe(false);
   });
 });

@@ -41,6 +41,11 @@ model User {
   createdTasks         Task[]                @relation("TaskCreator")
   taskComments         TaskComment[]         @relation("TaskCommentAuthor")
   taskAttachments      TaskAttachment[]      @relation("TaskAttachmentUploader")
+
+  profile                 UserProfile?
+  notifications           Notification[]           @relation("NotificationRecipient")
+  actedNotifications      Notification[]           @relation("NotificationActor")
+  notificationPreferences NotificationPreference[]
 }
 
 model Session {
@@ -107,11 +112,12 @@ model Workspace {
   metadata  String?
   createdAt DateTime @default(now())
 
-  members     WorkspaceMember[]
-  invitations WorkspaceInvitation[]
-  projects    Project[]
-  tasks       Task[]
-  taskCounter WorkspaceTaskCounter?
+  members       WorkspaceMember[]
+  invitations   WorkspaceInvitation[]
+  projects      Project[]
+  tasks         Task[]
+  taskCounter   WorkspaceTaskCounter?
+  notifications Notification[]
 }
 
 model WorkspaceMember {
@@ -353,4 +359,73 @@ model TaskAttachment {
   @@index([commentId])
   @@index([uploaderId, status, createdAt])
   @@index([workspaceId])
+}
+
+// ── Профили ────────────────────────────────────────────────────────────────────
+// Дополнение к User (модель Better Auth не расширяем). Имя и User.image меняются через
+// auth.api.updateUser; в User.image — адрес /api/users/<id>/avatar?v=<версия>.
+
+model UserProfile {
+  userId    String   @id
+  /// Должность — простой текст.
+  position  String?
+  /// Описание «о себе» — простой текст.
+  bio       String?
+  /// Ключ фото в хранилище: users/<userId>/avatar/<id>; null — фото нет.
+  avatarKey String?  @unique
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ── Уведомления ────────────────────────────────────────────────────────────────
+// payload — снимок данных на момент события (номер и название задачи, slug пространства,
+// имя автора): модуль notifications не читает таблицы задач. Задача и комментарий — ссылки без FK.
+// В миграции add_profiles_and_notifications вручную: триггер, удаляющий уведомления
+// пространства у вышедшего участника (кроме приглашений).
+
+/// Тип события. Новые значения — только в конец.
+enum NotificationType {
+  mention
+  task_assigned
+  task_comment
+  workspace_invitation
+}
+
+model Notification {
+  id           String           @id @default(uuid(7)) @db.Uuid
+  /// Получатель.
+  userId       String
+  workspaceId  String
+  type         NotificationType
+  /// Автор действия; null — пользователь удалён.
+  actorId      String?
+  taskId       String?          @db.Uuid
+  commentId    String?          @db.Uuid
+  invitationId String?
+  payload      Json
+  /// null — не прочитано.
+  readAt       DateTime?
+  createdAt    DateTime         @default(now())
+
+  user      User      @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor     User?     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@index([workspaceId])
+}
+
+/// Настройка канала доставки по типу события. Нет строки — значения по умолчанию из модели.
+model NotificationPreference {
+  userId    String
+  type      NotificationType
+  inApp     Boolean
+  email     Boolean
+  updatedAt DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, type])
 }

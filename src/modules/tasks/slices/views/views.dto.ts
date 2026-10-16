@@ -27,3 +27,21 @@ export interface TaskListPageDto {
   pageCount: number;
   pageSize: number;
 }
+
+/** Задачи участника в пространстве — для публичного профиля. */
+export interface MemberTaskSummaryDto {
+  /** Открытые задачи, где он ответственный. */
+  openCount: number;
+  /** Из них просроченные. */
+  overdueCount: number;
+  /** Выполненные за последние `MEMBER_DONE_RECENT_DAYS` дней (по времени изменения). */
+  doneRecentlyCount: number;
+  /** Созданные им задачи. */
+  createdCount: number;
+  /** Его комментарии. */
+  commentsCount: number;
+  /** Последний комментарий или созданная задача; null — активности нет. */
+  lastActivityAt: Date | null;
+  /** Ближайшие открытые задачи: сначала с ранним сроком, без срока — в конце. */
+  openTasks: TaskListItemDto[];
+}

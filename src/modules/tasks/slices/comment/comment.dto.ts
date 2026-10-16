@@ -1,3 +1,4 @@
+import type { MentionRange } from '../../models/comment-mentions';
 import type { TaskAttachmentDto } from '../attachment/attachment.dto';
 import type { TaskUserDto } from '../task/task.dto';
 
@@ -5,6 +6,8 @@ export interface TaskCommentDto {
   id: string;
   /** Простой текст: выводить как текст, переводы строк — через `white-space: pre-wrap`. */
   body: string;
+  /** @упоминания участников в тексте (по текущему составу пространства). */
+  mentions: MentionRange[];
   /** null — автор удалён. */
   author: TaskUserDto | null;
   createdAt: Date;

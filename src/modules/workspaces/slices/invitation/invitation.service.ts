@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { notifyByEmail } from '@/modules/notifications';
 import { parseWorkspaceRole, requireWorkspaceAccess, type WorkspaceRole } from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
 import { getEnv } from '@/shared/env';
@@ -93,6 +94,19 @@ export async function inviteMember(
   }
 
   log.info({ workspaceId, invitationId: invitation.id, role, emailSent }, '[invitation] created');
+
+  // Уже зарегистрированный адресат увидит приглашение и в колокольчике (не бросает).
+  await notifyByEmail(email, {
+    type: 'workspace_invitation',
+    workspaceId,
+    actorId: session.user.id,
+    invitationId: invitation.id,
+    payload: {
+      workspaceSlug: workspace.slug,
+      workspaceName: workspace.name,
+      actorName: session.user.name,
+    },
+  });
   return { invitationId: invitation.id, inviteUrl, emailSent };
 }
 

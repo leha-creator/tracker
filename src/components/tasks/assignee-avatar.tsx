@@ -1,19 +1,7 @@
-import { initials } from '@/components/layout/initials';
-import { cn } from '@/lib/utils';
+import { UserAvatar } from '@/components/users/user-avatar';
 import type { TaskUserDto } from '@/modules/tasks/client';
 
-/** Инициалы ответственного (без загрузки изображений). */
+/** Фото ответственного (или инициалы) с подписью для скринридера. */
 export function AssigneeAvatar({ user, className }: { user: TaskUserDto; className?: string }) {
-  return (
-    <span
-      title={user.name}
-      aria-label={`Ответственный: ${user.name}`}
-      className={cn(
-        'inline-grid size-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary',
-        className,
-      )}
-    >
-      {initials(user.name)}
-    </span>
-  );
+  return <UserAvatar user={user} className={className} label={`Ответственный: ${user.name}`} />;
 }

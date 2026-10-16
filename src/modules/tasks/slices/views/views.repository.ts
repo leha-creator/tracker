@@ -18,6 +18,19 @@ interface PageArgs<Where, OrderBy> {
   take: number;
 }
 
+/** Открытая задача: без размещений или хотя бы в одном проекте статус не «Готово». */
+const OPEN_TASK_WHERE = {
+  OR: [
+    { placements: { none: {} } },
+    { placements: { some: { status: { category: { not: 'done' } } } } },
+  ],
+} as const satisfies Prisma.TaskWhereInput;
+
+/** Выполненная задача: размещения есть, и во всех статус «Готово». */
+const DONE_TASK_WHERE = {
+  placements: { some: {}, every: { status: { category: 'done' } } },
+} as const satisfies Prisma.TaskWhereInput;
+
 // Read-модели представлений. Все запросы — с workspaceId в where (защита от IDOR).
 export const viewsRepository = {
   /** Страница задач пространства и общее число по фильтру — согласованно, одной транзакцией. */
@@ -46,6 +59,63 @@ export const viewsRepository = {
       prisma.taskPlacement.findMany({ where, orderBy, skip, take, select: LIST_PLACEMENT_SELECT }),
     ]);
     return { total, rows };
+  },
+
+  /**
+   * Сводка задач участника: открытые и просроченные (он ответственный), выполненные с `since`,
+   * созданные им задачи, его комментарии, последняя активность и ближайшие открытые задачи.
+   */
+  async memberSummary(
+    workspaceId: string,
+    userId: string,
+    options: { today: Date; since: Date; take: number },
+  ) {
+    const assigned = { workspaceId, assigneeId: userId } satisfies Prisma.TaskWhereInput;
+    const open = { ...assigned, ...OPEN_TASK_WHERE } satisfies Prisma.TaskWhereInput;
+    const [
+      openCount,
+      overdueCount,
+      doneRecentlyCount,
+      createdCount,
+      commentsCount,
+      lastComment,
+      lastTask,
+      openTasks,
+    ] = await prisma.$transaction([
+      prisma.task.count({ where: open }),
+      prisma.task.count({ where: { ...open, dueDate: { lt: options.today } } }),
+      prisma.task.count({
+        where: { ...assigned, ...DONE_TASK_WHERE, updatedAt: { gte: options.since } },
+      }),
+      prisma.task.count({ where: { workspaceId, createdById: userId } }),
+      prisma.taskComment.count({ where: { workspaceId, authorId: userId } }),
+      prisma.taskComment.findFirst({
+        where: { workspaceId, authorId: userId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+      prisma.task.findFirst({
+        where: { workspaceId, createdById: userId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+      prisma.task.findMany({
+        where: open,
+        orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }, { number: 'desc' }],
+        take: options.take,
+        select: TASK_LIST_SELECT,
+      }),
+    ]);
+    return {
+      openCount,
+      overdueCount,
+      doneRecentlyCount,
+      createdCount,
+      commentsCount,
+      lastCommentAt: lastComment?.createdAt ?? null,
+      lastTaskAt: lastTask?.createdAt ?? null,
+      openTasks,
+    };
   },
 
   /** Размещения проекта с полями карточки — один запрос на всю доску. */

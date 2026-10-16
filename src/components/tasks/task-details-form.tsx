@@ -3,6 +3,8 @@
 import { useCallback, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
+import { UserAvatar } from '@/components/users/user-avatar';
+import { UserHoverCard } from '@/components/users/user-hover-card';
 import { updateTaskAction, type TaskDto, type TaskPriority } from '@/modules/tasks/client';
 
 import { TaskProperty } from './task-panel/task-property';
@@ -155,8 +157,9 @@ export function TaskPropertiesEditor({
   // Ответственный, вышедший из пространства, снимается триггером; на случай гонки — добавляем в список.
   const options =
     task.assignee && !members.some((member) => member.userId === task.assignee?.userId)
-      ? [...members, { userId: task.assignee.userId, name: task.assignee.name }]
+      ? [...members, task.assignee]
       : members;
+  const assignee = options.find((member) => member.userId === assigneeId);
 
   return (
     <>
@@ -168,6 +171,17 @@ export function TaskPropertiesEditor({
           value={assigneeId}
           onChange={setAssigneeId}
         />
+        {assignee && (
+          <UserHoverCard
+            user={assignee}
+            className="ml-1 shrink-0 rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            <UserAvatar
+              user={{ name: assignee.name, image: assignee.image ?? null }}
+              label={`Профиль: ${assignee.name}`}
+            />
+          </UserHoverCard>
+        )}
       </TaskProperty>
       <TaskProperty labelId="task-due-label" label="Срок">
         <DueDatePicker

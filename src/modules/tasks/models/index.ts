@@ -1,11 +1,25 @@
 export { findCardColumn, moveCard, prevTaskIdAt } from './board-move';
 export type { BoardColumns } from './board-move';
+export {
+  extractMentions,
+  filterMentionCandidates,
+  findMentionQuery,
+  MENTION_QUERY_MAX_LENGTH,
+  MENTION_SUGGESTIONS_LIMIT,
+  mentionedUserIds,
+  mentionText,
+  resolveCommentRecipients,
+} from './comment-mentions';
+export type { MentionCandidate, MentionQuery, MentionRange } from './comment-mentions';
 export { comparePositions, positionAfter, positionBetween, rekeyColumn } from './position';
 export {
   assertAssigneeIsMember,
   assertCanDeleteTask,
   canDeleteTask,
   formatTaskKey,
+  isTaskOpen,
+  MEMBER_DONE_RECENT_DAYS,
+  MEMBER_OPEN_TASKS_LIMIT,
   isTaskOverdue,
   normalizeTaskTitle,
   parseTaskNumber,

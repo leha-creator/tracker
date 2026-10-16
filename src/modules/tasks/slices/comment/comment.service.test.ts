@@ -7,7 +7,10 @@ import { NotFoundError } from '@/shared/errors';
 
 const requireWorkspaceAccess =
   vi.fn<(session: AuthSession, ws: string) => Promise<WorkspaceAccess>>();
-const taskExists = vi.fn<(...args: unknown[]) => Promise<boolean>>();
+const findTask = vi.fn<(...args: unknown[]) => Promise<ReturnType<typeof taskRow> | null>>();
+const listMemberIdentities =
+  vi.fn<(ws: string) => Promise<{ userId: string; name: string; email: string; image: null }[]>>();
+const notify = vi.fn<(events: { type: string; recipientId: string }[]) => Promise<void>>();
 const listForTask =
   vi.fn<(...args: unknown[]) => Promise<{ total: number; rows: ReturnType<typeof row>[] }>>();
 const find = vi.fn<(...args: unknown[]) => Promise<ReturnType<typeof row> | null>>();
@@ -27,6 +30,13 @@ vi.mock('@/modules/projects', () => ({
   isEntityId: (value: string) => /^[0-9a-f-]{36}$/i.test(value),
   parseStatusColor: (value: string) => value,
 }));
+vi.mock('@/modules/workspaces', () => ({
+  listMemberIdentities: (ws: string) => listMemberIdentities(ws),
+}));
+vi.mock('@/modules/notifications', () => ({
+  notify: (events: { type: string; recipientId: string }[]) => notify(events),
+  notificationExcerpt: (text: string) => text,
+}));
 vi.mock('@/shared/db', () => ({
   prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn({ tx: true }) },
 }));
@@ -42,7 +52,7 @@ vi.mock('../attachment/attachment.storage', () => ({
 }));
 vi.mock('./comment.repository', () => ({
   commentRepository: {
-    taskExists: (...args: unknown[]) => taskExists(...args),
+    findTask: (...args: unknown[]) => findTask(...args),
     listForTask: (...args: unknown[]) => listForTask(...args),
     find: (...args: unknown[]) => find(...args),
     create: (...args: unknown[]) => create(...args),
@@ -110,6 +120,31 @@ function row(
   };
 }
 
+function taskRow() {
+  return {
+    id: TASK_ID,
+    workspaceId: 'ws-1',
+    number: 7,
+    title: 'Задача',
+    assigneeId: 'user-assignee' as string | null,
+    createdById: 'user-creator' as string | null,
+    workspace: { slug: 'team', name: 'Команда' },
+  };
+}
+
+const MEMBERS = [
+  { userId: 'user-1', name: 'User', email: 'user@example.com', image: null },
+  { userId: 'user-assignee', name: 'Анна Петрова', email: 'anna@example.com', image: null },
+  { userId: 'user-creator', name: 'Борис', email: 'boris@example.com', image: null },
+  { userId: 'user-other', name: 'Вера', email: 'vera@example.com', image: null },
+];
+
+function notifiedTypes() {
+  return notify.mock.calls.flatMap(([events]) =>
+    events.map((event) => [event.recipientId, event.type]),
+  );
+}
+
 function accessAs(role: WorkspaceRole) {
   requireWorkspaceAccess.mockImplementation((_session, workspaceId) =>
     Promise.resolve({
@@ -125,7 +160,9 @@ function accessAs(role: WorkspaceRole) {
 beforeEach(() => {
   vi.clearAllMocks();
   accessAs('member');
-  taskExists.mockResolvedValue(true);
+  findTask.mockResolvedValue(taskRow());
+  listMemberIdentities.mockResolvedValue(MEMBERS);
+  notify.mockResolvedValue();
   listForTask.mockResolvedValue({ total: 0, rows: [] });
   find.mockResolvedValue(row());
   create.mockResolvedValue({ id: COMMENT_ID });
@@ -176,6 +213,12 @@ describe('listTaskComments', () => {
     ]);
   });
 
+  it('maps mentions by current members', async () => {
+    listForTask.mockResolvedValue({ total: 1, rows: [row({ body: '@Вера, глянь' })] });
+    const [item] = (await listTaskComments(session, 'ws-1', TASK_ID)).items;
+    expect(item?.mentions).toEqual([{ start: 0, end: 5, userId: 'user-other' }]);
+  });
+
   it('loads all comments without a limit', async () => {
     listForTask.mockResolvedValue({ total: 1, rows: [row()] });
     const result = await listTaskComments(session, 'ws-1', TASK_ID, { all: true });
@@ -193,7 +236,7 @@ describe('listTaskComments', () => {
 
 describe('createComment', () => {
   it('returns NOT_FOUND for a task of another workspace', async () => {
-    taskExists.mockResolvedValue(false);
+    findTask.mockResolvedValue(null);
     await expect(
       createComment(session, { workspaceId: 'ws-1', taskId: TASK_ID, body: 'a' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
@@ -209,6 +252,34 @@ describe('createComment', () => {
       { tx: true },
     );
     expect(bindToComment).not.toHaveBeenCalled();
+  });
+
+  it('notifies mentioned users and task watchers once each', async () => {
+    await createComment(session, {
+      workspaceId: 'ws-1',
+      taskId: TASK_ID,
+      body: '@Анна Петрова и @Вера, посмотрите. @User',
+    });
+    expect(notifiedTypes()).toEqual([
+      ['user-assignee', 'mention'],
+      ['user-other', 'mention'],
+      ['user-creator', 'task_comment'],
+    ]);
+    const [event] = notify.mock.calls[0]![0] as unknown as {
+      commentId: string;
+      payload: { taskNumber: number; workspaceSlug: string };
+    }[];
+    expect(event).toMatchObject({
+      commentId: COMMENT_ID,
+      payload: { taskNumber: 7, workspaceSlug: 'team' },
+    });
+  });
+
+  it('does not notify when the comment is rejected', async () => {
+    await expect(
+      createComment(session, { workspaceId: 'ws-1', taskId: TASK_ID, body: '' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it('rejects empty text without files', async () => {
@@ -273,6 +344,18 @@ describe('updateComment', () => {
   it('updates the text of own comment', async () => {
     await updateComment(session, { ...KEY, body: 'Новый текст' });
     expect(updateBody).toHaveBeenCalledWith(KEY, 'Новый текст');
+  });
+
+  it('notifies only newly mentioned users on edit', async () => {
+    find.mockResolvedValue(row({ body: '@Вера привет' }));
+    await updateComment(session, { ...KEY, body: '@Вера и @Борис привет' });
+    expect(notifiedTypes()).toEqual([['user-creator', 'mention']]);
+  });
+
+  it('does not notify on edit without new mentions', async () => {
+    find.mockResolvedValue(row({ body: '@Вера привет' }));
+    await updateComment(session, { ...KEY, body: '@Вера, привет!' });
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it('allows empty text only when the comment has files', async () => {

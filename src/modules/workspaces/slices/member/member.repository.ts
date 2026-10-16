@@ -25,6 +25,38 @@ export const memberRepository = {
     return row !== null;
   },
 
+  /** Участник по userId — только внутри указанного пространства. */
+  findByUser(workspaceId: string, userId: string) {
+    return prisma.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId, userId } },
+      select: {
+        id: true,
+        role: true,
+        canManageProjects: true,
+        createdAt: true,
+        user: { select: { id: true, name: true, email: true, image: true, createdAt: true } },
+      },
+    });
+  },
+
+  /** Имена и email участников — для упоминаний в комментариях. */
+  listIdentities(workspaceId: string) {
+    return prisma.workspaceMember.findMany({
+      where: { workspaceId },
+      orderBy: { createdAt: 'asc' },
+      select: { user: { select: { id: true, name: true, email: true, image: true } } },
+    });
+  },
+
+  /** Есть ли у двух пользователей общее пространство. */
+  async sharesWorkspace(userId: string, otherUserId: string): Promise<boolean> {
+    const row = await prisma.workspaceMember.findFirst({
+      where: { userId, workspace: { members: { some: { userId: otherUserId } } } },
+      select: { id: true },
+    });
+    return row !== null;
+  },
+
   /** Число пространств каждого пользователя: один groupBy на страницу списка. */
   async countByUsers(userIds: string[]): Promise<Map<string, number>> {
     const rows = await prisma.workspaceMember.groupBy({

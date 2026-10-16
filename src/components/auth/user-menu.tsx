@@ -10,6 +10,7 @@ export async function UserMenu() {
     <UserMenuDropdown
       name={user.name}
       email={user.email}
+      image={user.image}
       isAdmin={isAdmin(user)}
       signOutAction={signOutAction}
     />

@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 
 import { UserMenu } from '@/components/auth/user-menu';
 import { PageContainer } from '@/components/layout/page-container';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import { WorkspaceSwitcher } from '@/components/workspaces/workspace-switcher';
 
 export default function AppLayout({ children }: LayoutProps<'/'>) {
@@ -31,7 +32,10 @@ export default function AppLayout({ children }: LayoutProps<'/'>) {
             <WorkspaceSwitcher />
           </Suspense>
           {/* Сессия читается внутри границы: шапка и {children} не ждут её на верхнем уровне. */}
-          <div className="ml-auto flex h-14 items-center pl-3">
+          <div className="ml-auto flex h-14 items-center gap-1.5 pl-3">
+            <Suspense fallback={<div className="size-8 animate-pulse rounded-lg bg-muted" />}>
+              <NotificationBell />
+            </Suspense>
             <Suspense fallback={<div className="size-8 animate-pulse rounded-lg bg-muted" />}>
               <UserMenu />
             </Suspense>

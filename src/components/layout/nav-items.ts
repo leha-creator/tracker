@@ -34,7 +34,9 @@ export function getWorkspaceSections(slug: string, role: WorkspaceRole): NavItem
     {
       href: `${base}/settings/members`,
       label: 'Участники',
-      isActive: (path) => isWithin(path, `${base}/settings/members`),
+      // Профиль участника открывается из «Участников» — вкладка остаётся активной.
+      isActive: (path) =>
+        isWithin(path, `${base}/settings/members`) || isWithin(path, `${base}/members`),
     },
   ];
   if (role === 'owner') {

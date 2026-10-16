@@ -59,6 +59,14 @@ export function isTaskOverdue(
   statusCategories: readonly string[],
 ): boolean {
   if (!dueDate || dueDate >= today) return false;
+  return isTaskOpen(statusCategories);
+}
+
+/**
+ * Задача открыта: нет размещений или хотя бы в одном проекте статус не «Готово». Выполнена —
+ * когда во всех проектах «Готово».
+ */
+export function isTaskOpen(statusCategories: readonly string[]): boolean {
   const done =
     statusCategories.length > 0 && statusCategories.every((category) => category === 'done');
   return !done;
@@ -68,3 +76,8 @@ export function isTaskOverdue(
 export function toIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
+
+/** Профиль участника: за сколько дней считать выполненные задачи. */
+export const MEMBER_DONE_RECENT_DAYS = 30;
+/** Профиль участника: сколько ближайших открытых задач показывать. */
+export const MEMBER_OPEN_TASKS_LIMIT = 10;

@@ -10,6 +10,15 @@ const listBoardPlacements = vi.fn<() => Promise<unknown[]>>();
 type PageResult = { total: number; rows: unknown[] };
 const listTaskPage = vi.fn<(args: { skip: number; take: number }) => Promise<PageResult>>();
 const listPlacementPage = vi.fn<(args: { skip: number; take: number }) => Promise<PageResult>>();
+const memberSummary =
+  vi.fn<
+    (
+      ws: string,
+      userId: string,
+      options: { today: Date; since: Date; take: number },
+    ) => Promise<unknown>
+  >();
+const isWorkspaceMember = vi.fn<(ws: string, userId: string) => Promise<boolean>>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
@@ -19,15 +28,24 @@ vi.mock('@/modules/projects', () => ({
   isEntityId: (value: string) => /^[0-9a-f-]{36}$/i.test(value),
   parseStatusColor: (value: string) => value,
 }));
+vi.mock('@/modules/workspaces', () => ({
+  isWorkspaceMember: (ws: string, userId: string) => isWorkspaceMember(ws, userId),
+}));
 vi.mock('./views.repository', () => ({
   viewsRepository: {
     listBoardPlacements: () => listBoardPlacements(),
     listTaskPage: (args: { skip: number; take: number }) => listTaskPage(args),
     listPlacementPage: (args: { skip: number; take: number }) => listPlacementPage(args),
+    memberSummary: (
+      ws: string,
+      userId: string,
+      options: { today: Date; since: Date; take: number },
+    ) => memberSummary(ws, userId, options),
   },
 }));
 
-const { getBoardCards, listProjectTasks, listTasks } = await import('./views.queries');
+const { getBoardCards, getMemberTaskSummary, listProjectTasks, listTasks } =
+  await import('./views.queries');
 const { defaultTaskListQuery, TASK_LIST_PAGE_SIZE } = await import('../../models');
 
 const session: AuthSession = {
@@ -189,5 +207,69 @@ describe('listProjectTasks', () => {
       listProjectTasks(session, 'ws-1', 'abc', defaultTaskListQuery('project')),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(listPlacementPage).not.toHaveBeenCalled();
+  });
+});
+
+describe('getMemberTaskSummary', () => {
+  it('hides non-members', async () => {
+    isWorkspaceMember.mockResolvedValue(false);
+    await expect(getMemberTaskSummary(session, 'ws-1', 'stranger')).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+    expect(memberSummary).not.toHaveBeenCalled();
+  });
+
+  it('maps counters, the latest activity and open tasks', async () => {
+    isWorkspaceMember.mockResolvedValue(true);
+    memberSummary.mockResolvedValue({
+      openCount: 3,
+      overdueCount: 1,
+      doneRecentlyCount: 2,
+      createdCount: 5,
+      commentsCount: 7,
+      lastCommentAt: new Date('2026-10-10T10:00:00Z'),
+      lastTaskAt: new Date('2026-10-12T10:00:00Z'),
+      openTasks: [
+        {
+          id: 't1',
+          number: 4,
+          title: 'Задача',
+          priority: 'none',
+          dueDate: null,
+          assignee: { id: 'user-2', name: 'Борис', image: null },
+          placements: [],
+        },
+      ],
+    });
+
+    const summary = await getMemberTaskSummary(session, 'ws-1', 'user-2');
+
+    const options = memberSummary.mock.calls[0]![2];
+    expect(options.take).toBe(10);
+    expect(options.today.toISOString().endsWith('T00:00:00.000Z')).toBe(true);
+    expect(summary).toMatchObject({
+      openCount: 3,
+      overdueCount: 1,
+      doneRecentlyCount: 2,
+      createdCount: 5,
+      commentsCount: 7,
+      lastActivityAt: new Date('2026-10-12T10:00:00Z'),
+    });
+    expect(summary.openTasks[0]).toMatchObject({ key: '#4', isOverdue: false });
+  });
+
+  it('reports no activity', async () => {
+    isWorkspaceMember.mockResolvedValue(true);
+    memberSummary.mockResolvedValue({
+      openCount: 0,
+      overdueCount: 0,
+      doneRecentlyCount: 0,
+      createdCount: 0,
+      commentsCount: 0,
+      lastCommentAt: null,
+      lastTaskAt: null,
+      openTasks: [],
+    });
+    expect((await getMemberTaskSummary(session, 'ws-1', 'user-2')).lastActivityAt).toBeNull();
   });
 });

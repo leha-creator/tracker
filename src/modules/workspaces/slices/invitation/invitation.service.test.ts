@@ -9,10 +9,14 @@ const sendMail = vi.fn();
 const createInvitation = vi.fn();
 const acceptInvitationApi = vi.fn();
 const findForRecipient = vi.fn();
+const notifyByEmail = vi.fn();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
   requireWorkspaceAccess: (...args: unknown[]) => requireWorkspaceAccess(...args) as unknown,
+}));
+vi.mock('@/modules/notifications', () => ({
+  notifyByEmail: (...args: unknown[]) => notifyByEmail(...args) as unknown,
 }));
 vi.mock('@/shared/mail', () => ({
   sendMail: (...args: unknown[]) => sendMail(...args) as unknown,
@@ -80,6 +84,13 @@ describe('inviteMember', () => {
       emailSent: true,
     });
     expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'bob@example.com' }));
+    expect(notifyByEmail).toHaveBeenCalledWith('bob@example.com', {
+      type: 'workspace_invitation',
+      workspaceId: 'ws-1',
+      actorId: 'user-owner',
+      invitationId: 'inv-1',
+      payload: { workspaceSlug: 'team', workspaceName: 'Team', actorName: 'Owner' },
+    });
   });
 
   it('keeps invitation when email fails', async () => {

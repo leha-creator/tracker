@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { ComponentProps } from 'react';
 
+import { UserHoverCard } from '@/components/users/user-hover-card';
 import { cn } from '@/lib/utils';
 import type { BoardCardDto } from '@/modules/tasks/client';
 
@@ -38,7 +39,12 @@ export function TaskCard({ card, href, active, className, ...props }: TaskCardPr
         <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{card.key}</span>
         <PriorityBadge priority={card.priority} compact />
         {card.dueDate && <DueDate value={card.dueDate} isOverdue={card.isOverdue} />}
-        {card.assignee && <AssigneeAvatar user={card.assignee} className="ml-auto" />}
+        {card.assignee && (
+          // Внутри ссылки карточки триггер не фокусируемый: предпросмотр — наведением указателя.
+          <UserHoverCard user={card.assignee} focusable={false} className="ml-auto">
+            <AssigneeAvatar user={card.assignee} />
+          </UserHoverCard>
+        )}
       </span>
     </Link>
   );

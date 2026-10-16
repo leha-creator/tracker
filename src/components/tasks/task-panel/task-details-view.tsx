@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { listProjects, listWorkspaceStatuses } from '@/modules/projects';
-import { getTaskByNumber, listTaskComments } from '@/modules/tasks';
+import { getTaskByNumber, listTaskComments, type MentionCandidate } from '@/modules/tasks';
 import { listMembers } from '@/modules/workspaces';
 import type { AuthSession } from '@/shared/auth';
 import { NotFoundError } from '@/shared/errors';
@@ -67,6 +67,12 @@ export async function TaskDetailsView({
     listProjects(session, workspace.id),
     listWorkspaceStatuses(session, workspace.id),
   ]);
+  const mentionCandidates = members.map(({ userId, name, email, image }) => ({
+    userId,
+    name,
+    email,
+    image,
+  }));
   const placedIds = new Set(task.placements.map((placement) => placement.projectId));
   const freeProjects = projects.filter((project) => !placedIds.has(project.id));
   // На странице задача — заголовок страницы, в панели — раздел поверх доски или списка.
@@ -127,7 +133,7 @@ export async function TaskDetailsView({
             <TaskPropertiesEditor
               workspaceId={workspace.id}
               task={task}
-              members={members.map((member) => ({ userId: member.userId, name: member.name }))}
+              members={members.map(({ userId, name, image }) => ({ userId, name, image }))}
             />
             <TaskProperty label="Проекты" align="start">
               <div className="grid min-w-0 flex-1 justify-items-start">
@@ -179,13 +185,19 @@ export async function TaskDetailsView({
                 taskId={task.id}
                 all={allComments}
                 showAllHref={showAllCommentsHref}
+                members={mentionCandidates}
               />
             </Suspense>
           </section>
         </div>
 
         <div className="sticky bottom-0 z-10 border-t bg-background px-4 py-3 sm:px-6">
-          <CommentForm docked workspaceId={workspace.id} taskId={task.id} />
+          <CommentForm
+            docked
+            workspaceId={workspace.id}
+            taskId={task.id}
+            members={mentionCandidates}
+          />
         </div>
       </article>
     </TaskSaveStatusProvider>
@@ -198,12 +210,14 @@ async function TaskComments({
   taskId,
   all,
   showAllHref,
+  members,
 }: {
   session: AuthSession;
   workspaceId: string;
   taskId: string;
   all: boolean;
   showAllHref: string;
+  members: MentionCandidate[];
 }) {
   const comments = await listTaskComments(session, workspaceId, taskId, { all });
   return (
@@ -216,6 +230,7 @@ async function TaskComments({
         taskId={taskId}
         comments={comments}
         showAllHref={showAllHref}
+        members={members}
       />
     </>
   );

@@ -4,6 +4,7 @@ import {
   assertAssigneeIsMember,
   assertCanDeleteTask,
   formatTaskKey,
+  isTaskOpen,
   isTaskOverdue,
   normalizeTaskTitle,
   parseTaskNumber,
@@ -97,5 +98,17 @@ describe('isTaskOverdue', () => {
 describe('toIsoDate', () => {
   it('formats in UTC', () => {
     expect(toIsoDate(new Date('2026-02-03T00:00:00.000Z'))).toBe('2026-02-03');
+  });
+});
+
+describe('isTaskOpen', () => {
+  it.each([
+    [[], true],
+    [['todo'], true],
+    [['done', 'in_progress'], true],
+    [['done'], false],
+    [['done', 'done'], false],
+  ])('%j → %s', (categories, expected) => {
+    expect(isTaskOpen(categories)).toBe(expected);
   });
 });

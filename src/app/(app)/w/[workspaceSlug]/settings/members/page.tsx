@@ -59,6 +59,7 @@ async function MembersSection({ params }: Pick<Props, 'params'>) {
         <CardContent>
           <MembersTable
             workspaceId={workspace.id}
+            workspaceSlug={workspace.slug}
             workspaceName={workspace.name}
             members={members}
             canManage={isOwner}

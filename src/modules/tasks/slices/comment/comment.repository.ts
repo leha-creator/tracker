@@ -28,13 +28,23 @@ function whereKey({ workspaceId, taskId, commentId }: CommentKey) {
 // Все запросы — с workspaceId и taskId в where: комментарий чужой задачи или пространства
 // не находится (защита от IDOR).
 export const commentRepository = {
-  /** Задача есть в пространстве? */
-  async taskExists(workspaceId: string, taskId: string): Promise<boolean> {
-    const task = await prisma.task.findFirst({
+  /**
+   * Задача пространства с данными для уведомлений (номер, название, ответственный, автор,
+   * пространство); null — задачи нет.
+   */
+  findTask(workspaceId: string, taskId: string) {
+    return prisma.task.findFirst({
       where: { id: taskId, workspaceId },
-      select: { id: true },
+      select: {
+        id: true,
+        workspaceId: true,
+        number: true,
+        title: true,
+        assigneeId: true,
+        createdById: true,
+        workspace: { select: { slug: true, name: true } },
+      },
     });
-    return task !== null;
   },
 
   /**
@@ -82,4 +92,5 @@ export const commentRepository = {
   },
 };
 
+export type CommentTaskRow = NonNullable<Awaited<ReturnType<typeof commentRepository.findTask>>>;
 export type CommentRow = NonNullable<Awaited<ReturnType<typeof commentRepository.find>>>;

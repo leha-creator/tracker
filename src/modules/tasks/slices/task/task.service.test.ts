@@ -9,10 +9,14 @@ const requireWorkspaceAccess =
   vi.fn<(session: AuthSession, ws: string) => Promise<WorkspaceAccess>>();
 const isWorkspaceMember = vi.fn<(ws: string, userId: string) => Promise<boolean>>();
 const nextNumber = vi.fn<() => Promise<number>>();
-const createRow =
-  vi.fn<
-    (...args: unknown[]) => Promise<{ id: string; number: number; workspace: { slug: string } }>
-  >();
+const createRow = vi.fn<
+  (...args: unknown[]) => Promise<{
+    id: string;
+    number: number;
+    title: string;
+    workspace: { slug: string; name: string };
+  }>
+>();
 const findById = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const findByNumber = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const updateRow = vi.fn<(...args: unknown[]) => Promise<number>>();
@@ -25,11 +29,16 @@ const lastPosition = vi.fn<(...args: unknown[]) => Promise<string | null>>();
 const createPlacement = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const keysForTask = vi.fn<(...args: unknown[]) => Promise<string[]>>();
 const deleteObjects = vi.fn<(keys: readonly string[]) => Promise<number>>();
+const notify =
+  vi.fn<(events: { type: string; recipientId: string; payload: object }[]) => Promise<void>>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
   requireWorkspaceAccess: (...args: Parameters<typeof requireWorkspaceAccess>) =>
     requireWorkspaceAccess(...args),
+}));
+vi.mock('@/modules/notifications', () => ({
+  notify: (events: { type: string; recipientId: string; payload: object }[]) => notify(events),
 }));
 vi.mock('@/modules/workspaces', () => ({
   isWorkspaceMember: (...args: Parameters<typeof isWorkspaceMember>) => isWorkspaceMember(...args),
@@ -94,7 +103,7 @@ function taskRow(overrides: Record<string, unknown> = {}) {
     createdById: 'author',
     createdAt: new Date('2026-10-15T10:00:00.000Z'),
     updatedAt: new Date('2026-10-15T10:00:00.000Z'),
-    workspace: { slug: 'team' },
+    workspace: { slug: 'team', name: 'Команда' },
     assignee: null,
     createdBy: { id: 'author', name: 'Author' },
     placements: [
@@ -128,7 +137,13 @@ beforeEach(() => {
   keysForTask.mockResolvedValue([]);
   deleteObjects.mockResolvedValue(0);
   nextNumber.mockResolvedValue(7);
-  createRow.mockResolvedValue({ id: TASK_ID, number: 7, workspace: { slug: 'team' } });
+  createRow.mockResolvedValue({
+    id: TASK_ID,
+    number: 7,
+    title: 'Задача',
+    workspace: { slug: 'team', name: 'Команда' },
+  });
+  notify.mockResolvedValue();
   findById.mockResolvedValue(taskRow());
   updateRow.mockResolvedValue(1);
   deleteRow.mockResolvedValue(1);
@@ -280,6 +295,40 @@ describe('updateTask', () => {
       updateTask(session, { workspaceId: 'ws-1', taskId: TASK_ID, assigneeId: 'stranger' }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(updateRow).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('notifies a newly assigned user', async () => {
+    await updateTask(session, { workspaceId: 'ws-1', taskId: TASK_ID, assigneeId: 'user-2' });
+    expect(notify).toHaveBeenCalledWith([
+      expect.objectContaining({
+        type: 'task_assigned',
+        recipientId: 'user-2',
+        actorId: 'user-1',
+        payload: expect.objectContaining({ taskNumber: 7, workspaceSlug: 'team' }),
+      }),
+    ]);
+  });
+
+  it('does not notify when the assignee is unchanged or cleared', async () => {
+    findById.mockResolvedValue(taskRow({ assignee: { id: 'user-2', name: 'B', image: null } }));
+    await updateTask(session, { workspaceId: 'ws-1', taskId: TASK_ID, assigneeId: 'user-2' });
+    await updateTask(session, { workspaceId: 'ws-1', taskId: TASK_ID, assigneeId: null });
+    expect(notify).not.toHaveBeenCalled();
+  });
+});
+
+describe('createTask notifications', () => {
+  it('notifies the assignee of a new task', async () => {
+    await createTask(session, { workspaceId: 'ws-1', title: 'Новая', assigneeId: 'user-2' });
+    expect(notify).toHaveBeenCalledWith([
+      expect.objectContaining({ type: 'task_assigned', recipientId: 'user-2' }),
+    ]);
+  });
+
+  it('does not notify without an assignee', async () => {
+    await createTask(session, { workspaceId: 'ws-1', title: 'Новая' });
+    expect(notify).not.toHaveBeenCalled();
   });
 });
 

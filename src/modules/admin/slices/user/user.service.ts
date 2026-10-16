@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { prepareAvatarCleanup } from '@/modules/profiles';
 import { countWorkspacesByUsers, listSoleOwnedWorkspaces } from '@/modules/workspaces';
 import { parseGlobalRole, requireAdmin } from '@/shared/access';
 import { NotFoundError, ValidationError } from '@/shared/errors';
@@ -178,7 +179,10 @@ export async function deleteUser(input: DeleteUserInput): Promise<void> {
     () => assertCanDelete(target, soleOwned),
   );
 
+  // Ключ фото — до удаления (строка профиля уйдёт каскадом), объект — после.
+  const cleanupAvatar = await prepareAvatarCleanup(target.id);
   await callAdminApi((api, headers) => api.removeUser({ headers, body: { userId: target.id } }));
+  await cleanupAvatar();
   log.info(
     { actorId, userId: target.id, email: maskEmail(target.email) },
     '[admin.user.delete] deleted',

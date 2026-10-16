@@ -12,7 +12,12 @@ import { createLogger } from '@/shared/logger';
 
 import { Membership } from '../../models';
 import { callOrganizationApi } from '../../organization-api';
-import type { MemberDto, SoleOwnedWorkspaceDto } from './member.dto';
+import type {
+  MemberDto,
+  MemberIdentityDto,
+  SoleOwnedWorkspaceDto,
+  WorkspaceMemberDto,
+} from './member.dto';
 import { memberRepository } from './member.repository';
 
 const log = createLogger('workspaces.member');
@@ -62,6 +67,64 @@ export async function listMembers(session: AuthSession, workspaceId: string): Pr
 export async function isWorkspaceMember(workspaceId: string, userId: string): Promise<boolean> {
   const result = await memberRepository.isMember(workspaceId, userId);
   log.debug({ workspaceId, userId, result }, '[member.isWorkspaceMember]');
+  return result;
+}
+
+/**
+ * Участник пространства по userId: роль, дата вступления, право на проекты. Смотрящий должен
+ * быть участником; цель не участник — `NotFoundError` (кто есть в чужих пространствах, не
+ * раскрываем).
+ */
+export async function getMember(
+  session: AuthSession,
+  workspaceId: string,
+  userId: string,
+): Promise<WorkspaceMemberDto> {
+  await requireWorkspaceAccess(session, workspaceId, 'member');
+  const row = await memberRepository.findByUser(workspaceId, userId);
+  const role = row ? parseWorkspaceRole(row.role) : null;
+  if (!row || !role) {
+    log.warn({ viewerId: session.user.id, workspaceId, userId }, '[member.getMember] not found');
+    throw new NotFoundError('Участник не найден');
+  }
+  log.debug({ viewerId: session.user.id, workspaceId, userId }, '[member.getMember]');
+  return {
+    memberId: row.id,
+    userId: row.user.id,
+    name: row.user.name,
+    email: row.user.email,
+    image: row.user.image,
+    role,
+    canManageProjects: role === 'owner' || row.canManageProjects,
+    joinedAt: row.createdAt,
+    registeredAt: row.user.createdAt,
+    isCurrentUser: row.user.id === session.user.id,
+  };
+}
+
+/**
+ * Имена и email участников — кандидаты для @упоминаний. Без проверки сессии: только для
+ * серверных модулей, которые уже проверили доступ к пространству (комментарии в tasks).
+ */
+export async function listMemberIdentities(workspaceId: string): Promise<MemberIdentityDto[]> {
+  const rows = await memberRepository.listIdentities(workspaceId);
+  log.debug({ workspaceId, count: rows.length }, '[member.listMemberIdentities]');
+  return rows.map(({ user }) => ({
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    image: user.image,
+  }));
+}
+
+/**
+ * Есть ли у пользователей общее пространство. Без проверки сессии: для серверных модулей
+ * (доступ к фото профиля).
+ */
+export async function sharesWorkspace(userId: string, otherUserId: string): Promise<boolean> {
+  if (userId === otherUserId) return true;
+  const result = await memberRepository.sharesWorkspace(userId, otherUserId);
+  log.debug({ userId, otherUserId, result }, '[member.sharesWorkspace]');
   return result;
 }
 

@@ -13,6 +13,29 @@ export interface MemberDto {
   isCurrentUser: boolean;
 }
 
+/** Участник пространства по userId — для публичного профиля и карточки при наведении. */
+export interface WorkspaceMemberDto {
+  memberId: string;
+  userId: string;
+  name: string;
+  email: string;
+  image: string | null;
+  role: WorkspaceRole;
+  /** Право управлять проектами: у владельца — всегда. */
+  canManageProjects: boolean;
+  joinedAt: Date;
+  registeredAt: Date;
+  isCurrentUser: boolean;
+}
+
+/** Имя и email участника — кандидат для @упоминания. */
+export interface MemberIdentityDto {
+  userId: string;
+  name: string;
+  email: string;
+  image: string | null;
+}
+
 /** Пространство, где пользователь — единственный владелец. */
 export interface SoleOwnedWorkspaceDto {
   id: string;

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import type { TaskCommentsDto } from '@/modules/tasks';
+import type { MentionCandidate, TaskCommentsDto } from '@/modules/tasks';
 
 import { CommentItem, type CommentDateLabel } from './comment-item';
 
@@ -16,10 +16,18 @@ interface CommentListProps {
   comments: TaskCommentsDto;
   /** Адрес «Показать все» — текущая страница или панель с `comments=all`. */
   showAllHref: string;
+  /** Участники пространства: подсказка `@` при правке и карточки упомянутых. */
+  members: MentionCandidate[];
 }
 
 /** Лента комментариев (от старых к новым). Даты форматируются здесь, на сервере. */
-export function CommentList({ workspaceId, taskId, comments, showAllHref }: CommentListProps) {
+export function CommentList({
+  workspaceId,
+  taskId,
+  comments,
+  showAllHref,
+  members,
+}: CommentListProps) {
   if (comments.total === 0) {
     return <p className="text-sm text-muted-foreground">Комментариев пока нет.</p>;
   }
@@ -46,6 +54,7 @@ export function CommentList({ workspaceId, taskId, comments, showAllHref }: Comm
             }}
             createdAt={dateLabel(createdAt)}
             editedAt={editedAt ? dateLabel(editedAt) : null}
+            members={members}
           />
         ))}
       </ol>

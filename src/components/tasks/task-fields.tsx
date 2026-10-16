@@ -3,7 +3,6 @@
 import { CalendarDays, UserRound, X } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent, type Ref } from 'react';
 
-import { initials } from '@/components/layout/initials';
 import { StatusDot } from '@/components/projects/status-badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -14,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { UserAvatar } from '@/components/users/user-avatar';
 import { cn } from '@/lib/utils';
 import type { ProjectStatusDto } from '@/modules/projects/client';
 import {
@@ -30,6 +30,8 @@ import { PriorityBadge } from './priority-badge';
 export interface MemberOption {
   userId: string;
   name: string;
+  /** Адрес фото; без него — инициалы. */
+  image?: string | null;
 }
 
 // У radix Select нет пустого значения: «не выбрано» — отдельный ключ, в форму уходит ''.
@@ -79,17 +81,6 @@ interface QuietFieldProps {
 }
 
 /** Инициалы участника — декоративно, имя читается текстом рядом. */
-function MemberInitials({ name }: { name: string }) {
-  return (
-    <span
-      aria-hidden
-      className="inline-grid size-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary"
-    >
-      {initials(name)}
-    </span>
-  );
-}
-
 export function AssigneeSelect({
   id,
   labelledBy,
@@ -128,7 +119,7 @@ export function AssigneeSelect({
           </SelectItem>
           {members.map((member) => (
             <SelectItem key={member.userId} value={member.userId}>
-              <MemberInitials name={member.name} />
+              <UserAvatar user={{ name: member.name, image: member.image ?? null }} />
               <span className="truncate">{member.name}</span>
             </SelectItem>
           ))}

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { isEntityId } from '@/modules/projects';
+import { isWorkspaceMember } from '@/modules/workspaces';
 import { requireWorkspaceAccess } from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
 import { NotFoundError } from '@/shared/errors';
@@ -10,6 +11,8 @@ import {
   comparePositions,
   formatTaskKey,
   isTaskOverdue,
+  MEMBER_DONE_RECENT_DAYS,
+  MEMBER_OPEN_TASKS_LIMIT,
   pageCountOf,
   TASK_LIST_PAGE_SIZE,
   toIsoDate,
@@ -25,7 +28,12 @@ import {
   buildTaskOrderBy,
   buildTaskWhere,
 } from './task-list.prisma';
-import type { BoardCardDto, BoardCardsDto, TaskListPageDto } from './views.dto';
+import type {
+  BoardCardDto,
+  BoardCardsDto,
+  MemberTaskSummaryDto,
+  TaskListPageDto,
+} from './views.dto';
 import { viewsRepository, type BoardPlacementRow } from './views.repository';
 
 const log = createLogger('tasks.views');
@@ -168,6 +176,58 @@ export async function listTasks(
     result.clamped ? query.page : undefined,
   );
   return page;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Задачи участника пространства для его публичного профиля. Смотрящий — участник пространства;
+ * цель не участник — `NotFoundError` (не раскрываем, кто есть в чужих пространствах).
+ */
+export async function getMemberTaskSummary(
+  session: AuthSession,
+  workspaceId: string,
+  userId: string,
+): Promise<MemberTaskSummaryDto> {
+  const access = await requireWorkspaceAccess(session, workspaceId);
+  if (!(await isWorkspaceMember(workspaceId, userId))) {
+    log.warn(
+      { viewerId: access.userId, workspaceId, userId },
+      '[views.memberSummary] not a member',
+    );
+    throw new NotFoundError('Участник не найден');
+  }
+
+  const now = new Date();
+  const today = toIsoDate(now);
+  const row = await viewsRepository.memberSummary(workspaceId, userId, {
+    today: new Date(today),
+    since: new Date(now.getTime() - MEMBER_DONE_RECENT_DAYS * DAY_MS),
+    take: MEMBER_OPEN_TASKS_LIMIT,
+  });
+  const activity = [row.lastCommentAt, row.lastTaskAt].filter((date) => date !== null);
+  const summary: MemberTaskSummaryDto = {
+    openCount: row.openCount,
+    overdueCount: row.overdueCount,
+    doneRecentlyCount: row.doneRecentlyCount,
+    createdCount: row.createdCount,
+    commentsCount: row.commentsCount,
+    lastActivityAt:
+      activity.length > 0 ? new Date(Math.max(...activity.map((date) => date.getTime()))) : null,
+    openTasks: row.openTasks.map((task) => toListItem(task, today)),
+  };
+  log.debug(
+    {
+      viewerId: access.userId,
+      workspaceId,
+      userId,
+      open: summary.openCount,
+      overdue: summary.overdueCount,
+      doneRecently: summary.doneRecentlyCount,
+    },
+    '[views.memberSummary]',
+  );
+  return summary;
 }
 
 /** Вкладка «Список» проекта: строки — размещения проекта; «просрочено» — по статусу в проекте. */

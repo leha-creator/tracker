@@ -1,0 +1,199 @@
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { Suspense, type ReactNode } from 'react';
+
+import { DueDate } from '@/components/tasks/due-date';
+import { PriorityBadge } from '@/components/tasks/priority-badge';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { UserAvatar } from '@/components/users/user-avatar';
+import { WORKSPACE_ROLE_LABELS } from '@/components/workspaces/role-label';
+import { getProfileCards } from '@/modules/profiles';
+import { getMemberTaskSummary, MEMBER_DONE_RECENT_DAYS } from '@/modules/tasks';
+import { getMember } from '@/modules/workspaces';
+import { requireWorkspaceAccessBySlug } from '@/shared/access';
+import { NotFoundError } from '@/shared/errors';
+
+export const metadata: Metadata = { title: 'Профиль участника — Tasker' };
+
+type Props = PageProps<'/w/[workspaceSlug]/members/[userId]'>;
+
+const DATE = new Intl.DateTimeFormat('ru', { dateStyle: 'long' });
+const DATE_TIME = new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyle: 'short' });
+
+export default function MemberProfilePage({ params }: Props) {
+  return (
+    <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-muted" />}>
+      <MemberProfile params={params} />
+    </Suspense>
+  );
+}
+
+/** Ошибку «не найдено» сервиса превращаем в 404 страницы. */
+function orNotFound<T>(promise: Promise<T>): Promise<T> {
+  return promise.catch((error: unknown) => {
+    if (error instanceof NotFoundError) notFound();
+    throw error;
+  });
+}
+
+async function MemberProfile({ params }: Pick<Props, 'params'>) {
+  const { workspaceSlug, userId } = await params;
+  const { session, workspace } = await requireWorkspaceAccessBySlug(workspaceSlug);
+  const member = await orNotFound(getMember(session, workspace.id, userId));
+  const [cards, summary] = await Promise.all([
+    getProfileCards([userId]),
+    orNotFound(getMemberTaskSummary(session, workspace.id, userId)),
+  ]);
+  const card = cards.get(userId);
+  const image = card?.image ?? null;
+  const tasksHref = `/w/${workspace.slug}/tasks`;
+
+  return (
+    <div className="mx-auto grid w-full max-w-3xl gap-6">
+      <Link
+        href={`/w/${workspace.slug}/settings/members`}
+        className="w-fit text-sm text-muted-foreground hover:text-foreground"
+      >
+        ← Участники
+      </Link>
+
+      <header className="flex flex-wrap items-center gap-5">
+        <UserAvatar user={{ name: member.name, image }} size="xl" />
+        <div className="grid min-w-0 flex-1 gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight break-words">
+            {member.name}
+            {member.isCurrentUser && (
+              <span className="text-base font-normal text-muted-foreground"> (вы)</span>
+            )}
+          </h1>
+          {card?.position && <p className="text-muted-foreground">{card.position}</p>}
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Badge variant={member.role === 'owner' ? 'default' : 'secondary'}>
+              {WORKSPACE_ROLE_LABELS[member.role]}
+            </Badge>
+            {member.role !== 'owner' && member.canManageProjects && (
+              <Badge variant="outline">Управляет проектами</Badge>
+            )}
+          </div>
+        </div>
+        {member.isCurrentUser && (
+          <Button asChild variant="outline">
+            <Link href="/profile">Редактировать профиль</Link>
+          </Button>
+        )}
+      </header>
+
+      {card?.bio && (
+        <section aria-labelledby="member-bio-heading" className="grid gap-1.5">
+          <h2 id="member-bio-heading" className="text-sm font-semibold">
+            О себе
+          </h2>
+          <p className="text-sm break-words whitespace-pre-wrap">{card.bio}</p>
+        </section>
+      )}
+
+      <section aria-label="Задачи" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="Открытых задач" value={summary.openCount} />
+        <Stat
+          label="Просрочено"
+          value={summary.overdueCount}
+          tone={summary.overdueCount > 0 ? 'danger' : undefined}
+        />
+        <Stat
+          label={`Выполнено за ${MEMBER_DONE_RECENT_DAYS} дней`}
+          value={summary.doneRecentlyCount}
+        />
+        <Stat label="Комментариев" value={summary.commentsCount} />
+      </section>
+
+      <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_16rem]">
+        <Card className="min-w-0">
+          <CardHeader>
+            <CardTitle>Открытые задачи</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {summary.openTasks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Открытых задач нет.</p>
+            ) : (
+              <ul className="grid gap-1">
+                {summary.openTasks.map((task) => (
+                  <li key={task.id}>
+                    <Link
+                      href={`${tasksHref}/${task.number}`}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2 text-sm hover:bg-muted/60"
+                    >
+                      <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                        {task.key}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-medium">{task.title}</span>
+                      <PriorityBadge priority={task.priority} compact />
+                      {task.dueDate && <DueDate value={task.dueDate} isOverdue={task.isOverdue} />}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {summary.openCount > summary.openTasks.length && (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Показаны {summary.openTasks.length} из {summary.openCount}.{' '}
+                <Link href={tasksHref} className="text-primary hover:underline">
+                  Все задачи
+                </Link>
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Сведения</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid gap-3 text-sm">
+              <Detail label="Email">
+                <a href={`mailto:${member.email}`} className="break-all hover:underline">
+                  {member.email}
+                </a>
+              </Detail>
+              <Detail label="В пространстве с">{DATE.format(member.joinedAt)}</Detail>
+              <Detail label="Зарегистрирован">{DATE.format(member.registeredAt)}</Detail>
+              <Detail label="Создал задач">{summary.createdCount}</Detail>
+              <Detail label="Последняя активность">
+                {summary.lastActivityAt ? DATE_TIME.format(summary.lastActivityAt) : 'нет'}
+              </Detail>
+            </dl>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: number; tone?: 'danger' }) {
+  return (
+    <div className="grid gap-1 rounded-xl border p-4">
+      <span
+        className={
+          tone === 'danger'
+            ? 'text-2xl font-semibold text-destructive tabular-nums'
+            : 'text-2xl font-semibold tabular-nums'
+        }
+      >
+        {value}
+      </span>
+      <span className="text-xs text-muted-foreground">{label}</span>
+    </div>
+  );
+}
+
+function Detail({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid gap-0.5">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}

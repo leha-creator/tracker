@@ -45,7 +45,7 @@ export async function TaskCreateView({
       </TaskToolbar>
       <CreateTaskForm
         workspaceId={workspaceId}
-        members={members.map((member) => ({ userId: member.userId, name: member.name }))}
+        members={members.map(({ userId, name, image }) => ({ userId, name, image }))}
         projects={projects.map(({ id, name }) => ({ id, name }))}
         statusesByProject={statusesByProject}
         // Неизвестный проект просто не выбирается: форма проверяет его по списку статусов.

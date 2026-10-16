@@ -16,7 +16,7 @@ const TASK_SELECT = {
   createdById: true,
   createdAt: true,
   updatedAt: true,
-  workspace: { select: { slug: true } },
+  workspace: { select: { slug: true, name: true } },
   assignee: { select: { id: true, name: true, image: true } },
   createdBy: { select: { id: true, name: true } },
   placements: PLACEMENT_SELECT,
@@ -51,7 +51,12 @@ export const taskRepository = {
   ) {
     return tx.task.create({
       data,
-      select: { id: true, number: true, workspace: { select: { slug: true } } },
+      select: {
+        id: true,
+        number: true,
+        title: true,
+        workspace: { select: { slug: true, name: true } },
+      },
     });
   },
 

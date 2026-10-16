@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { startTransition, useActionState, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { UserAvatar } from '@/components/users/user-avatar';
 import {
   Table,
   TableBody,
@@ -35,6 +37,7 @@ import { WORKSPACE_ROLE_LABELS } from './role-label';
 
 interface MembersTableProps {
   workspaceId: string;
+  workspaceSlug: string;
   workspaceName: string;
   members: MemberDto[];
   /** Может ли текущий пользователь управлять участниками (UX; сервер проверяет сам). */
@@ -43,6 +46,7 @@ interface MembersTableProps {
 
 export function MembersTable({
   workspaceId,
+  workspaceSlug,
   workspaceName,
   members,
   canManage,
@@ -64,6 +68,7 @@ export function MembersTable({
           <MemberRow
             key={member.id}
             workspaceId={workspaceId}
+            workspaceSlug={workspaceSlug}
             workspaceName={workspaceName}
             member={member}
             canManage={canManage}
@@ -76,6 +81,7 @@ export function MembersTable({
 
 function MemberRow({
   workspaceId,
+  workspaceSlug,
   workspaceName,
   member,
   canManage,
@@ -101,11 +107,19 @@ function MemberRow({
   return (
     <TableRow>
       <TableCell className="whitespace-normal">
-        <div className="font-medium">
-          {member.name}
-          {member.isCurrentUser && <span className="text-muted-foreground"> (вы)</span>}
+        <div className="flex items-center gap-3">
+          <UserAvatar user={member} size="sm" />
+          <div className="min-w-0">
+            <Link
+              href={`/w/${workspaceSlug}/members/${member.userId}`}
+              className="font-medium hover:underline focus-visible:underline focus-visible:outline-none"
+            >
+              {member.name}
+            </Link>
+            {member.isCurrentUser && <span className="text-muted-foreground"> (вы)</span>}
+            <div className="text-sm break-all text-muted-foreground">{member.email}</div>
+          </div>
         </div>
-        <div className="text-sm text-muted-foreground">{member.email}</div>
         {roleError && (
           <p role="alert" className="mt-1 text-sm text-destructive">
             {roleError}

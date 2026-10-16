@@ -11,6 +11,7 @@ import {
   COMMENT_ATTACHMENTS_LIMIT,
   createCommentAction,
   deleteAttachmentAction,
+  type MentionCandidate,
 } from '@/modules/tasks/client';
 import { cn } from '@/lib/utils';
 import type { FormState } from '@/shared/types';
@@ -28,13 +29,15 @@ interface CommentFormProps {
    * тексте или файлах.
    */
   docked?: boolean;
+  /** Участники пространства — подсказка после `@`. */
+  members?: readonly MentionCandidate[];
 }
 
 /**
  * Новый комментарий с файлами. Файлы загружаются сразу (черновики), при отправке привязываются к
  * комментарию. После успеха React сбрасывает поле, черновики очищаются; при ошибке всё остаётся.
  */
-export function CommentForm({ workspaceId, taskId, docked = false }: CommentFormProps) {
+export function CommentForm({ workspaceId, taskId, docked = false, members }: CommentFormProps) {
   const [active, setActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useAttachmentUpload({ workspaceId, taskId, target: 'comment' });
@@ -109,6 +112,8 @@ export function CommentForm({ workspaceId, taskId, docked = false }: CommentForm
         errors={fieldErrors?.body}
         placeholder={docked ? 'Написать комментарий…' : undefined}
         rows={docked ? 1 : 3}
+        members={members}
+        suggestionsPlacement={docked ? 'above' : 'below'}
       />
       {upload.items.length > 0 && (
         <ul className="grid gap-2 @lg:grid-cols-2" aria-label="Файлы комментария">

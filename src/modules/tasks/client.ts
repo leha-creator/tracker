@@ -3,8 +3,16 @@
  * Без server-only кода (сервисов, репозиториев) — их экспортирует только index.ts.
  */
 export { findCardColumn, moveCard, prevTaskIdAt } from './models/board-move';
+export {
+  extractMentions,
+  filterMentionCandidates,
+  findMentionQuery,
+  mentionText,
+} from './models/comment-mentions';
+export type { MentionCandidate, MentionRange } from './models/comment-mentions';
 export type { BoardColumns } from './models/board-move';
 export {
+  MEMBER_DONE_RECENT_DAYS,
   TASK_DESCRIPTION_MAX_LENGTH,
   TASK_PLACEMENT_LIMIT,
   TASK_TITLE_MAX_LENGTH,
@@ -78,4 +86,9 @@ export type {
   TaskUserDto,
 } from './slices/task/task.dto';
 export { createTaskSchema, taskNumberSchema, updateTaskSchema } from './slices/task/task.schema';
-export type { BoardCardDto, BoardCardsDto, TaskListPageDto } from './slices/views/views.dto';
+export type {
+  BoardCardDto,
+  BoardCardsDto,
+  MemberTaskSummaryDto,
+  TaskListPageDto,
+} from './slices/views/views.dto';

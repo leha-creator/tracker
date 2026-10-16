@@ -1,10 +1,9 @@
 'use client';
 
-import { LogOutIcon, ShieldIcon } from 'lucide-react';
+import { BellIcon, LogOutIcon, ShieldIcon, UserIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
 
-import { initials } from '@/components/layout/initials';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -16,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { UserAvatar } from '@/components/users/user-avatar';
 
 const THEME_OPTIONS = [
   { value: 'system', label: 'Как в системе' },
@@ -26,12 +26,19 @@ const THEME_OPTIONS = [
 interface UserMenuDropdownProps {
   name: string;
   email: string;
+  image: string | null;
   isAdmin: boolean;
   signOutAction: () => Promise<void>;
 }
 
 /** Аватар с выпадающим меню: профиль, админка (только администратору), тема, выход. */
-export function UserMenuDropdown({ name, email, isAdmin, signOutAction }: UserMenuDropdownProps) {
+export function UserMenuDropdown({
+  name,
+  email,
+  image,
+  isAdmin,
+  signOutAction,
+}: UserMenuDropdownProps) {
   // До гидратации тема неизвестна (undefined) — ни один пункт не отмечен.
   const { theme, setTheme } = useTheme();
 
@@ -39,9 +46,9 @@ export function UserMenuDropdown({ name, email, isAdmin, signOutAction }: UserMe
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label="Меню пользователя"
-        className="grid size-8 place-items-center rounded-lg bg-primary/10 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none data-[state=open]:bg-primary/15"
+        className="grid size-8 place-items-center rounded-full transition-opacity hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
       >
-        {initials(name)}
+        <UserAvatar user={{ name, image }} size="sm" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="grid gap-0.5 font-normal">
@@ -53,6 +60,19 @@ export function UserMenuDropdown({ name, email, isAdmin, signOutAction }: UserMe
             </Badge>
           )}
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/profile">
+            <UserIcon />
+            Профиль
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/notifications">
+            <BellIcon />
+            Уведомления
+          </Link>
+        </DropdownMenuItem>
         {/* Ссылка скрыта для не-админов ради UX; доступ проверяет сама страница /admin. */}
         {isAdmin && (
           <>

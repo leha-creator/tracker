@@ -16,6 +16,8 @@ import {
   type TaskPlacementDto,
 } from '@/modules/tasks/client';
 
+import { UserHoverCard } from '@/components/users/user-hover-card';
+
 import { AssigneeAvatar } from '../assignee-avatar';
 import { DueDate } from '../due-date';
 import { PriorityBadge } from '../priority-badge';
@@ -97,10 +99,13 @@ export function TaskListTable({
               </TableCell>
               <TableCell>
                 {task.assignee && (
-                  <span className="flex items-center gap-2 text-sm">
+                  <UserHoverCard
+                    user={task.assignee}
+                    className="flex w-fit max-w-full items-center gap-2 rounded-sm text-sm hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  >
                     <AssigneeAvatar user={task.assignee} />
                     <span className="truncate">{task.assignee.name}</span>
-                  </span>
+                  </UserHoverCard>
                 )}
               </TableCell>
             </TableRow>

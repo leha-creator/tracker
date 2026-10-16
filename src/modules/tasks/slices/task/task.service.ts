@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { notify } from '@/modules/notifications';
 import { isEntityId } from '@/modules/projects';
 import { isWorkspaceMember } from '@/modules/workspaces';
 import { requireWorkspaceAccess, type WorkspaceRole } from '@/shared/access';
@@ -55,6 +56,39 @@ async function checkAssignee(workspaceId: string, assigneeId: string): Promise<v
   const isMember = await isWorkspaceMember(workspaceId, assigneeId);
   if (!isMember) log.warn({ workspaceId, assigneeId }, '[task] assignee is not a member');
   assertAssigneeIsMember(isMember);
+}
+
+/**
+ * Уведомление «вас назначили ответственным». Себе не отправляется (это отсекает notify),
+ * сбой не отменяет изменение задачи (notify не бросает).
+ */
+async function notifyAssignee(input: {
+  session: AuthSession;
+  workspaceId: string;
+  assigneeId: string;
+  task: { id: string; number: number; title: string; workspace: { slug: string; name: string } };
+}): Promise<void> {
+  const { session, workspaceId, assigneeId, task } = input;
+  log.debug(
+    { workspaceId, taskId: task.id, assigneeId, byUserId: session.user.id },
+    '[task] assignee notification',
+  );
+  await notify([
+    {
+      type: 'task_assigned',
+      recipientId: assigneeId,
+      workspaceId,
+      actorId: session.user.id,
+      taskId: task.id,
+      payload: {
+        workspaceSlug: task.workspace.slug,
+        workspaceName: task.workspace.name,
+        actorName: session.user.name,
+        taskNumber: task.number,
+        taskTitle: task.title,
+      },
+    },
+  ]);
 }
 
 async function loadTask(workspaceId: string, taskId: string): Promise<TaskRow> {
@@ -143,6 +177,9 @@ export async function createTask(
     { workspaceId, taskId: task.id, number: task.number, userId, placed: Boolean(placement) },
     '[task] created',
   );
+  if (input.assigneeId) {
+    await notifyAssignee({ session, workspaceId, assigneeId: input.assigneeId, task });
+  }
   return { taskId: task.id, number: task.number, workspaceSlug: task.workspace.slug };
 }
 
@@ -202,6 +239,15 @@ export async function updateTask(session: AuthSession, input: UpdateTaskInput): 
   const count = await taskRepository.update(workspaceId, taskId, data);
   if (count === 0) throw new NotFoundError('Задача не найдена');
   log.info({ workspaceId, taskId, userId: session.user.id, fields }, '[task] updated');
+
+  if (input.assigneeId && input.assigneeId !== current.assignee?.id) {
+    await notifyAssignee({
+      session,
+      workspaceId,
+      assigneeId: input.assigneeId,
+      task: { ...current, title: data.title ?? current.title },
+    });
+  }
 }
 
 /** Удаляет задачу (размещения — каскадом). Возвращает slug пространства для редиректа. */

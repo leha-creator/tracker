@@ -23,10 +23,15 @@ const unbanUserApi = vi.fn();
 const setRoleApi = vi.fn();
 const revokeUserSessionsApi = vi.fn();
 const removeUserApi = vi.fn();
+const cleanupAvatar = vi.fn<() => Promise<void>>();
+const prepareAvatarCleanup = vi.fn<(userId: string) => Promise<() => Promise<void>>>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
   requireAdmin: () => requireAdmin(),
+}));
+vi.mock('@/modules/profiles', () => ({
+  prepareAvatarCleanup: (userId: string) => prepareAvatarCleanup(userId),
 }));
 vi.mock('@/modules/workspaces', () => ({
   countWorkspacesByUsers: (ids: string[]) => countWorkspacesByUsers(ids),
@@ -251,11 +256,18 @@ describe('deleteUser', () => {
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 
-  it('removes the user through the plugin', async () => {
+  it('removes the user through the plugin and then the avatar', async () => {
+    prepareAvatarCleanup.mockResolvedValue(cleanupAvatar);
+    removeUserApi.mockImplementation(() => {
+      expect(cleanupAvatar).not.toHaveBeenCalled();
+      return Promise.resolve();
+    });
     await deleteUser({ userId: 'user-2', confirmEmail: 'user@example.com' });
     expect(listSoleOwnedWorkspaces).toHaveBeenCalledWith('user-2');
     expect(removeUserApi).toHaveBeenCalledWith(
       expect.objectContaining({ body: { userId: 'user-2' } }),
     );
+    expect(prepareAvatarCleanup).toHaveBeenCalledWith('user-2');
+    expect(cleanupAvatar).toHaveBeenCalledTimes(1);
   });
 });
