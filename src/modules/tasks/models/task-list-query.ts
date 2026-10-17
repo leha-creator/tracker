@@ -7,8 +7,11 @@ import { TASK_PRIORITIES, type TaskPriority } from './task-priority';
  * поэтому разбор нестрогий — некорректные значения отбрасываются, а не превращаются в ошибку.
  */
 
-/** Список задач пространства (`/tasks`) или вкладка «Список» проекта. */
-export type TaskListScope = 'workspace' | 'project';
+/**
+ * Список задач пространства (`/tasks`), вкладка «Список» проекта или «Мои задачи» (`/my-tasks`) —
+ * открытые задачи пользователя во всех его пространствах.
+ */
+export type TaskListScope = 'workspace' | 'project' | 'mine';
 
 export const TASK_LIST_PAGE_SIZE = 50;
 /** Максимум значений в одном фильтре. */
@@ -52,13 +55,18 @@ export interface TaskListQuery {
   q: string;
   /** Статусы проекта (только в проекте). */
   statuses: string[];
-  /** Категории статуса; `none` — задачи вне проектов (только в пространстве). */
+  /**
+   * Категории статуса; `none` — задачи вне проектов (пространство и «Мои задачи»). В «Моих
+   * задачах» без фильтра показываются только открытые.
+   */
   categories: TaskCategoryFilter[];
   /** id проектов; `none` — задачи вне проектов (только в пространстве). */
   projects: string[];
   priorities: TaskPriority[];
-  /** id участников, `me` или `none` (не назначен). */
+  /** id участников, `me` или `none` (не назначен). Не в «Моих задачах»: там всегда я. */
   assignees: string[];
+  /** id пространств (только в «Моих задачах»); пусто — все мои пространства. */
+  workspaces: string[];
   /** id меток: задача хотя бы с одной из них. */
   labels: string[];
   due: TaskDueFilter | null;
@@ -75,6 +83,7 @@ export interface TaskListQuery {
 const DEFAULT_SORT: Record<TaskListScope, TaskListSort> = {
   workspace: 'number',
   project: 'status',
+  mine: 'due',
 };
 
 /** Направление при первом клике по колонке: новые/срочные — сверху, сроки и названия — по порядку. */
@@ -108,6 +117,7 @@ export function defaultTaskListQuery(scope: TaskListScope): TaskListQuery {
     projects: [],
     priorities: [],
     assignees: [],
+    workspaces: [],
     labels: [],
     due: null,
     topLevelOnly: false,
@@ -170,16 +180,22 @@ export function parseTaskListParams(raw: RawParams, scope: TaskListScope): TaskL
     query.statuses = parseList(raw.status, isEntityIdItem);
   } else {
     query.categories = parseList(raw.category, isCategoryFilter);
-    query.projects = parseList(raw.project, isProjectFilter);
   }
   query.priorities = parseList(raw.priority, isPriority);
-  query.assignees = parseList(raw.assignee, isAssigneeFilter);
-  query.labels = parseList(raw.label, isEntityIdItem);
+  if (scope === 'mine') {
+    // Проекты, метки и участники — свои у каждого пространства; ответственный — всегда я.
+    query.workspaces = parseList(raw.workspace, isEntityIdItem);
+  } else {
+    if (scope === 'workspace') query.projects = parseList(raw.project, isProjectFilter);
+    query.assignees = parseList(raw.assignee, isAssigneeFilter);
+    query.labels = parseList(raw.label, isEntityIdItem);
+  }
 
   const due = first(raw.due);
   query.due = due && isDueFilter(due) ? due : null;
   query.topLevelOnly = first(raw.level) === TASK_LIST_LEVEL_TOP;
-  query.archived = first(raw.archived) === '1';
+  // Архива в «Моих задачах» нет: это список открытой работы.
+  query.archived = scope !== 'mine' && first(raw.archived) === '1';
 
   const sort = first(raw.sort);
   if (sort && isSort(sort) && isSortAllowed(sort, scope)) query.sort = sort;
@@ -195,18 +211,23 @@ export function parseTaskListParams(raw: RawParams, scope: TaskListScope): TaskL
 export function serializeTaskListParams(query: TaskListQuery, scope: TaskListScope): string {
   const params = new URLSearchParams();
   if (query.q) params.set('q', query.q);
-  if (scope === 'workspace') {
+  if (scope === 'mine') {
+    if (query.workspaces.length) params.set('workspace', query.workspaces.join(','));
+    if (query.categories.length) params.set('category', query.categories.join(','));
+  } else if (scope === 'workspace') {
     if (query.projects.length) params.set('project', query.projects.join(','));
     if (query.categories.length) params.set('category', query.categories.join(','));
   } else if (query.statuses.length) {
     params.set('status', query.statuses.join(','));
   }
   if (query.priorities.length) params.set('priority', query.priorities.join(','));
-  if (query.assignees.length) params.set('assignee', query.assignees.join(','));
-  if (query.labels.length) params.set('label', query.labels.join(','));
+  if (scope !== 'mine') {
+    if (query.assignees.length) params.set('assignee', query.assignees.join(','));
+    if (query.labels.length) params.set('label', query.labels.join(','));
+  }
   if (query.due) params.set('due', query.due);
   if (query.topLevelOnly) params.set('level', TASK_LIST_LEVEL_TOP);
-  if (query.archived) params.set('archived', '1');
+  if (query.archived && scope !== 'mine') params.set('archived', '1');
   if (query.sort !== DEFAULT_SORT[scope] && isSortAllowed(query.sort, scope)) {
     params.set('sort', query.sort);
   }
@@ -239,6 +260,7 @@ export function hasActiveFilters(query: TaskListQuery): boolean {
     query.projects.length > 0 ||
     query.priorities.length > 0 ||
     query.assignees.length > 0 ||
+    query.workspaces.length > 0 ||
     query.labels.length > 0 ||
     query.due !== null ||
     query.topLevelOnly

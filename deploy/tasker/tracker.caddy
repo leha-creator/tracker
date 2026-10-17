@@ -35,6 +35,15 @@ __DOMAIN__ {
 		reverse_proxy tasker-minio:9000
 	}
 
+	# Поток событий реалтайма (SSE): без сжатия (encode буферизует поток) и со сбросом каждого
+	# кадра клиенту сразу.
+	@realtime path /api/realtime/*
+	handle @realtime {
+		reverse_proxy tasker-app:3000 {
+			flush_interval -1
+		}
+	}
+
 	handle {
 		encode zstd gzip
 		reverse_proxy tasker-app:3000

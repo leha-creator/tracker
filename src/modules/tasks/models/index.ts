@@ -1,5 +1,5 @@
-export { findCardColumn, moveCard, prevTaskIdAt } from './board-move';
-export type { BoardColumns } from './board-move';
+export { findCardColumn, moveCard, nextBoardFocus, prevTaskIdAt } from './board-move';
+export type { BoardColumns, BoardFocusDirection } from './board-move';
 export {
   extractMentions,
   filterMentionCandidates,
@@ -112,6 +112,39 @@ export {
   TASK_LABELS_PER_WORKSPACE,
 } from './task-label';
 export type { TaskLabelColor } from './task-label';
+export {
+  escapeCsvCell,
+  exportFileName,
+  TASK_CSV_COLUMNS,
+  TASK_EXPORT_MAX_ROWS,
+  toCsv,
+} from './task-csv';
+export type { CsvColumn, TaskCsvRow } from './task-csv';
+export {
+  addIsoDays,
+  barPercent,
+  buildDashboard,
+  DASHBOARD_OVERDUE_LIMIT,
+  DASHBOARD_WEEK_DAYS,
+} from './dashboard';
+export type {
+  AssigneeCountRow,
+  DashboardCounts,
+  DashboardMember,
+  DashboardModel,
+  ProjectCountRow,
+  WorkloadItem,
+} from './dashboard';
+export {
+  assertCanCreateView,
+  canonicalViewParams,
+  normalizeViewName,
+  SAVED_VIEW_NAME_MAX_LENGTH,
+  SAVED_VIEW_PARAMS_MAX_LENGTH,
+  SAVED_VIEWS_PER_SCOPE,
+  viewNameKey,
+} from './saved-task-view';
+export type { SavedTaskViewScope } from './saved-task-view';
 export { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from './task-priority';
 export type { TaskPriority } from './task-priority';
 export {

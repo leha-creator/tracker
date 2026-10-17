@@ -65,6 +65,8 @@ export function TaskWatchButton({
           type="button"
           variant="ghost"
           size="sm"
+          data-hotkey-field="watch"
+          aria-keyshortcuts="W"
           aria-label={`${label}. Наблюдателей: ${count}`}
           className={cn('gap-1.5 px-2', state.watching && 'text-primary')}
         >

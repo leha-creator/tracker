@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
+import { LiveRefresh } from '@/components/realtime/use-live-refresh';
 import { TaskPanel } from '@/components/tasks/task-panel/task-panel';
 import { taskPanelHref } from '@/components/tasks/task-panel/task-panel-href';
 import { TaskListEmpty } from '@/components/tasks/task-list/task-list-empty';
@@ -12,7 +13,13 @@ import { TaskListToolbar } from '@/components/tasks/task-list/task-list-toolbar'
 import { Button } from '@/components/ui/button';
 import { getPullRequestBadges } from '@/modules/integrations/github';
 import { listProjects } from '@/modules/projects';
-import { hasActiveFilters, listLabels, listTasks, parseTaskListParams } from '@/modules/tasks';
+import {
+  hasActiveFilters,
+  listLabels,
+  listSavedViews,
+  listTasks,
+  parseTaskListParams,
+} from '@/modules/tasks';
 import { listMembers } from '@/modules/workspaces';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
 
@@ -51,11 +58,12 @@ async function TasksSection({ params, searchParams }: Props) {
   const query = parseTaskListParams(raw, 'workspace');
   const basePath = `/w/${workspace.slug}/tasks`;
   // Фильтры — из модулей workspaces и projects, строки — из tasks: модули друг о друге не знают.
-  const [page, members, projects, labels] = await Promise.all([
+  const [page, members, projects, labels, savedViews] = await Promise.all([
     listTasks(session, workspace.id, query),
     listMembers(session, workspace.id),
     listProjects(session, workspace.id),
     listLabels(session, workspace.id),
+    listSavedViews(session, { scope: 'workspace', workspaceId: workspace.id }),
   ]);
   // Номер страницы мог быть ограничен последней — показываем фактический.
   const shown = { ...query, page: page.page };
@@ -78,12 +86,15 @@ async function TasksSection({ params, searchParams }: Props) {
         </Button>
       </div>
       <TaskListShell query={shown} scope="workspace" basePath={basePath}>
+        <LiveRefresh tasksOnly debounceMs={1000} />
         <TaskListToolbar
           options={{
             currentUserId: session.user.id,
             members: members.map(({ userId, name }) => ({ userId, name })),
             projects: projects.map(({ id, name }) => ({ id, name })),
             labels: labels.map(({ id, name, color }) => ({ id, name, color })),
+            savedViews: { views: savedViews, workspaceId: workspace.id },
+            csvExport: { path: `/api/w/${workspace.slug}/tasks/export` },
           }}
         />
         {page.total === 0 ? (

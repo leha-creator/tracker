@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 import { PullRequestIndicator } from '@/components/github/pull-request-indicator';
 import { StatusDot } from '@/components/projects/status-badge';
+import { RegisterTaskOrder } from '@/components/tasks/task-navigation-context';
 import {
   Table,
   TableBody,
@@ -32,8 +33,11 @@ import {
 } from '../task-panel/task-panel-href';
 import { SortHeader } from './sort-header';
 
+/** Строка «Моих задач» знает своё пространство: ссылка ведёт на страницу задачи там. */
+type TaskListRow = TaskListItemDto & { workspace?: { slug: string; name: string } };
+
 interface TaskListTableProps {
-  items: TaskListItemDto[];
+  items: TaskListRow[];
   scope: TaskListScope;
   /** Путь страницы списка и её параметры: строка открывает задачу в панели, фильтры остаются. */
   basePath: string;
@@ -55,8 +59,17 @@ export function TaskListTable({
 }: TaskListTableProps) {
   const panel = parseTaskPanelParam(searchParams[TASK_PANEL_PARAM]);
   const openNumber = panel.mode === 'view' ? panel.number : null;
+  const mine = scope === 'mine';
+  // Задача другого пространства — его страница; в пространстве и проекте — панель списка.
+  function taskHref(task: TaskListRow, number: number): string {
+    return task.workspace
+      ? `/w/${task.workspace.slug}/tasks/${number}`
+      : taskPanelHref(basePath, searchParams, number);
+  }
   return (
     <div className="overflow-x-auto rounded-lg border transition-opacity group-data-pending/list:opacity-60">
+      {/* Порядок строк — для «следующая / предыдущая» (j / k) в панели задачи. */}
+      {!mine && <RegisterTaskOrder numbers={items.map((task) => task.number)} />}
       <Table>
         <TableHeader>
           <TableRow>
@@ -70,14 +83,14 @@ export function TaskListTable({
             <TableHead>Метки</TableHead>
             <SortHeader sort="priority" label={TASK_LIST_SORT_LABELS.priority} />
             <SortHeader sort="due" label={TASK_LIST_SORT_LABELS.due} />
-            <TableHead>Ответственный</TableHead>
+            <TableHead>{mine ? 'Пространство' : 'Ответственный'}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {items.map((task) => (
             <TableRow
               key={task.id}
-              data-state={task.number === openNumber ? 'selected' : undefined}
+              data-state={!mine && task.number === openNumber ? 'selected' : undefined}
             >
               <TableCell className="text-muted-foreground tabular-nums">
                 <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
@@ -88,7 +101,7 @@ export function TaskListTable({
               <TableCell className="max-w-80">
                 {task.parent && (
                   <Link
-                    href={taskPanelHref(basePath, searchParams, task.parent.number)}
+                    href={taskHref(task, task.parent.number)}
                     scroll={false}
                     title={`Подзадача ${task.parent.key} «${task.parent.title}»`}
                     className="flex w-fit max-w-full items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
@@ -100,9 +113,9 @@ export function TaskListTable({
                   </Link>
                 )}
                 <Link
-                  href={taskPanelHref(basePath, searchParams, task.number)}
+                  href={taskHref(task, task.number)}
                   scroll={false}
-                  aria-current={task.number === openNumber || undefined}
+                  aria-current={(!mine && task.number === openNumber) || undefined}
                   className="line-clamp-2 font-medium whitespace-normal hover:underline"
                 >
                   {task.title}
@@ -127,14 +140,18 @@ export function TaskListTable({
                 {task.dueDate && <DueDate value={task.dueDate} isOverdue={task.isOverdue} />}
               </TableCell>
               <TableCell>
-                {task.assignee && (
-                  <UserHoverCard
-                    user={task.assignee}
-                    className="flex w-fit max-w-full items-center gap-2 rounded-sm text-sm hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                  >
-                    <AssigneeAvatar user={task.assignee} />
-                    <span className="truncate">{task.assignee.name}</span>
-                  </UserHoverCard>
+                {task.workspace ? (
+                  <span className="block max-w-48 truncate text-sm">{task.workspace.name}</span>
+                ) : (
+                  task.assignee && (
+                    <UserHoverCard
+                      user={task.assignee}
+                      className="flex w-fit max-w-full items-center gap-2 rounded-sm text-sm hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                      <AssigneeAvatar user={task.assignee} />
+                      <span className="truncate">{task.assignee.name}</span>
+                    </UserHoverCard>
+                  )
                 )}
               </TableCell>
             </TableRow>

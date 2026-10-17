@@ -17,6 +17,7 @@ import {
   type SubtaskProgress,
 } from '../../models';
 import { historyAuthorOf, recordHistory, taskSnapshot } from '../history/history.service';
+import { emitTaskEvent } from '../realtime/task-events.service';
 import { assertTaskActive } from '../task/task-archive.guard';
 import { toTaskListItem } from '../task/task.mapper';
 import { taskRepository } from '../task/task.repository';
@@ -172,6 +173,13 @@ export async function setTaskParent(
     { workspaceId, taskId, fromParentId, toParentId: parentId, userId: access.userId },
     '[subtask] parent changed',
   );
+  // Прогресс подзадач виден на карточках прежнего и нового родителя.
+  await emitTaskEvent(session, {
+    workspaceId,
+    kind: 'task.updated',
+    taskId,
+    relatedTaskIds: [fromParentId, parentId].filter((id): id is string => id !== null),
+  });
 }
 
 /**

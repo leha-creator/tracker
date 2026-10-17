@@ -22,6 +22,7 @@ export const TASK_LABELS_SELECT = {
 /** Поля строки списка задач (общие для списка пространства и вкладки проекта). */
 export const TASK_LIST_SELECT = {
   id: true,
+  workspaceId: true,
   number: true,
   title: true,
   priority: true,

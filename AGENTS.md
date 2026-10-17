@@ -30,7 +30,7 @@ tasker/
 ├── .claude/                  # Скиллы и субагенты
 ├── .github/workflows/ci.yml  # CI/CD: pnpm check + build, миграции на чистом Postgres, образ и smoke-тест; на main — GHCR и деплой
 ├── prisma/
-│   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …), пространств (Workspace, WorkspaceMember, WorkspaceInvitation), проектов (Project, ProjectStatus), задач (Task, TaskPlacement, WorkspaceTaskCounter, TaskComment, TaskAttachment), профилей (UserProfile), уведомлений (Notification, NotificationPreference), документов (DocumentFolder, Document, DocumentTag, DocumentTagAssignment, TaskDocumentLink), GitHub (GithubInstallation, GithubRepository, GithubPullRequest, TaskPullRequest, TaskGithubBranch, TaskGithubCommit, GithubWebhookDelivery, GithubProjectAutomation, GithubAppConfig), токенов (ApiToken: области, issuedById), безопасности входа (TwoFactor, User.twoFactorEnabled, RateLimit — лимит Better Auth, ActionRateLimit — лимит Server Actions), агентов (WorkspaceAgent, User.isAgent), журнала MCP (McpActivity), пометки «через агента» (createdViaTokenId у Task, TaskComment, Document); Workspace.taskKey — ключ задач (TSK-42); Task.parentId — подзадачи (составной FK, каскад); расширения задач — TaskHistoryEntry (история), TaskLabel и TaskLabelAssignment (метки), TaskWatcher (наблюдатели), TaskDueReminder (отправленные напоминания), archivedAt у Task, Project и Workspace (архив); GIN-индексы pg_trgm для поиска
+│   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …), пространств (Workspace, WorkspaceMember, WorkspaceInvitation), проектов (Project, ProjectStatus), задач (Task, TaskPlacement, WorkspaceTaskCounter, TaskComment, TaskAttachment), профилей (UserProfile), уведомлений (Notification, NotificationPreference), документов (DocumentFolder, Document, DocumentTag, DocumentTagAssignment, TaskDocumentLink), GitHub (GithubInstallation, GithubRepository, GithubPullRequest, TaskPullRequest, TaskGithubBranch, TaskGithubCommit, GithubWebhookDelivery, GithubProjectAutomation, GithubAppConfig), токенов (ApiToken: области, issuedById), безопасности входа (TwoFactor, User.twoFactorEnabled, RateLimit — лимит Better Auth, ActionRateLimit — лимит Server Actions), агентов (WorkspaceAgent, User.isAgent), журнала MCP (McpActivity), пометки «через агента» (createdViaTokenId у Task, TaskComment, Document); Workspace.taskKey — ключ задач (TSK-42); Task.parentId — подзадачи (составной FK, каскад); расширения задач — TaskHistoryEntry (история), TaskLabel и TaskLabelAssignment (метки), TaskWatcher (наблюдатели), TaskDueReminder (отправленные напоминания), SavedTaskView (сохранённые фильтры списка), archivedAt у Task, Project и Workspace (архив); GIN-индексы pg_trgm для поиска
 │   └── migrations/
 ├── prisma.config.ts          # Подключение Prisma CLI (DATABASE_URL, миграции)
 ├── src/
@@ -38,10 +38,10 @@ tasker/
 │   ├── app/                  # Представление (Next.js): страницы, layout, route handlers
 │   │   ├── (auth)/           # /login (+ two-factor — второй шаг 2FA), /register, /forgot-password, /reset-password, /verify-email
 │   │   ├── not-found.tsx     # 404 для неизвестных адресов (+ w/[workspaceSlug]/not-found.tsx внутри пространства)
-│   │   ├── (app)/            # Защищённая зона: sticky-шапка (переключатель и разделы пространства, колокольчик уведомлений, меню пользователя, skip-link), /, /admin (→ /admin/users, + integrations — GitHub App),
+│   │   ├── (app)/            # Защищённая зона: sticky-шапка (переключатель и разделы пространства, колокольчик уведомлений, меню пользователя, skip-link), реалтайм и горячие клавиши, /, /my-tasks (мои задачи по всем пространствам), /admin (→ /admin/users, + integrations — GitHub App),
 │   │   │                     # / (+ ?create=workspace — панель «Новое пространство»), /w/[workspaceSlug] (+ ?create=project — панель «Новый проект»; settings, settings/members, settings/github, settings/agents, settings/agents/[agentId], settings/labels — метки), /invite/[invitationId],
 │   │   │                     # /w/[workspaceSlug]/projects/[projectId]/{board,list,settings} (/workspaces/new и projects/new — редиректы на панели),
-│   │   │                     # /w/[workspaceSlug]/tasks (+ new, [taskNumber]), /w/[workspaceSlug]/members/[userId] (публичный профиль),
+│   │   │                     # /w/[workspaceSlug]/overview (обзор: счётчики, нагрузка, просрочка), /w/[workspaceSlug]/tasks (+ new, [taskNumber]), /w/[workspaceSlug]/members/[userId] (публичный профиль),
 │   │   │                     # /w/[workspaceSlug]/docs (+ new, [documentId], [documentId]/edit) — документы пространства,
 │   │   │                     # /profile (+ notifications, account, security — пароль, 2FA, сессии; tokens, tokens/[tokenId] — журнал токена), /notifications
 │   │   └── api/
@@ -50,6 +50,8 @@ tasker/
 │   │       ├── documents/[documentId]/file/ # GET — файл документа (302 на presigned-ссылку) или Markdown заметки
 │   │       ├── users/[userId]/avatar/ # GET — фото профиля (общее пространство или admin), 302 на presigned-ссылку
 │   │       ├── w/[workspaceSlug]/members/[userId]/card/ # GET — данные карточки участника при наведении
+│   │       ├── realtime/w/[workspaceSlug]/ # GET — поток событий пространства (SSE, только идентификаторы)
+│   │       ├── w/[workspaceSlug]/tasks/export/ # GET — экспорт списка задач в CSV (лимит 10/мин)
 │   │       ├── notifications/ # GET — последние уведомления и счётчик (+ unread-count для опроса)
 │   │       ├── mcp/          # POST — MCP-сервер для агентов (Bearer-токен, JSON без SSE); GET/DELETE — 405
 │   │       ├── webhooks/github/ # POST — вебхуки GitHub App: подпись, идемпотентность, обработчики событий
@@ -61,7 +63,7 @@ tasker/
 │   │   ├── auth/             # Вход, регистрация, выход; срезы password (сброс и смена), verification (повторное письмо), two-factor (шаг входа и управление), session (активные сессии); models — returnTo, TOTP, User-Agent (client.ts — для клиентских компонентов)
 │   │   ├── workspaces/       # Пространства, участники (+ права «Управление проектами» и «Управление документами»), приглашения (index.ts — сервер, client.ts — клиент)
 │   │   ├── projects/         # Проекты и статусы-колонки: модели (StatusSet), срезы project/status
-│   │   ├── tasks/            # Задачи: модели (TaskPlacement, позиции, запрос списка TaskListQuery, права на комментарии, правила вложений, дерево подзадач task-tree), @упоминания (comment-mentions), архив (archivedAt, assertTaskActive), срезы task/placement/subtask/comment/attachment/history/label/watcher/search/reminder/views; зависит от projects, workspaces и notifications
+│   │   ├── tasks/            # Задачи: модели (TaskPlacement, позиции, запрос списка TaskListQuery, права на комментарии, правила вложений, дерево подзадач task-tree), @упоминания (comment-mentions), архив (archivedAt, assertTaskActive), срезы task/placement/subtask/comment/attachment/history/label/watcher/search/reminder/views (+ «Мои задачи», экспорт CSV)/saved-view (сохранённые фильтры)/dashboard (обзор)/realtime (публикация событий); зависит от projects, workspaces и notifications
 │   │   ├── profiles/         # Профиль: UserProfile (должность, описание, ключ фото), фото по presigned POST, имя и User.image через auth.api.updateUser; зависит от workspaces
 │   │   ├── search/           # Глобальный поиск (агрегатор): задачи, документы и участники пространства или пространства пользователя; globalSearchAction; зависит от tasks, documents, workspaces
 │   │   ├── notifications/    # Уведомления: notify/notifyByEmail для других модулей (никогда не бросают), настройки «тип × канал», письма через after(); ни от кого не зависит
@@ -81,11 +83,14 @@ tasker/
 │   │   ├── projects/         # Список проектов, навигация проекта, настройки проекта и статусов (settings-draft — общее сохранение настроек плавающей панелью снизу)
 │   │   ├── tasks/            # Канбан-доска (dnd-kit), карточка, быстрое создание, поля задачи (режим чтения), размещения;
 │   │                         # task-panel/ — панель задачи справа (?task=<номер> / ?task=new): оболочка, просмотр и создание (общие с /tasks/[n] и /tasks/new), адреса панели;
-│   │                         # task-list/ — список задач: фильтры, сортировка, пагинация (состояние в URL);
+│   │                         # task-list/ — список задач: фильтры, сортировка, пагинация (состояние в URL), сохранённые фильтры, экспорт CSV;
 │   │                         # comments/ — комментарии на странице задачи: лента, добавление, правка, удаление, файлы, подсказка @ и подсветка упоминаний;
 │   │                         # attachments/ — вложения: очередь загрузки (presigned POST), зона перетаскивания, список, миниатюры;
 │   │                         # subtasks/ — подзадачи: раздел в задаче, строка (вывести на доску, отвязать), быстрое добавление, выбор родителя, хлебные крошки;
 │   │                         # history/ — секция «История»; labels/ — выбор и отображение меток, настройки меток; watchers/ — кнопка «Следить» и список наблюдателей
+│   │   ├── realtime/         # RealtimeProvider (один EventSource на пространство), useLiveRefresh / LiveRefresh (router.refresh с задержкой)
+│   │   ├── hotkeys/          # Каталог SHORTCUTS, глобальные клавиши и клавиши пространства, справка по «?»
+│   │   ├── dashboard/        # Обзор пространства: плитки счётчиков, полосы, нагрузка, проекты, просроченные
 │   │   ├── search/           # CommandPalette — палитра Cmd/Ctrl+K (cmdk), SearchTrigger в шапке, адреса результатов (search-hrefs)
 │   │   ├── entity-icon/      # EntityIconTile (иконка пространства или проекта на цветной плитке), EntityIconPicker (выбор в формах)
 │   │   ├── users/            # UserAvatar (фото или инициалы), UserHoverCard (карточка участника при наведении, данные — по запросу)
@@ -97,7 +102,7 @@ tasker/
 │   │   ├── documents/        # Раздел «Документы»: дерево папок, список и фильтры (URL), загрузка, диалоги; markdown/ — безопасный рендер;
 │   │   │                     # note-editor/ — редактор заметки; viewers/ — просмотр картинок, PDF, текста, CSV, JSON, медиа; task-documents/ — раздел в задаче
 │   │   └── ui/               # shadcn/ui (генерируется CLI, вручную не править)
-│   ├── lib/                  # utils.ts — cn() для shadcn; use-prefers-reduced-motion.ts — общий хук (доска, статусы); format-relative-time.ts — «2 часа назад» (уведомления, карточки проектов)
+│   ├── lib/                  # utils.ts — cn() для shadcn; use-prefers-reduced-motion.ts — общий хук (доска, статусы); format-relative-time.ts — «2 часа назад» (уведомления, карточки проектов); hotkeys.ts — разбор и сопоставление клавиш (по event.code); use-hotkeys.ts — хук подписки
 │   ├── generated/prisma/     # Сгенерированный Prisma Client (в .gitignore)
 │   ├── shared/               # Сквозная инфраструктура
 │   │   ├── auth/             # Конфиг Better Auth (getAuth), getSession() → DTO, getFreshSession() (в обход cookie-кеша); письма аутентификации (auth-emails), чистые опции (auth-options: лимиты /api/auth/*, синтетический пользователь)
@@ -112,6 +117,7 @@ tasker/
 │   │   ├── text/             # transliterate() — для slug, ключей задач и имён веток
 │   │   ├── storage/          # S3-клиенты (сервер и подпись ссылок), presigned POST/GET, HeadObject, удаление пачками, checkStorage()
 │   │   ├── mail/             # sendMail() (nodemailer), sendMailInBackground() (after()), escapeHtml()
+│   │   ├── realtime/         # pg LISTEN/NOTIFY: схема события, publish, hub (одно подключение на процесс), SSE-поток с лимитами
 │   │   ├── rate-limit/       # enforceRateLimit(action, { ip, email?, userId? }) — лимиты Server Actions (ActionRateLimit), getClientIp(), правила RATE_LIMITS
 │   │   └── health/           # checkHealth() — агрегирует проверки
 │   └── test/                 # Вспомогательное для Vitest
@@ -147,11 +153,13 @@ tasker/
 | `src/shared/mail/index.ts` | `sendMail()` — отправка писем через SMTP |
 | `src/modules/workspaces/index.ts` | Пространства, участники, приглашения: actions и read-функции (`client.ts` — для клиентских компонентов) |
 | `src/modules/projects/index.ts` | Проекты и статусы: actions и read-функции (`listProjects`, `getProject`, `listStatuses`, `listWorkspaceStatuses`; `client.ts` — для клиентских компонентов, в т.ч. `moveStatusAction` и чистая функция `reorderStatuses`) |
-| `src/modules/tasks/index.ts` | Задачи, размещения, комментарии и вложения: actions и read-функции (`getTaskByNumber`, `listSubtasks`, `listTaskComments`, `listTaskAttachments`, `getAttachmentDownload`, `listTasks`, `listProjectTasks`, `getBoardCards`, `getMemberTaskSummary`, `getTaskSummaries`, `parseTaskListParams`; сервисы изменения для agent-mcp — `createTask`, `updateTask`, `addToProject`, `changeStatus`, `setTaskParent`, `createComment`, `archiveTask`, `restoreTask`, `setTaskLabels`; история, метки и наблюдатели — `listTaskHistory`, `listLabels`, `listTaskWatchers`; `searchTasks` (для search); системная `sendDueReminders` (только для `/api/cron/reminders`); чистые функции упоминаний `extractMentions`, `filterMentionCandidates`, `findMentionQuery`; `client.ts` — для клиентских компонентов, в т.ч. `movePlacementAction`, `setTaskParentAction`, `searchParentCandidatesAction` и чистые функции переноса карточек) |
+| `src/modules/tasks/index.ts` | Задачи, размещения, комментарии и вложения: actions и read-функции (`getTaskByNumber`, `listSubtasks`, `listTaskComments`, `listTaskAttachments`, `getAttachmentDownload`, `listTasks`, `listProjectTasks`, `listMyTasks`, `listSavedViews`, `getWorkspaceDashboard`, `exportTasks` (для экспорта CSV), `getBoardCards`, `getMemberTaskSummary`, `getTaskSummaries`, `parseTaskListParams`; сервисы изменения для agent-mcp — `createTask`, `updateTask`, `addToProject`, `changeStatus`, `setTaskParent`, `createComment`, `archiveTask`, `restoreTask`, `setTaskLabels`; история, метки и наблюдатели — `listTaskHistory`, `listLabels`, `listTaskWatchers`; `searchTasks` (для search); системная `sendDueReminders` (только для `/api/cron/reminders`); чистые функции упоминаний `extractMentions`, `filterMentionCandidates`, `findMentionQuery`; `client.ts` — для клиентских компонентов, в т.ч. `movePlacementAction`, `setTaskParentAction`, `searchParentCandidatesAction` и чистые функции переноса карточек) |
 | `src/modules/documents/index.ts` | Документы пространства: `listDocuments`, `parseDocumentListParams`, `listFolderTree`, `getDocument`, `getDocumentText`, `getDocumentFile` (для `/api/documents/[id]/file`), `getWorkspaceStorageUsage`, `listTags`, `listTaskDocuments`, `listDocumentTasks`; сервисы изменения для agent-mcp — `createNote`, `updateNote`, `createFolder`, `setDocumentTags`, `linkDocumentToTask`, `unlinkDocumentFromTask`, `requestDocumentUpload`, `completeDocumentUpload`; actions папок, заметок, загрузки, тегов и связей с задачами (`client.ts` — в т.ч. `applyMarkdownFormat`, `parseDelimited`) |
 | `src/modules/profiles/index.ts` | Профили: `getMyProfile`, `getProfileCards`, `getAvatarDownload`, `prepareAvatarCleanup`; actions профиля и фото (`client.ts` — в т.ч. `isAvatarUrl`) |
 | `src/modules/notifications/index.ts` | Уведомления: `notify`, `notifyByEmail` (для модулей), `listMyNotifications`, `countMyUnreadNotifications`, `getMyNotificationPreferences`; actions прочтения и настроек (`client.ts`) |
 | `src/modules/search/index.ts` | `globalSearch` (`client.ts` — `globalSearchAction`, типы результатов) |
+| `src/shared/realtime/index.ts` | Реалтайм: `publishRealtimeEvent`, `subscribeToWorkspace` (hub), `createWorkspaceEventStream`, `acquireSseConnection` (`client.ts` — схема и типы событий для клиента) |
+| `src/app/api/realtime/w/[workspaceSlug]/route.ts` | SSE-эндпоинт событий пространства |
 | `src/app/api/cron/reminders/route.ts` | Эндпоинт напоминаний о сроке для планировщика |
 | `src/modules/admin/index.ts` | Пользователи ресурса: `listAdminUsers`, `parseAdminUserListParams`; actions блокировки, роли, сессий и удаления (`client.ts` — для клиентских компонентов) |
 | `src/modules/integrations/github/index.ts` | GitHub: `isGithubEnabled`, `handleGithubWebhook`, `verifyGithubWebhookSignature`, `completeInstallation`, `getGithubSettings`, `listTaskPullRequests`, `listTaskBranchesAndCommits`, `getPullRequestBadges`, `getProjectAutomation`, `getMyGithubAccount`, `getGithubAppSetup`, `completeGithubAppManifest`, `getWorkspaceGithubSummary` (сводка для любого участника), `findTaskReferences` (`client.ts` — actions установки, привязки, автоматизации, типы DTO, `suggestBranchName`) |

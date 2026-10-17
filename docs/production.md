@@ -246,6 +246,29 @@ Claude Code подключается к `https://tracker.plwedding.ru/api/mcp` �
 curl -si -X POST https://tracker.plwedding.ru/api/mcp -H 'content-type: application/json' -d '{}' | head -5
 ```
 
+## Реалтайм через Caddy
+
+Доска и списки обновляются по потоку событий `GET /api/realtime/w/<slug>` (SSE, см. [архитектуру](architecture.md#обновления-в-реальном-времени)). Поток нельзя сжимать и буферизовать: `encode` в Caddy копит ответ, и события приходят пачками или не приходят совсем. Поэтому в `tracker.caddy` для него отдельный `handle` **перед** общим:
+
+```caddy
+@realtime path /api/realtime/*
+handle @realtime {
+	reverse_proxy tasker-app:3000 {
+		flush_interval -1
+	}
+}
+```
+
+Без `encode`, `flush_interval -1` отдаёт каждый кадр сразу. Пинг каждые 25 секунд держит соединение живым, таймауты Caddy по умолчанию его не рвут. Файл сайта приходит с деплоем, на сервере ничего менять не нужно.
+
+Проверка (с cookie сессии из браузера) — ожидаются `200`, `content-type: text/event-stream` и строка `retry: 5000`:
+
+```bash
+curl -sN https://tracker.plwedding.ru/api/realtime/w/<slug> -H 'cookie: __Secure-better-auth.session_token=…' | head -3
+```
+
+Без сессии — `401`. Если приложение запущено в нескольких экземплярах, отдельный брокер не нужен: события идут через `LISTEN/NOTIFY` общего Postgres, каждый экземпляр держит одно подключение.
+
 ## Безопасность
 
 - Снаружи открыты только 22, 80 и 443. Postgres и MinIO наружу не публикуются, из MinIO через прокси доступен только путь бакета. Анонимный доступ к бакету закрыт.

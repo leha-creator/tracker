@@ -28,6 +28,7 @@ import { attachmentRepository } from '../attachment/attachment.repository';
 import { deleteStoredObjects } from '../attachment/attachment.storage';
 import { historyAuthorOf, recordHistory, userSnapshot } from '../history/history.service';
 import { ensureWatchers } from '../watcher/watcher.service';
+import { emitTaskEvent } from '../realtime/task-events.service';
 import { placementRepository } from '../placement/placement.repository';
 import { subtaskRepository } from '../subtask/subtask.repository';
 import { getSubtaskProgress, getTaskAncestors } from '../subtask/subtask.service';
@@ -276,6 +277,13 @@ export async function createTask(
     },
     '[task] created',
   );
+  await emitTaskEvent(session, {
+    workspaceId,
+    kind: 'task.created',
+    taskId: task.id,
+    taskNumber: task.number,
+    projectIds: placement ? [placement.projectId] : [],
+  });
   if (input.assigneeId) {
     await notifyAssignee({ session, workspaceId, assigneeId: input.assigneeId, task });
   }
@@ -380,6 +388,13 @@ export async function updateTask(session: AuthSession, input: UpdateTaskInput): 
     if (assigneeChanged) await ensureWatchers(tx, workspaceId, taskId, [input.assigneeId]);
   });
   log.info({ workspaceId, taskId, userId: session.user.id, fields }, '[task] updated');
+  await emitTaskEvent(session, {
+    workspaceId,
+    kind: 'task.updated',
+    taskId,
+    taskNumber: current.number,
+    projectIds: current.placements.map((row) => row.projectId),
+  });
 
   if (input.assigneeId && input.assigneeId !== current.assignee?.id) {
     await notifyAssignee({
@@ -404,10 +419,12 @@ export async function archiveTask(
   const task = await loadTask(workspaceId, taskId);
   if (task.archivedAt) throw new ValidationError('Задача уже в архиве');
 
+  let subtree: string[] = [];
   const descendants = await prisma.$transaction(async (tx) => {
     // Та же блокировка дерева, что при смене родителя: поддерево не меняется посреди операции.
     await subtaskRepository.lockTree(tx, workspaceId);
     const ids = await subtaskRepository.subtreeIds(workspaceId, taskId, tx);
+    subtree = ids;
     const count = await taskRepository.archiveMany(tx, workspaceId, ids, {
       archivedAt: new Date(),
       archivedById: access.userId,
@@ -423,6 +440,13 @@ export async function archiveTask(
     return archivedDescendants;
   });
   log.info({ workspaceId, taskId, descendants, userId: access.userId }, '[task] archived');
+  await emitTaskEvent(session, {
+    workspaceId,
+    kind: 'task.archived',
+    taskId,
+    taskNumber: task.number,
+    relatedTaskIds: subtree,
+  });
   return { descendants };
 }
 
@@ -447,9 +471,11 @@ export async function restoreTask(
     throw new ValidationError('Родительская задача в архиве — восстановите сначала её');
   }
 
+  let subtree: string[] = [];
   const descendants = await prisma.$transaction(async (tx) => {
     await subtaskRepository.lockTree(tx, workspaceId);
     const ids = await subtaskRepository.subtreeIds(workspaceId, taskId, tx);
+    subtree = ids;
     const count = await taskRepository.restoreMany(tx, workspaceId, ids, archivedAt);
     if (count === 0) throw new ValidationError('Задача не в архиве');
     const restoredDescendants = count - 1;
@@ -462,6 +488,12 @@ export async function restoreTask(
     return restoredDescendants;
   });
   log.info({ workspaceId, taskId, descendants, userId: access.userId }, '[task] restored');
+  await emitTaskEvent(session, {
+    workspaceId,
+    kind: 'task.updated',
+    taskId,
+    relatedTaskIds: subtree,
+  });
   return { descendants };
 }
 
@@ -496,6 +528,11 @@ export async function deleteTask(
     subtreeIds.length > 0 ? subtreeIds : [taskId],
   );
   const descendants = Math.max(subtreeIds.length - 1, 0);
+  // После удаления размещений уже нет — доски поддерева вычисляются заранее.
+  const projectIds = await placementRepository.listProjectIdsOfTasks(
+    workspaceId,
+    subtreeIds.length > 0 ? subtreeIds : [taskId],
+  );
   const count = await taskRepository.delete(workspaceId, taskId);
   if (count === 0) throw new NotFoundError('Задача не найдена');
   await deleteStoredObjects(storageKeys, { workspaceId, taskId });
@@ -510,6 +547,13 @@ export async function deleteTask(
     },
     '[task] deleted',
   );
+  await emitTaskEvent(session, {
+    workspaceId,
+    kind: 'task.archived',
+    taskId,
+    taskNumber: task.number,
+    projectIds,
+  });
   return { workspaceSlug: task.workspace.slug };
 }
 

@@ -1,6 +1,13 @@
 'use client';
 
-import { ArchiveIcon, ChevronDownIcon, ListTreeIcon, SearchIcon, XIcon } from 'lucide-react';
+import {
+  ArchiveIcon,
+  ChevronDownIcon,
+  DownloadIcon,
+  ListTreeIcon,
+  SearchIcon,
+  XIcon,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { StatusDot } from '@/components/projects/status-badge';
@@ -32,7 +39,9 @@ import {
   type TaskPriority,
 } from '@/modules/tasks/client';
 
+import { SavedViewsMenu } from './saved-views-menu';
 import { TaskListFilter, type FilterOption } from './task-list-filter';
+import { taskExportHref } from './task-list-href';
 import { useTaskList } from './task-list-shell';
 import type { TaskListOptions } from './task-list-types';
 
@@ -66,20 +75,47 @@ export function TaskListToolbar({ options }: { options: TaskListOptions }) {
   const assigneeOptions: FilterOption[] = [
     { value: TASK_LIST_ME, label: 'Я' },
     { value: TASK_LIST_NONE, label: 'Не назначен', separatorAfter: true },
-    ...options.members
+    ...(options.members ?? [])
       .filter((member) => member.userId !== options.currentUserId)
       .map((member) => ({ value: member.userId, label: member.name })),
   ];
-  const labelOptions: FilterOption[] = options.labels.map((label) => ({
+  const labelOptions: FilterOption[] = (options.labels ?? []).map((label) => ({
     value: label.id,
     label: label.name,
     icon: <StatusDot color={label.color} />,
   }));
+  const workspaceOptions: FilterOption[] = (options.workspaces ?? []).map((workspace) => ({
+    value: workspace.id,
+    label: workspace.name,
+  }));
+  const categoryFilter = (
+    <TaskListFilter
+      label="Статус"
+      options={categoryOptions}
+      selected={query.categories}
+      onChange={(categories) =>
+        navigate(patchTaskListQuery(query, { categories: categories as TaskCategoryFilter[] }))
+      }
+    />
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-2" role="search" aria-label="Фильтры задач">
       <TaskSearch />
-      {scope === 'workspace' ? (
+      {options.savedViews && <SavedViewsMenu options={options.savedViews} />}
+      {scope === 'mine' ? (
+        <>
+          {workspaceOptions.length > 1 && (
+            <TaskListFilter
+              label="Пространство"
+              options={workspaceOptions}
+              selected={query.workspaces}
+              onChange={(workspaces) => navigate(patchTaskListQuery(query, { workspaces }))}
+            />
+          )}
+          {categoryFilter}
+        </>
+      ) : scope === 'workspace' ? (
         <>
           <TaskListFilter
             label="Проект"
@@ -87,16 +123,7 @@ export function TaskListToolbar({ options }: { options: TaskListOptions }) {
             selected={query.projects}
             onChange={(projects) => navigate(patchTaskListQuery(query, { projects }))}
           />
-          <TaskListFilter
-            label="Статус"
-            options={categoryOptions}
-            selected={query.categories}
-            onChange={(categories) =>
-              navigate(
-                patchTaskListQuery(query, { categories: categories as TaskCategoryFilter[] }),
-              )
-            }
-          />
+          {categoryFilter}
         </>
       ) : (
         <TaskListFilter
@@ -114,12 +141,14 @@ export function TaskListToolbar({ options }: { options: TaskListOptions }) {
           navigate(patchTaskListQuery(query, { priorities: priorities as TaskPriority[] }))
         }
       />
-      <TaskListFilter
-        label="Ответственный"
-        options={assigneeOptions}
-        selected={query.assignees}
-        onChange={(assignees) => navigate(patchTaskListQuery(query, { assignees }))}
-      />
+      {scope !== 'mine' && (
+        <TaskListFilter
+          label="Ответственный"
+          options={assigneeOptions}
+          selected={query.assignees}
+          onChange={(assignees) => navigate(patchTaskListQuery(query, { assignees }))}
+        />
+      )}
       {labelOptions.length > 0 && (
         <TaskListFilter
           label="Метки"
@@ -141,18 +170,32 @@ export function TaskListToolbar({ options }: { options: TaskListOptions }) {
         <ListTreeIcon className="text-muted-foreground" />
         Только верхнего уровня
       </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        aria-pressed={query.archived}
-        title="Показать задачи из архива вместо активных"
-        className={cn(query.archived && 'border-primary/50 bg-primary/5')}
-        onClick={() => navigate(patchTaskListQuery(query, { archived: !query.archived }))}
-      >
-        <ArchiveIcon className="text-muted-foreground" />
-        Архив
-      </Button>
+      {scope !== 'mine' && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-pressed={query.archived}
+          title="Показать задачи из архива вместо активных"
+          className={cn(query.archived && 'border-primary/50 bg-primary/5')}
+          onClick={() => navigate(patchTaskListQuery(query, { archived: !query.archived }))}
+        >
+          <ArchiveIcon className="text-muted-foreground" />
+          Архив
+        </Button>
+      )}
+      {options.csvExport && (
+        <Button asChild variant="ghost" size="sm" className="ml-auto">
+          {/* Обычная ссылка: файл отдаёт route handler, клиентская навигация не нужна. */}
+          <a
+            href={taskExportHref(options.csvExport.path, query, scope, options.csvExport.projectId)}
+            download
+          >
+            <DownloadIcon />
+            Экспорт CSV
+          </a>
+        </Button>
+      )}
       {hasActiveFilters(query) && (
         <Button
           type="button"
@@ -257,6 +300,8 @@ function TaskSearch() {
         maxLength={TASK_LIST_QUERY_MAX_LENGTH}
         placeholder="Название или номер"
         aria-label="Поиск задач"
+        aria-keyshortcuts="/"
+        data-list-search
         className="h-8 pl-8"
         onChange={(event) => change(event.target.value)}
         onKeyDown={(event) => {

@@ -4,6 +4,16 @@ import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/db';
 
 import { TASK_LABELS_SELECT, TASK_LIST_SELECT } from '../task/task.select';
+import { openTaskWhere } from './task-list.prisma';
+
+/** Строка выгрузки CSV: поля списка и даты создания и изменения. */
+const EXPORT_TASK_SELECT = {
+  ...TASK_LIST_SELECT,
+  createdAt: true,
+  updatedAt: true,
+} as const satisfies Prisma.TaskSelect;
+
+export type ExportTaskRow = Prisma.TaskGetPayload<{ select: typeof EXPORT_TASK_SELECT }>;
 
 const LIST_PLACEMENT_SELECT = {
   status: { select: { category: true } },
@@ -17,14 +27,6 @@ interface PageArgs<Where, OrderBy> {
   skip: number;
   take: number;
 }
-
-/** Открытая задача: без размещений или хотя бы в одном проекте статус не «Готово». */
-const OPEN_TASK_WHERE = {
-  OR: [
-    { placements: { none: {} } },
-    { placements: { some: { status: { category: { not: 'done' } } } } },
-  ],
-} as const satisfies Prisma.TaskWhereInput;
 
 /** Выполненная задача: размещения есть, и во всех статус «Готово». */
 const DONE_TASK_WHERE = {
@@ -45,6 +47,33 @@ export const viewsRepository = {
       prisma.task.findMany({ where, orderBy, skip, take, select: TASK_LIST_SELECT }),
     ]);
     return { total, rows };
+  },
+
+  /** Задачи пространства для выгрузки: фильтр и порядок как у списка, без пагинации. */
+  listTasksForExport({
+    where,
+    orderBy,
+    take,
+  }: Omit<PageArgs<Prisma.TaskWhereInput, Prisma.TaskOrderByWithRelationInput[]>, 'skip'>) {
+    return prisma.task.findMany({ where, orderBy, take, select: EXPORT_TASK_SELECT });
+  },
+
+  /** Задачи вкладки «Список» проекта для выгрузки (через размещения проекта). */
+  async listProjectTasksForExport({
+    where,
+    orderBy,
+    take,
+  }: Omit<
+    PageArgs<Prisma.TaskPlacementWhereInput, Prisma.TaskPlacementOrderByWithRelationInput[]>,
+    'skip'
+  >) {
+    const rows = await prisma.taskPlacement.findMany({
+      where,
+      orderBy,
+      take,
+      select: { task: { select: EXPORT_TASK_SELECT } },
+    });
+    return rows.map((row) => row.task);
   },
 
   /** Страница размещений проекта (строки вкладки «Список») и общее число по фильтру. */
@@ -76,7 +105,7 @@ export const viewsRepository = {
       assigneeId: userId,
       archivedAt: null,
     } satisfies Prisma.TaskWhereInput;
-    const open = { ...assigned, ...OPEN_TASK_WHERE } satisfies Prisma.TaskWhereInput;
+    const open = { ...assigned, ...openTaskWhere() } satisfies Prisma.TaskWhereInput;
     const [
       openCount,
       overdueCount,

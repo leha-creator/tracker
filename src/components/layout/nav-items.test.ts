@@ -29,6 +29,7 @@ describe('getWorkspaceSections', () => {
 
   it('скрывает «Настройки» для участника', () => {
     expect(getWorkspaceSections('a', 'member').map((item) => item.label)).toEqual([
+      'Обзор',
       'Проекты',
       'Задачи',
       'Документы',
@@ -39,6 +40,7 @@ describe('getWorkspaceSections', () => {
 
   it.each([
     ['/w/a', ['Проекты']],
+    ['/w/a/overview', ['Обзор']],
     ['/w/a/projects/new', ['Проекты']],
     ['/w/a/projects/p1/board', ['Проекты']],
     ['/w/a/tasks', ['Задачи']],

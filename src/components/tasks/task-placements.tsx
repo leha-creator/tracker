@@ -62,14 +62,17 @@ function PlacementRow({
       >
         {placement.projectName}
       </Link>
-      <StatusSelect
-        quiet
-        statuses={statuses}
-        value={statusId}
-        onValueChange={change}
-        disabled={pending}
-        label={`Статус в проекте «${placement.projectName}»`}
-      />
+      {/* Клавиша «s» открывает статус первого проекта. */}
+      <span data-hotkey-field="status" className="contents">
+        <StatusSelect
+          quiet
+          statuses={statuses}
+          value={statusId}
+          onValueChange={change}
+          disabled={pending}
+          label={`Статус в проекте «${placement.projectName}»`}
+        />
+      </span>
       <ConfirmActionDialog
         action={removeFromProjectAction}
         fields={ids}

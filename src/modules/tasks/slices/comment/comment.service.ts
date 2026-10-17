@@ -24,6 +24,7 @@ import {
 import { toAttachmentDto } from '../attachment/attachment.mapper';
 import { attachmentRepository } from '../attachment/attachment.repository';
 import { deleteStoredObjects } from '../attachment/attachment.storage';
+import { emitTaskEvent } from '../realtime/task-events.service';
 import { toCreatedVia, toUserDto } from '../task/task.mapper';
 import { assertTaskActive } from '../task/task-archive.guard';
 import { ensureWatchers, listWatcherIds } from '../watcher/watcher.service';
@@ -250,6 +251,7 @@ export async function createComment(
     },
     '[comment] created',
   );
+  await emitTaskEvent(session, { workspaceId, kind: 'comment.changed', taskId });
   await notifyAboutComment({ session, task, commentId: id, body });
   return { commentId: id };
 }
@@ -281,6 +283,11 @@ export async function updateComment(
   const count = await commentRepository.updateBody(key, body);
   if (count === 0) throw new NotFoundError('Комментарий не найден');
   log.info({ ...key, userId: access.userId, length: body.length }, '[comment] updated');
+  await emitTaskEvent(session, {
+    workspaceId: key.workspaceId,
+    kind: 'comment.changed',
+    taskId: key.taskId,
+  });
 
   const task = await commentRepository.findTask(key.workspaceId, key.taskId);
   if (task) {
@@ -324,4 +331,9 @@ export async function deleteComment(session: AuthSession, key: CommentKey): Prom
     },
     '[comment] deleted',
   );
+  await emitTaskEvent(session, {
+    workspaceId: key.workspaceId,
+    kind: 'comment.changed',
+    taskId: key.taskId,
+  });
 }

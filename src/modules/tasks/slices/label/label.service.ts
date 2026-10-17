@@ -16,6 +16,7 @@ import {
   parseLabelColor,
   type TaskLabelColor,
 } from '../../models';
+import { emitTaskEvent, emitWorkspaceResync } from '../realtime/task-events.service';
 import { assertTaskActive } from '../task/task-archive.guard';
 import { historyAuthorOf, recordHistory } from '../history/history.service';
 import type { TaskLabelDto, TaskLabelRefDto } from './label.dto';
@@ -103,6 +104,8 @@ export async function updateLabel(
     throw error;
   }
   log.info({ workspaceId, labelId, userId: session.user.id }, '[label] updated');
+  // Метка видна на карточках всех её задач — обновляем всё пространство.
+  await emitWorkspaceResync(session, workspaceId);
 }
 
 /** Удаление метки снимает её со всех задач (каскад связей) — право «Управление проектами». */
@@ -115,6 +118,7 @@ export async function deleteLabel(
   const count = isEntityId(labelId) ? await labelRepository.delete(workspaceId, labelId) : 0;
   if (count === 0) throw labelNotFound({ workspaceId, labelId });
   log.info({ workspaceId, labelId, userId: session.user.id }, '[label] deleted');
+  await emitWorkspaceResync(session, workspaceId);
 }
 
 /**
@@ -174,6 +178,7 @@ export async function setTaskLabels(
       },
       '[task] labels set',
     );
+    await emitTaskEvent(session, { workspaceId, kind: 'task.updated', taskId });
   }
   return labels.map(toLabelRef);
 }

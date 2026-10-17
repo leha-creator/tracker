@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 
 import { UserMenu } from '@/components/auth/user-menu';
+import { AppHotkeys } from '@/components/hotkeys/app-hotkeys';
+import { ShortcutsDialog } from '@/components/hotkeys/shortcuts-dialog';
 import { PageContainer } from '@/components/layout/page-container';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { SearchTrigger } from '@/components/search/search-trigger';
@@ -47,6 +49,8 @@ export default function AppLayout({ children }: LayoutProps<'/'>) {
           </div>
         </PageContainer>
       </header>
+      <ShortcutsDialog />
+      <AppHotkeys />
       {children}
     </>
   );

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { isEntityId } from '@/modules/projects';
-import { isWorkspaceMember } from '@/modules/workspaces';
+import { isWorkspaceMember, listMyWorkspaces } from '@/modules/workspaces';
 import { requireWorkspaceAccess } from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
 import { NotFoundError } from '@/shared/errors';
@@ -24,6 +24,7 @@ import {
 import { getSubtaskProgress } from '../subtask/subtask.service';
 import { toLabelRefs, toParentRef, toTaskListItem, toUserDto } from '../task/task.mapper';
 import {
+  buildMyTaskWhere,
   buildPlacementOrderBy,
   buildPlacementWhere,
   buildTaskOrderBy,
@@ -33,6 +34,8 @@ import type {
   BoardCardDto,
   BoardCardsDto,
   MemberTaskSummaryDto,
+  MyTaskListPageDto,
+  MyTaskWorkspaceDto,
   TaskListPageDto,
   TaskSummaryDto,
 } from './views.dto';
@@ -192,6 +195,66 @@ export async function listTasks(
     result.clamped ? query.page : undefined,
   );
   return page;
+}
+
+/**
+ * «Мои задачи»: открытые задачи, где я ответственный, во всех моих активных пространствах.
+ * Пространства из URL пересекаются с моими — чужой id просто ничего не добавляет.
+ */
+export async function listMyTasks(
+  session: AuthSession,
+  query: TaskListQuery,
+): Promise<MyTaskListPageDto> {
+  const userId = session.user.id;
+  const workspaces: MyTaskWorkspaceDto[] = (await listMyWorkspaces(session)).map(
+    ({ id, slug, name, icon }) => ({ id, slug, name, icon }),
+  );
+  const byId = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
+  const requested = query.workspaces.filter((id) => byId.has(id));
+  const workspaceIds =
+    query.workspaces.length > 0 ? requested : workspaces.map((workspace) => workspace.id);
+  if (query.workspaces.length !== requested.length) {
+    log.debug(
+      { userId, requested: query.workspaces.length, allowed: requested.length },
+      '[views.listMyTasks] foreign workspaces ignored',
+    );
+  }
+
+  const today = toIsoDate(new Date());
+  const where = buildMyTaskWhere(query, { workspaceIds, userId, today });
+  const orderBy = buildTaskOrderBy(query.sort, query.dir);
+  const result =
+    workspaceIds.length > 0
+      ? await loadPage(query.page, (skip) =>
+          viewsRepository.listTaskPage({ where, orderBy, skip, take: TASK_LIST_PAGE_SIZE }),
+        )
+      : { total: 0, rows: [], page: 1, pageCount: 1 };
+
+  const items = result.rows.flatMap((row) => {
+    const workspace = byId.get(row.workspaceId);
+    return workspace ? [{ ...toTaskListItem(row, today), workspace }] : [];
+  });
+  log.debug(
+    {
+      userId,
+      workspaces: workspaceIds.length,
+      categories: query.categories.length,
+      priorities: query.priorities.length,
+      due: query.due,
+      hasQuery: query.q !== '',
+      total: result.total,
+      page: result.page,
+    },
+    '[views.listMyTasks]',
+  );
+  return {
+    items,
+    workspaces,
+    total: result.total,
+    page: result.page,
+    pageCount: result.pageCount,
+    pageSize: TASK_LIST_PAGE_SIZE,
+  };
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

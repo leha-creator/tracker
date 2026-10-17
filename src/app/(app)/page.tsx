@@ -1,3 +1,4 @@
+import { ListChecksIcon } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
@@ -20,11 +21,19 @@ export default function HomePage({ searchParams }: PageProps<'/'>) {
     <PageContainer as="main" id="main-content" size="wide" className="grid gap-6 py-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Мои пространства</h1>
-        <Button asChild>
-          <Link href={NEW_WORKSPACE_HREF} scroll={false}>
-            Создать пространство
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link href="/my-tasks">
+              <ListChecksIcon />
+              Мои задачи
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href={NEW_WORKSPACE_HREF} scroll={false}>
+              Создать пространство
+            </Link>
+          </Button>
+        </div>
       </div>
       <Suspense fallback={<div className="h-24 animate-pulse rounded-xl bg-muted" />}>
         <WorkspacesSection />

@@ -62,6 +62,10 @@ vi.mock('../attachment/attachment.storage', () => ({
   deleteStoredObjects: (keys: readonly string[], context: object) =>
     deleteStoredObjects(keys, context),
 }));
+const emitTaskEvent = vi.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve());
+vi.mock('../realtime/task-events.service', () => ({
+  emitTaskEvent: (...args: unknown[]) => emitTaskEvent(...args),
+}));
 vi.mock('./comment.repository', () => ({
   commentRepository: {
     findTask: (...args: unknown[]) => findTask(...args),
@@ -271,6 +275,11 @@ describe('createComment', () => {
       { tx: true },
     );
     expect(bindToComment).not.toHaveBeenCalled();
+    expect(emitTaskEvent).toHaveBeenCalledWith(session, {
+      workspaceId: 'ws-1',
+      kind: 'comment.changed',
+      taskId: TASK_ID,
+    });
   });
 
   it('marks a comment written through an MCP token', async () => {
@@ -314,6 +323,7 @@ describe('createComment', () => {
       createComment(session, { workspaceId: 'ws-1', taskId: TASK_ID, body: '' }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(notify).not.toHaveBeenCalled();
+    expect(emitTaskEvent).not.toHaveBeenCalled();
   });
 
   it('rejects empty text without files', async () => {
@@ -404,6 +414,7 @@ describe('updateComment', () => {
   it('skips the update when the text is unchanged', async () => {
     await updateComment(session, { ...KEY, body: 'Текст' });
     expect(updateBody).not.toHaveBeenCalled();
+    expect(emitTaskEvent).not.toHaveBeenCalled();
   });
 
   it('returns NOT_FOUND when the comment disappeared', async () => {

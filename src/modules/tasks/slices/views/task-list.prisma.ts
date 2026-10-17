@@ -32,9 +32,51 @@ const TASK_DONE: Prisma.TaskWhereInput = {
   AND: [{ placements: { some: {} } }, { placements: { every: { status: { category: 'done' } } } }],
 };
 
+/**
+ * Открытая задача: без размещений или хотя бы в одном проекте статус не «Готово». Общее условие
+ * «Моих задач», сводки участника и дашборда.
+ */
+export function openTaskWhere(): Prisma.TaskWhereInput {
+  return {
+    OR: [
+      { placements: { none: {} } },
+      { placements: { some: { status: { category: { not: 'done' } } } } },
+    ],
+  };
+}
+
 /** Фильтры по задаче. В проекте условие «не выполнена» для «Просрочено» добавляет `buildPlacementWhere`. */
 export function buildTaskWhere(query: TaskListQuery, ctx: TaskListContext): Prisma.TaskWhereInput {
+  const and = buildTaskConditions(query, ctx);
+  return {
+    workspaceId: ctx.workspaceId,
+    // Архивные — только в режиме «Архив», активные — во всех остальных.
+    archivedAt: query.archived ? { not: null } : null,
+    ...(and.length > 0 ? { AND: and } : {}),
+  };
+}
+
+/**
+ * «Мои задачи»: я ответственный, пространства — мои (`workspaceIds`, уже пересечённые с фильтром
+ * из URL), без архива. Без фильтра по категории — только открытые.
+ */
+export function buildMyTaskWhere(
+  query: TaskListQuery,
+  ctx: Omit<TaskListContext, 'workspaceId' | 'scope'> & { workspaceIds: string[] },
+): Prisma.TaskWhereInput {
+  const and = buildTaskConditions(query, { ...ctx, workspaceId: '', scope: 'mine' });
+  if (query.categories.length === 0) and.push(openTaskWhere());
+  return {
+    workspaceId: { in: ctx.workspaceIds },
+    assigneeId: ctx.userId,
+    archivedAt: null,
+    AND: and,
+  };
+}
+
+function buildTaskConditions(query: TaskListQuery, ctx: TaskListContext): Prisma.TaskWhereInput[] {
   const and: Prisma.TaskWhereInput[] = [];
+  const acrossTasks = ctx.scope !== 'project';
 
   if (query.q) {
     const number = parseTaskNumberQuery(query.q);
@@ -74,11 +116,11 @@ export function buildTaskWhere(query: TaskListQuery, ctx: TaskListContext): Pris
           ...(range.lte ? { lte: toDate(range.lte) } : {}),
         },
       });
-      if (query.due === 'overdue' && ctx.scope === 'workspace') and.push({ NOT: TASK_DONE });
+      if (query.due === 'overdue' && acrossTasks) and.push({ NOT: TASK_DONE });
     }
   }
 
-  if (ctx.scope === 'workspace') {
+  if (acrossTasks) {
     if (query.categories.length > 0) {
       const categories = query.categories.filter((value) => value !== TASK_LIST_NONE);
       const or: Prisma.TaskWhereInput[] = [];
@@ -99,12 +141,7 @@ export function buildTaskWhere(query: TaskListQuery, ctx: TaskListContext): Pris
     }
   }
 
-  return {
-    workspaceId: ctx.workspaceId,
-    // Архивные — только в режиме «Архив», активные — во всех остальных.
-    archivedAt: query.archived ? { not: null } : null,
-    ...(and.length > 0 ? { AND: and } : {}),
-  };
+  return and;
 }
 
 /** Размещения проекта: статус и «не выполнена» — по статусу в этом проекте, как на доске. */

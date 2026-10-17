@@ -48,3 +48,29 @@ export function prevTaskIdAt<T extends { taskId: string }>(
 ): string | null {
   return index > 0 ? (column[index - 1]?.taskId ?? null) : null;
 }
+
+export type BoardFocusDirection = 'up' | 'down' | 'left' | 'right';
+
+/**
+ * Карточка, на которую переходит фокус со стрелки: вверх и вниз — внутри колонки, влево и вправо —
+ * ближайшая по индексу карточка соседней непустой колонки. `order` — id карточек по колонкам
+ * слева направо. null — дальше идти некуда.
+ */
+export function nextBoardFocus(
+  order: readonly (readonly string[])[],
+  taskId: string,
+  direction: BoardFocusDirection,
+): string | null {
+  const column = order.findIndex((cards) => cards.includes(taskId));
+  if (column === -1) return null;
+  const index = order[column]!.indexOf(taskId);
+  if (direction === 'up') return order[column]![index - 1] ?? null;
+  if (direction === 'down') return order[column]![index + 1] ?? null;
+
+  const step = direction === 'left' ? -1 : 1;
+  for (let next = column + step; next >= 0 && next < order.length; next += step) {
+    const cards = order[next]!;
+    if (cards.length > 0) return cards[Math.min(index, cards.length - 1)]!;
+  }
+  return null;
+}

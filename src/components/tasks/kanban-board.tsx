@@ -22,19 +22,23 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useId, useRef, useState, useTransition } from 'react';
+import { useId, useRef, useState, useTransition, type KeyboardEvent } from 'react';
 import { toast } from 'sonner';
 
 import { StatusDot } from '@/components/projects/status-badge';
+import { useLiveRefresh } from '@/components/realtime/use-live-refresh';
+import { useRegisterTaskOrder } from '@/components/tasks/task-navigation-context';
 import { cn } from '@/lib/utils';
 import type { PullRequestBadgesDto } from '@/modules/integrations/github/client';
 import type { ProjectStatusDto } from '@/modules/projects/client';
 import {
   findCardColumn,
   moveCard,
+  nextBoardFocus,
   movePlacementAction,
   prevTaskIdAt,
   type BoardCardDto,
+  type BoardFocusDirection,
   type BoardCardsDto,
 } from '@/modules/tasks/client';
 
@@ -50,6 +54,13 @@ const COLUMN_PREFIX = 'column:';
 const CLICK_SUPPRESS_MS = 250;
 
 const columnId = (statusId: string) => `${COLUMN_PREFIX}${statusId}`;
+
+const ARROW_DIRECTIONS: Partial<Record<string, BoardFocusDirection>> = {
+  ArrowUp: 'up',
+  ArrowDown: 'down',
+  ArrowLeft: 'left',
+  ArrowRight: 'right',
+};
 
 interface KanbanBoardProps {
   workspaceId: string;
@@ -88,7 +99,7 @@ export function KanbanBoard({
   const openNumber = panel.mode === 'view' ? panel.number : null;
   const cardHref = (number: number) => taskPanelHref(pathname, searchParams.toString(), number);
   const reduceMotion = usePrefersReducedMotion();
-  const [, startTransition] = useTransition();
+  const [moving, startTransition] = useTransition();
 
   // Новые данные сервера (после revalidate) заменяют локальное состояние доски.
   const [serverCards, setServerCards] = useState(cards);
@@ -100,6 +111,12 @@ export function KanbanBoard({
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const origin = useRef<DragOrigin | null>(null);
+  // Изменения других участников: пока карточку тащат или бросок сохраняется — обновление ждёт.
+  useLiveRefresh({ projectId }, { paused: activeId !== null || moving });
+  // Порядок карточек (колонки слева направо) — для «следующая / предыдущая» в панели задачи.
+  useRegisterTaskOrder(
+    statuses.flatMap((status) => (columns[status.id] ?? []).map((card) => card.number)),
+  );
   const droppedAt = useRef(0);
 
   const sensors = useSensors(
@@ -213,6 +230,26 @@ export function KanbanBoard({
     setColumns(cards);
   }
 
+  // Стрелки переводят фокус между карточками. Во время перетаскивания стрелки — у dnd-kit.
+  function handleBoardKeyDown(event: KeyboardEvent<HTMLOListElement>) {
+    const direction = ARROW_DIRECTIONS[event.key];
+    if (!direction || activeId !== null || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.shiftKey) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const taskId = target?.closest<HTMLElement>('[data-board-card]')?.dataset.boardCard;
+    if (!taskId) return;
+    const order = statuses.map((status) => (columns[status.id] ?? []).map((card) => card.taskId));
+    const next = nextBoardFocus(order, taskId, direction);
+    event.preventDefault();
+    if (!next) return;
+    // Поиск внутри своей доски: скрытая (Activity) доска другой страницы тоже в DOM.
+    const element = event.currentTarget.querySelector<HTMLElement>(
+      `[data-board-card="${CSS.escape(next)}"]`,
+    );
+    element?.focus();
+    element?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
   const cardLabel = (taskId: string) =>
     Object.values(columns)
       .flat()
@@ -251,7 +288,11 @@ export function KanbanBoard({
         data-board
         className="relative -mx-4 overflow-x-auto edge-fade-x px-4 pb-2 sm:-mx-6 sm:px-6"
       >
-        <ol className="flex h-full min-w-max items-start gap-3" aria-label="Колонки доски">
+        <ol
+          className="flex h-full min-w-max items-start gap-3"
+          aria-label="Колонки доски"
+          onKeyDown={handleBoardKeyDown}
+        >
           {statuses.map((status) => (
             <BoardColumn
               key={status.id}

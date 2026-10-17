@@ -30,6 +30,7 @@ import {
   recordHistory,
   statusSnapshots,
 } from '../history/history.service';
+import { emitTaskEvent } from '../realtime/task-events.service';
 import { notifyWatchersAboutStatus, type StatusChangeNotice } from '../watcher/watcher.service';
 import { placementRepository } from './placement.repository';
 
@@ -202,6 +203,17 @@ export async function addToProject(
     throw error;
   }
   log.info({ workspaceId, taskId, projectId, statusId }, '[placement] added');
+  await emitPlacementEvent(session, input);
+}
+
+/** Сигнал реалтайма: изменилась одна доска (и панель этой задачи). */
+function emitPlacementEvent(session: AuthSession | null, input: PlacementRef): Promise<void> {
+  return emitTaskEvent(session, {
+    workspaceId: input.workspaceId,
+    kind: 'placement.changed',
+    taskId: input.taskId,
+    projectIds: [input.projectId],
+  });
 }
 
 /** Меняет статус задачи в проекте: карточка встаёт в конец новой колонки. */
@@ -223,6 +235,7 @@ export async function changeStatus(
     return;
   }
   log.info({ workspaceId, taskId, projectId, from, to: statusId }, '[placement] status changed');
+  await emitPlacementEvent(session, input);
   await notifyStatusWatchers(input, names, actorOf(session));
 }
 
@@ -249,6 +262,7 @@ export async function changePlacementStatusBySystem(
     { workspaceId, taskId, projectId, from, to: statusId, reason },
     '[placement] status changed by system',
   );
+  await emitPlacementEvent(null, input);
   await notifyStatusWatchers(input, names, null, 'GitHub');
   return true;
 }
@@ -347,6 +361,7 @@ export async function removeFromProject(session: AuthSession, input: PlacementRe
     }
   });
   log.info({ workspaceId, taskId, projectId }, '[placement] removed');
+  await emitPlacementEvent(session, input);
 }
 
 /**
@@ -431,6 +446,7 @@ export async function movePlacement(session: AuthSession, input: MoveInput): Pro
     { workspaceId, taskId, projectId, from: result.from, to: statusId, userId: session.user.id },
     '[placement] moved',
   );
+  await emitPlacementEvent(session, input);
   await notifyStatusWatchers(input, result.names, actorOf(session));
 }
 

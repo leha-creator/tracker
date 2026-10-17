@@ -98,6 +98,17 @@ export const placementRepository = {
     });
   },
 
+  /** Проекты, где размещена хотя бы одна из задач (доски для события реалтайма). */
+  async listProjectIdsOfTasks(workspaceId: string, taskIds: readonly string[]): Promise<string[]> {
+    if (taskIds.length === 0) return [];
+    const rows = await prisma.taskPlacement.findMany({
+      where: { workspaceId, taskId: { in: [...taskIds] } },
+      select: { projectId: true },
+      distinct: ['projectId'],
+    });
+    return rows.map((row) => row.projectId);
+  },
+
   async listProjectIds(
     tx: TransactionClient,
     workspaceId: string,

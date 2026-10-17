@@ -10,6 +10,7 @@ import {
   SearchIcon,
   SettingsIcon,
   UsersIcon,
+  UserCheckIcon,
 } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -178,6 +179,12 @@ export function CommandPalette({ workspaces }: { workspaces: WorkspaceListItemDt
   );
 
   const search = searchParams.toString();
+  const myTasks: PaletteCommand = {
+    id: 'my-tasks',
+    label: 'Мои задачи',
+    icon: UserCheckIcon,
+    href: '/my-tasks',
+  };
   const commands: PaletteCommand[] = workspace
     ? [
         {
@@ -192,6 +199,7 @@ export function CommandPalette({ workspaces }: { workspaces: WorkspaceListItemDt
           icon: ListTodoIcon,
           href: `/w/${workspace.slug}/tasks`,
         },
+        myTasks,
         {
           id: 'docs',
           label: 'Документы',
@@ -222,6 +230,7 @@ export function CommandPalette({ workspaces }: { workspaces: WorkspaceListItemDt
           icon: PlusIcon,
           href: NEW_WORKSPACE_HREF,
         },
+        myTasks,
       ];
 
   const folded = q.toLocaleLowerCase('ru');

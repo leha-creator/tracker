@@ -37,6 +37,8 @@
 
 **IP клиента для лимитов попыток** берётся из первого адреса `X-Forwarded-For` (см. [«Лимиты попыток»](architecture.md#лимиты-попыток)). Перед приложением должен стоять прокси, который перезаписывает этот заголовок (в продакшене — edge-Caddy). Если открыть приложение наружу напрямую, заголовок можно подделать и обойти лимиты по IP.
 
+**Обновления в реальном времени** (SSE, `/api/realtime/*`) отдельных переменных не требуют: события идут через `LISTEN/NOTIFY` той же базы (`DATABASE_URL`, одно дополнительное подключение на процесс). Прокси перед приложением не должен сжимать и буферизовать этот путь — настройка Caddy в [«Реалтайм через Caddy»](production.md#реалтайм-через-caddy). Локально `pnpm dev` отдаёт поток напрямую.
+
 Невалидное окружение даёт `EnvValidationError` со списком ключей. Значения в сообщение не попадают.
 
 ### GitHub App
@@ -126,7 +128,7 @@ PDF в разделе «Документы» показывается во `<ifr
 |------|------------|
 | `next.config.ts` | `output: 'standalone'` для Docker-образа, Cache Components, `serverExternalPackages` для pino, редирект `/w/:slug/projects/:projectId` → `/board` |
 | `prisma.config.ts` | Путь к схеме, миграции, `DATABASE_URL` для Prisma CLI |
-| `prisma/schema.prisma` | Схема БД (генератор `prisma-client` → `src/generated/prisma`). Модели Better Auth (`User`, `Session`, `Account`, `Verification`) пространств (`Workspace`, `WorkspaceMember`, `WorkspaceInvitation`), проектов (`Project`, `ProjectStatus`, enum `StatusCategory`), задач, профилей, уведомлений и документов (`DocumentFolder`, `Document`, `DocumentTag`, `DocumentTagAssignment`, `TaskDocumentLink`) |
+| `prisma/schema.prisma` | Схема БД (генератор `prisma-client` → `src/generated/prisma`). Модели Better Auth (`User`, `Session`, `Account`, `Verification`) пространств (`Workspace`, `WorkspaceMember`, `WorkspaceInvitation`), проектов (`Project`, `ProjectStatus`, enum `StatusCategory`), задач, сохранённых фильтров (`SavedTaskView`), профилей, уведомлений и документов (`DocumentFolder`, `Document`, `DocumentTag`, `DocumentTagAssignment`, `TaskDocumentLink`) |
 | `src/shared/auth/auth.ts` | Настройки Better Auth: срок сессии (7 дней), длина пароля (8–128), плагины `admin` и `organization` (роли `owner`/`member`, приглашение действует 7 дней, до 50 пространств на пользователя, до 100 ожидающих приглашений на пространство, переименование моделей, поля участника `canManageProjects` и `canManageDocuments`) |
 | `components.json` | Настройки shadcn/ui CLI |
 | `eslint.config.mjs` / `.prettierrc` | Линтер и форматирование |

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { defaultTaskListQuery, type TaskListQuery } from '../../models';
 import {
+  buildMyTaskWhere,
   buildPlacementOrderBy,
   buildPlacementWhere,
   buildTaskOrderBy,
@@ -169,5 +170,45 @@ describe('order by', () => {
       { task: { dueDate: { sort: 'asc', nulls: 'last' } } },
       { task: { number: 'desc' } },
     ]);
+  });
+});
+
+describe('buildMyTaskWhere', () => {
+  const mineCtx = { userId: 'user-1', today: '2026-10-16', workspaceIds: ['ws-1', 'ws-2'] };
+
+  it('takes my open active tasks in the given workspaces', () => {
+    expect(buildMyTaskWhere(defaultTaskListQuery('mine'), mineCtx)).toEqual({
+      workspaceId: { in: ['ws-1', 'ws-2'] },
+      assigneeId: 'user-1',
+      archivedAt: null,
+      AND: [
+        {
+          OR: [
+            { placements: { none: {} } },
+            { placements: { some: { status: { category: { not: 'done' } } } } },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('a category filter replaces the open-only condition', () => {
+    const where = buildMyTaskWhere(
+      { ...defaultTaskListQuery('mine'), categories: ['done'] },
+      mineCtx,
+    );
+    expect(where.AND).toEqual([
+      { OR: [{ placements: { some: { status: { category: { in: ['done'] } } } } }] },
+    ]);
+  });
+
+  it('overdue excludes done tasks like in the workspace list', () => {
+    const where = buildMyTaskWhere({ ...defaultTaskListQuery('mine'), due: 'overdue' }, mineCtx);
+    expect(where.AND).toEqual(
+      expect.arrayContaining([
+        { dueDate: { lt: new Date('2026-10-16T00:00:00.000Z') } },
+        expect.objectContaining({ NOT: expect.anything() }),
+      ]),
+    );
   });
 });

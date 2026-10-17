@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { findCardColumn, moveCard, prevTaskIdAt } from './board-move';
+import { findCardColumn, moveCard, nextBoardFocus, prevTaskIdAt } from './board-move';
 
 const card = (taskId: string) => ({ taskId });
 const ids = (cards: { taskId: string }[] | undefined) => (cards ?? []).map((item) => item.taskId);
@@ -76,5 +76,42 @@ describe('prevTaskIdAt', () => {
   it('returns the card above the index', () => {
     expect(prevTaskIdAt(column, 1)).toBe('a');
     expect(prevTaskIdAt(column, 2)).toBe('b');
+  });
+});
+
+describe('nextBoardFocus', () => {
+  const order = [['a1', 'a2', 'a3'], [], ['c1'], ['d1', 'd2']];
+
+  it('moves within a column and stops at the edges', () => {
+    expect(nextBoardFocus(order, 'a1', 'down')).toBe('a2');
+    expect(nextBoardFocus(order, 'a2', 'up')).toBe('a1');
+    expect(nextBoardFocus(order, 'a1', 'up')).toBeNull();
+    expect(nextBoardFocus(order, 'a3', 'down')).toBeNull();
+  });
+
+  it('skips empty columns and clamps the index', () => {
+    expect(nextBoardFocus(order, 'a3', 'right')).toBe('c1');
+    expect(nextBoardFocus(order, 'c1', 'left')).toBe('a1');
+    expect(nextBoardFocus(order, 'c1', 'right')).toBe('d1');
+    expect(nextBoardFocus(order, 'd2', 'left')).toBe('c1');
+    expect(nextBoardFocus(order, 'a1', 'left')).toBeNull();
+    expect(nextBoardFocus(order, 'd1', 'right')).toBeNull();
+  });
+
+  it('keeps the index when the neighbour column is long enough', () => {
+    expect(
+      nextBoardFocus(
+        [
+          ['a1', 'a2'],
+          ['b1', 'b2'],
+        ],
+        'a2',
+        'right',
+      ),
+    ).toBe('b2');
+  });
+
+  it('returns null for an unknown card', () => {
+    expect(nextBoardFocus(order, 'x', 'down')).toBeNull();
   });
 });

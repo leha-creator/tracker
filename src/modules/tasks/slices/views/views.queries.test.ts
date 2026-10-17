@@ -19,6 +19,7 @@ const memberSummary =
     ) => Promise<unknown>
   >();
 const isWorkspaceMember = vi.fn<(ws: string, userId: string) => Promise<boolean>>();
+const listMyWorkspaces = vi.fn<() => Promise<{ id: string; slug: string; name: string }[]>>();
 const listTaskSummaries = vi.fn<(ws: string, ids: string[]) => Promise<unknown[]>>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
@@ -31,6 +32,7 @@ vi.mock('@/modules/projects', () => ({
 }));
 vi.mock('@/modules/workspaces', () => ({
   isWorkspaceMember: (ws: string, userId: string) => isWorkspaceMember(ws, userId),
+  listMyWorkspaces: () => listMyWorkspaces(),
 }));
 vi.mock('./views.repository', () => ({
   viewsRepository: {
@@ -52,8 +54,14 @@ vi.mock('../subtask/subtask.service', () => ({
   getSubtaskProgress: (ws: string, ids: readonly string[]) => getSubtaskProgress(ws, ids),
 }));
 
-const { getBoardCards, getMemberTaskSummary, getTaskSummaries, listProjectTasks, listTasks } =
-  await import('./views.queries');
+const {
+  getBoardCards,
+  getMemberTaskSummary,
+  getTaskSummaries,
+  listMyTasks,
+  listProjectTasks,
+  listTasks,
+} = await import('./views.queries');
 const { defaultTaskListQuery, TASK_LIST_PAGE_SIZE } = await import('../../models');
 
 const session: AuthSession = {
@@ -165,6 +173,7 @@ describe('getBoardCards', () => {
 function listRow(number: number, extra: { dueDate?: Date | null; categories?: string[] } = {}) {
   return {
     id: `0192f3a0-0000-7000-8000-${String(number).padStart(12, '0')}`,
+    workspaceId: 'ws-1',
     number,
     title: `Задача ${number}`,
     priority: 'none',
@@ -339,5 +348,51 @@ describe('getTaskSummaries', () => {
   it('does not query without ids', async () => {
     await expect(getTaskSummaries(session, 'ws-1', [])).resolves.toEqual([]);
     expect(listTaskSummaries).not.toHaveBeenCalled();
+  });
+});
+
+describe('listMyTasks', () => {
+  const WS_A = '0192f3a0-0000-7000-8000-00000000000a';
+  const WS_B = '0192f3a0-0000-7000-8000-00000000000b';
+  const FOREIGN = '0192f3a0-0000-7000-8000-00000000000f';
+
+  function whereOfCall(): { workspaceId: { in: string[] }; assigneeId: string } {
+    return (listTaskPage.mock.calls[0]?.[0] as unknown as { where: never }).where;
+  }
+
+  beforeEach(() => {
+    listMyWorkspaces.mockResolvedValue([
+      { id: WS_A, slug: 'a', name: 'A', icon: 'rocket' },
+      { id: WS_B, slug: 'b', name: 'B', icon: 'star' },
+    ] as never);
+  });
+
+  it('lists my tasks across my workspaces with the workspace of each row', async () => {
+    listTaskPage.mockResolvedValue({
+      total: 1,
+      rows: [{ ...listRow(7), workspaceId: WS_B }],
+    });
+    const page = await listMyTasks(session, defaultTaskListQuery('mine'));
+    expect(whereOfCall()).toMatchObject({
+      workspaceId: { in: [WS_A, WS_B] },
+      assigneeId: 'user-1',
+    });
+    expect(page.items[0]?.workspace).toEqual({ id: WS_B, slug: 'b', name: 'B', icon: 'star' });
+    expect(page.workspaces).toHaveLength(2);
+  });
+
+  it('ignores a foreign workspace from the URL', async () => {
+    listTaskPage.mockResolvedValue({ total: 0, rows: [] });
+    await listMyTasks(session, { ...defaultTaskListQuery('mine'), workspaces: [WS_A, FOREIGN] });
+    expect(whereOfCall().workspaceId).toEqual({ in: [WS_A] });
+  });
+
+  it('does not query when only foreign workspaces are requested', async () => {
+    const page = await listMyTasks(session, {
+      ...defaultTaskListQuery('mine'),
+      workspaces: [FOREIGN],
+    });
+    expect(listTaskPage).not.toHaveBeenCalled();
+    expect(page).toMatchObject({ total: 0, items: [], page: 1, pageCount: 1 });
   });
 });

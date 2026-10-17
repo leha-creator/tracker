@@ -37,6 +37,7 @@ import {
 import type { AttachmentUploadDto, TaskAttachmentDto } from './attachment.dto';
 import { toAttachmentDto } from './attachment.mapper';
 import { attachmentRepository } from './attachment.repository';
+import { emitTaskEvent } from '../realtime/task-events.service';
 import { assertTaskActive } from '../task/task-archive.guard';
 import type { AttachmentKey } from './attachment.schema';
 import type { AttachmentRow } from './attachment.select';
@@ -236,6 +237,14 @@ export async function completeUpload(
     },
     '[attachment] uploaded',
   );
+  // Черновик файла комментария другим не виден, пока комментарий не отправлен.
+  if (row.commentId || row.target === 'task') {
+    await emitTaskEvent(session, {
+      workspaceId: key.workspaceId,
+      kind: 'attachment.changed',
+      taskId: key.taskId,
+    });
+  }
   return { target: row.target };
 }
 
@@ -288,6 +297,13 @@ export async function deleteAttachment(
     },
     '[attachment] deleted',
   );
+  if (row.status === 'ready' && (row.commentId || row.target === 'task')) {
+    await emitTaskEvent(session, {
+      workspaceId: key.workspaceId,
+      kind: 'attachment.changed',
+      taskId: key.taskId,
+    });
+  }
   return { target: row.target };
 }
 

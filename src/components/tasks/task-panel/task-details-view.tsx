@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { ViaAgentBadge } from '@/components/agents/via-agent-badge';
 import { TaskDocumentsSection } from '@/components/documents/task-documents/task-documents-section';
 import { TaskGithubSection } from '@/components/github/task-github-section';
+import { LiveRefresh } from '@/components/realtime/use-live-refresh';
 import { listProjects, listWorkspaceStatuses } from '@/modules/projects';
 import {
   getTaskByNumber,
@@ -30,6 +31,7 @@ import { TaskSubtasksSection } from '../subtasks/task-subtasks-section';
 import { TaskDescriptionEditor, TaskPropertiesEditor, TaskTitleEditor } from '../task-details-form';
 import { TaskPlacements } from '../task-placements';
 import { TaskArchiveBanner } from './task-archive-banner';
+import { TaskPanelHotkeys } from './task-panel-hotkeys';
 import { TaskPanelNotFound } from './task-panel-not-found';
 import { TaskProperty, TaskPropertyList } from './task-property';
 import { TaskSaveStatusProvider } from './task-save-status';
@@ -114,7 +116,13 @@ export async function TaskDetailsView({
   return (
     // key: другая задача — новые поля с её значениями (поля не пересоздаются после сохранения).
     <TaskSaveStatusProvider key={task.id}>
+      {/* Правки других участников, комментарии и файлы этой задачи. */}
+      <LiveRefresh taskId={task.id} />
       <article aria-labelledby="task-heading" className="flex min-h-full flex-col">
+        {/* useSearchParams внутри — под своей границей Suspense. */}
+        <Suspense fallback={null}>
+          <TaskPanelHotkeys taskNumber={task.number} variant={variant} readOnly={archived} />
+        </Suspense>
         <TaskToolbar
           sticky={variant === 'panel'}
           start={
@@ -199,6 +207,8 @@ export async function TaskDetailsView({
               workspaceId={workspace.id}
               task={task}
               members={members.map(({ userId, name, image }) => ({ userId, name, image }))}
+              currentUserId={session.user.id}
+              readOnly={archived}
             />
             <TaskProperty label="Проекты" align="start">
               <div className="grid min-w-0 flex-1 justify-items-start">

@@ -55,6 +55,7 @@ export function SortableTaskCard({
       active={active}
       pullRequest={pullRequest}
       {...listeners}
+      data-board-card={card.taskId}
       aria-describedby={describedBy}
       aria-roledescription={disabled ? undefined : 'перетаскиваемая карточка'}
       style={{ transform: CSS.Translate.toString(transform), transition }}

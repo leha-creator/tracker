@@ -65,6 +65,10 @@ vi.mock('../history/history.service', () => ({
   statusSnapshots: (tx: unknown, workspaceId: string, ids: string[]) =>
     statusSnapshots(tx, workspaceId, ids),
 }));
+const emitTaskEvent = vi.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve());
+vi.mock('../realtime/task-events.service', () => ({
+  emitTaskEvent: (...args: unknown[]) => emitTaskEvent(...args),
+}));
 vi.mock('./placement.repository', () => ({
   placementRepository: {
     findArchiveState: () => findArchiveState(),
@@ -196,6 +200,12 @@ describe('changeStatus', () => {
         actor: { id: 'user-1', name: session.user.name },
       }),
     );
+    expect(emitTaskEvent).toHaveBeenCalledWith(session, {
+      workspaceId: 'ws-1',
+      kind: 'placement.changed',
+      taskId: TASK_ID,
+      projectIds: [PROJECT_ID],
+    });
   });
 
   it('does nothing for the same status', async () => {
@@ -203,6 +213,7 @@ describe('changeStatus', () => {
     expect(findStatus).not.toHaveBeenCalled();
     expect(updateStatus).not.toHaveBeenCalled();
     expect(notifyWatchersAboutStatus).not.toHaveBeenCalled();
+    expect(emitTaskEvent).not.toHaveBeenCalled();
   });
 
   it('rejects a status of another project', async () => {
@@ -402,6 +413,11 @@ describe('changePlacementStatusBySystem', () => {
     );
     expect(notifyWatchersAboutStatus).toHaveBeenCalledWith(
       expect.objectContaining({ actor: null, systemName: 'GitHub' }),
+    );
+    // Системное изменение — без автора.
+    expect(emitTaskEvent).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({ kind: 'placement.changed', projectIds: [PROJECT_ID] }),
     );
   });
 

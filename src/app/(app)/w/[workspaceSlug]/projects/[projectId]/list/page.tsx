@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
+import { LiveRefresh } from '@/components/realtime/use-live-refresh';
 import { TaskPanel } from '@/components/tasks/task-panel/task-panel';
 import { taskPanelHref } from '@/components/tasks/task-panel/task-panel-href';
 import { TaskListEmpty } from '@/components/tasks/task-list/task-list-empty';
@@ -15,6 +16,7 @@ import { listStatuses } from '@/modules/projects';
 import {
   hasActiveFilters,
   listLabels,
+  listSavedViews,
   listProjectTasks,
   parseTaskListParams,
 } from '@/modules/tasks';
@@ -59,11 +61,12 @@ async function ListSection({ params, searchParams }: Props) {
   const projectPath = `/w/${workspace.slug}/projects/${project.id}`;
   const basePath = `${projectPath}/list`;
   // Статусы — из модуля projects, участники — из workspaces, строки — из tasks.
-  const [page, statuses, members, labels] = await Promise.all([
+  const [page, statuses, members, labels, savedViews] = await Promise.all([
     listProjectTasks(session, workspace.id, project.id, query),
     listStatuses(session, workspace.id, project.id),
     listMembers(session, workspace.id),
     listLabels(session, workspace.id),
+    listSavedViews(session, { scope: 'project', workspaceId: workspace.id, projectId: project.id }),
   ]);
   const shown = { ...query, page: page.page };
   const pullRequests = await getPullRequestBadges(
@@ -74,12 +77,15 @@ async function ListSection({ params, searchParams }: Props) {
 
   return (
     <TaskListShell query={shown} scope="project" basePath={basePath}>
+      <LiveRefresh projectId={project.id} tasksOnly debounceMs={1000} />
       <TaskListToolbar
         options={{
           currentUserId: session.user.id,
           members: members.map(({ userId, name }) => ({ userId, name })),
           statuses: statuses.map(({ id, name, color }) => ({ id, name, color })),
           labels: labels.map(({ id, name, color }) => ({ id, name, color })),
+          savedViews: { views: savedViews, workspaceId: workspace.id, projectId: project.id },
+          csvExport: { path: `/api/w/${workspace.slug}/tasks/export`, projectId: project.id },
         }}
       />
       {page.total === 0 ? (

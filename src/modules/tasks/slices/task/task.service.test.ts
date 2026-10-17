@@ -92,8 +92,16 @@ vi.mock('./task.repository', () => ({
     restoreMany: (...args: unknown[]) => restoreMany(...args),
   },
 }));
+const emitTaskEvent = vi.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve());
+vi.mock('../realtime/task-events.service', () => ({
+  emitTaskEvent: (...args: unknown[]) => emitTaskEvent(...args),
+}));
+const listProjectIdsOfTasks = vi.fn<(...args: unknown[]) => Promise<string[]>>(() =>
+  Promise.resolve(['project-1']),
+);
 vi.mock('../placement/placement.repository', () => ({
   placementRepository: {
+    listProjectIdsOfTasks: (...args: unknown[]) => listProjectIdsOfTasks(...args),
     findStatus: (...args: unknown[]) => findStatus(...args),
     lastPosition: (...args: unknown[]) => lastPosition(...args),
     create: (...args: unknown[]) => createPlacement(...args),
@@ -318,6 +326,21 @@ describe('createTask', () => {
       'user-1',
       null,
     ]);
+    expect(emitTaskEvent).toHaveBeenCalledWith(session, {
+      workspaceId: 'ws-1',
+      kind: 'task.created',
+      taskId: TASK_ID,
+      taskNumber: 7,
+      projectIds: [],
+    });
+  });
+
+  it('does not publish a realtime event when the transaction fails', async () => {
+    nextNumber.mockRejectedValueOnce(new Error('db down'));
+    await expect(createTask(session, { workspaceId: 'ws-1', title: 'Задача' })).rejects.toThrow(
+      'db down',
+    );
+    expect(emitTaskEvent).not.toHaveBeenCalled();
   });
 
   it('places the task at the end of the status column', async () => {
@@ -419,6 +442,10 @@ describe('updateTask', () => {
       expect.anything(),
     );
     expect(isWorkspaceMember).not.toHaveBeenCalled();
+    expect(emitTaskEvent).toHaveBeenCalledWith(
+      session,
+      expect.objectContaining({ kind: 'task.updated', taskId: TASK_ID }),
+    );
   });
 
   it('records changed fields in history', async () => {
@@ -509,6 +536,15 @@ describe('deleteTask', () => {
       workspaceSlug: 'team',
     });
     expect(deleteRow).toHaveBeenCalledWith('ws-1', TASK_ID);
+    // Доски вычислены до удаления: после него размещений уже нет.
+    expect(emitTaskEvent).toHaveBeenCalledWith(
+      session,
+      expect.objectContaining({
+        kind: 'task.archived',
+        taskId: TASK_ID,
+        projectIds: ['project-1'],
+      }),
+    );
   });
 
   it('removes stored objects of task files; storage failure does not break deletion', async () => {

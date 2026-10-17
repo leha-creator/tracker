@@ -1,10 +1,12 @@
 'use client';
 
-import { useCallback, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
+import { SHORTCUTS } from '@/components/hotkeys/shortcuts';
 import { UserAvatar } from '@/components/users/user-avatar';
 import { UserHoverCard } from '@/components/users/user-hover-card';
+import { useHotkeys } from '@/lib/use-hotkeys';
 import { updateTaskAction, type TaskDto, type TaskPriority } from '@/modules/tasks/client';
 
 import { TaskProperty } from './task-panel/task-property';
@@ -71,6 +73,14 @@ function useTextCommit(
   const saved = useRef(initial);
   const ref = useRef<HTMLTextAreaElement>(null);
 
+  // Текст с сервера изменился (правка другого участника) — показываем его, если поле не в правке.
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || initial === saved.current || document.activeElement === element) return;
+    saved.current = initial;
+    element.value = initial;
+  }, [initial]);
+
   function revert() {
     if (ref.current) ref.current.value = saved.current;
   }
@@ -131,6 +141,12 @@ function useOptimisticField<T extends string>(
   initial: T,
 ) {
   const [value, setValue] = useState(initial);
+  // Новое значение с сервера (правка другого участника, реалтайм) заменяет показанное.
+  const [synced, setSynced] = useState(initial);
+  if (initial !== synced) {
+    setSynced(initial);
+    setValue(initial);
+  }
   async function change(next: T) {
     if (next === value) return;
     const previous = value;
@@ -145,7 +161,14 @@ export function TaskPropertiesEditor({
   workspaceId,
   task,
   members,
-}: EditorProps & { members: MemberOption[] }) {
+  currentUserId,
+  readOnly = false,
+}: EditorProps & {
+  members: MemberOption[];
+  /** Для клавиши «i» — назначить себя. */
+  currentUserId?: string;
+  readOnly?: boolean;
+}) {
   const save = useTaskAutosave(workspaceId, task.id);
   const [assigneeId, setAssigneeId] = useOptimisticField(
     save,
@@ -160,17 +183,33 @@ export function TaskPropertiesEditor({
       ? [...members, task.assignee]
       : members;
   const assignee = options.find((member) => member.userId === assigneeId);
+  const canAssignMe =
+    !readOnly &&
+    currentUserId !== undefined &&
+    options.some((member) => member.userId === currentUserId);
+
+  useHotkeys([
+    {
+      keys: SHORTCUTS.assignMe.keys,
+      handler: () => {
+        if (currentUserId) void setAssigneeId(currentUserId);
+      },
+      enabled: canAssignMe,
+    },
+  ]);
 
   return (
     <>
       <TaskProperty labelId="task-assignee-label" label="Ответственный">
-        <AssigneeSelect
-          id="task-assignee"
-          labelledBy="task-assignee-label"
-          members={options}
-          value={assigneeId}
-          onChange={setAssigneeId}
-        />
+        <span data-hotkey-field="assignee" className="contents">
+          <AssigneeSelect
+            id="task-assignee"
+            labelledBy="task-assignee-label"
+            members={options}
+            value={assigneeId}
+            onChange={setAssigneeId}
+          />
+        </span>
         {assignee && (
           <UserHoverCard
             user={assignee}
@@ -194,12 +233,14 @@ export function TaskPropertiesEditor({
         />
       </TaskProperty>
       <TaskProperty labelId="task-priority-label" label="Приоритет">
-        <PrioritySelect
-          id="task-priority"
-          labelledBy="task-priority-label"
-          value={priority}
-          onChange={setPriority}
-        />
+        <span data-hotkey-field="priority" className="contents">
+          <PrioritySelect
+            id="task-priority"
+            labelledBy="task-priority-label"
+            value={priority}
+            onChange={setPriority}
+          />
+        </span>
       </TaskProperty>
     </>
   );

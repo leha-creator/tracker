@@ -2,7 +2,7 @@
  * Публичный API модуля для клиентских компонентов: Server Actions, схемы, константы и типы.
  * Без server-only кода (сервисов, репозиториев) — их экспортирует только index.ts.
  */
-export { findCardColumn, moveCard, prevTaskIdAt } from './models/board-move';
+export { findCardColumn, moveCard, nextBoardFocus, prevTaskIdAt } from './models/board-move';
 export {
   extractMentions,
   filterMentionCandidates,
@@ -10,7 +10,7 @@ export {
   mentionText,
 } from './models/comment-mentions';
 export type { MentionCandidate, MentionRange } from './models/comment-mentions';
-export type { BoardColumns } from './models/board-move';
+export type { BoardColumns, BoardFocusDirection } from './models/board-move';
 export {
   MEMBER_DONE_RECENT_DAYS,
   TASK_DESCRIPTION_MAX_LENGTH,
@@ -30,6 +30,7 @@ export type { AttachmentKind, AttachmentTarget } from './models/task-attachment'
 export { TASK_COMMENT_MAX_LENGTH } from './models/task-comment';
 export {
   clearFilters,
+  defaultTaskListQuery,
   hasActiveFilters,
   pageBounds,
   paginationRange,
@@ -62,6 +63,13 @@ export {
   TASK_LABELS_PER_WORKSPACE,
 } from './models/task-label';
 export type { TaskLabelColor } from './models/task-label';
+export { barPercent } from './models/dashboard';
+export {
+  canonicalViewParams,
+  SAVED_VIEW_NAME_MAX_LENGTH,
+  SAVED_VIEWS_PER_SCOPE,
+} from './models/saved-task-view';
+export type { SavedTaskViewScope } from './models/saved-task-view';
 export { TASK_MAX_DEPTH, TASK_SUBTASKS_LIMIT } from './models/task-tree';
 export type { SubtaskProgress } from './models/task-tree';
 export { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from './models/task-priority';
@@ -84,6 +92,8 @@ export {
   updateCommentAction,
 } from './slices/comment/comment.actions';
 export type { TaskCommentDto, TaskCommentsDto } from './slices/comment/comment.dto';
+export type { WorkspaceDashboardDto } from './slices/dashboard/dashboard.dto';
+export type { DashboardCounts, ProjectCountRow, WorkloadItem } from './models/dashboard';
 export type { TaskHistoryDto, TaskHistoryItemDto } from './slices/history/history.dto';
 export {
   createLabelAction,
@@ -93,6 +103,12 @@ export {
   updateLabelAction,
 } from './slices/label/label.actions';
 export type { TaskLabelDto, TaskLabelRefDto } from './slices/label/label.dto';
+export {
+  createSavedViewAction,
+  deleteSavedViewAction,
+  renameSavedViewAction,
+} from './slices/saved-view/saved-view.actions';
+export type { SavedTaskViewDto } from './slices/saved-view/saved-view.dto';
 export type { TaskSearchResultDto } from './slices/search/search.dto';
 export { setWatchingAction } from './slices/watcher/watcher.actions';
 export type { TaskWatchersDto } from './slices/watcher/watcher.dto';
@@ -127,6 +143,9 @@ export type {
   BoardCardDto,
   BoardCardsDto,
   MemberTaskSummaryDto,
+  MyTaskListItemDto,
+  MyTaskListPageDto,
+  MyTaskWorkspaceDto,
   TaskListPageDto,
   TaskSummaryDto,
 } from './slices/views/views.dto';

@@ -138,6 +138,8 @@ export function TaskLabelsEditor({
       <PopoverTrigger asChild>
         <button
           type="button"
+          data-hotkey-field="labels"
+          aria-keyshortcuts="L"
           aria-labelledby={labelledBy}
           aria-describedby={`${labelledBy}-value`}
           className="-ml-2 inline-flex min-h-8 max-w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-left text-sm transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"

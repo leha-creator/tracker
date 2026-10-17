@@ -242,6 +242,7 @@ export function DueDatePicker({
         <button
           type="button"
           id={id}
+          data-hotkey-field="due"
           aria-labelledby={`${labelledBy} ${id}`}
           data-invalid={invalid || undefined}
           onClick={() => setEditing(true)}

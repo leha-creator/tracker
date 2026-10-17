@@ -1,3 +1,5 @@
+import type { EntityIcon } from '@/shared/entity-icon';
+
 import type { TaskPriority } from '../../models';
 import type { SubtaskProgress } from '../../models/task-tree';
 import type { TaskLabelRefDto } from '../label/label.dto';
@@ -64,4 +66,22 @@ export interface TaskSummaryDto {
   title: string;
   /** Во всех проектах задачи статус «Готово». */
   isDone: boolean;
+}
+
+/** Пространство строки «Моих задач»: задача живёт в нём, ссылка ведёт туда. */
+export interface MyTaskWorkspaceDto {
+  id: string;
+  slug: string;
+  name: string;
+  icon: EntityIcon;
+}
+
+export interface MyTaskListItemDto extends TaskListItemDto {
+  workspace: MyTaskWorkspaceDto;
+}
+
+/** Страница «Моих задач» и мои пространства — для фильтра «Пространство». */
+export interface MyTaskListPageDto extends Omit<TaskListPageDto, 'items'> {
+  items: MyTaskListItemDto[];
+  workspaces: MyTaskWorkspaceDto[];
 }

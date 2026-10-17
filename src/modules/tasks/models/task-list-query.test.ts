@@ -51,6 +51,7 @@ describe('parseTaskListParams', () => {
       projects: [PROJECT_ID, 'none'],
       priorities: ['high', 'urgent'],
       assignees: ['me', 'none', 'user_1'],
+      workspaces: [],
       labels: [],
       due: 'overdue',
       topLevelOnly: true,
@@ -289,5 +290,58 @@ describe('archived', () => {
     expect(parseTaskListParams({ archived: 'yes' }, 'workspace').archived).toBe(false);
     expect(serializeTaskListParams(query, 'workspace')).toBe('priority=high&archived=1');
     expect(clearFilters(query, 'workspace')).toMatchObject({ archived: true, priorities: [] });
+  });
+});
+
+describe('mine', () => {
+  const WS = '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c';
+
+  it('defaults to due date ascending', () => {
+    expect(defaultTaskListQuery('mine')).toMatchObject({ sort: 'due', dir: 'asc', workspaces: [] });
+  });
+
+  it('keeps workspaces, categories and priorities, drops other scopes filters', () => {
+    const query = parseTaskListParams(
+      {
+        workspace: `${WS},bad`,
+        category: 'todo',
+        priority: 'high',
+        project: PROJECT_ID,
+        status: PROJECT_ID,
+        label: PROJECT_ID,
+        assignee: 'someone',
+        archived: '1',
+      },
+      'mine',
+    );
+    expect(query).toMatchObject({
+      workspaces: [WS],
+      categories: ['todo'],
+      priorities: ['high'],
+      projects: [],
+      statuses: [],
+      labels: [],
+      assignees: [],
+      archived: false,
+    });
+  });
+
+  it('forbids sorting by status', () => {
+    expect(parseTaskListParams({ sort: 'status' }, 'mine').sort).toBe('due');
+  });
+
+  it('round-trips through the URL', () => {
+    const query = parseTaskListParams(
+      { workspace: WS, category: 'todo', due: 'week', sort: 'priority' },
+      'mine',
+    );
+    expect(serializeTaskListParams(query, 'mine')).toBe(
+      `workspace=${WS}&category=todo&due=week&sort=priority`,
+    );
+    expect(serializeTaskListParams(defaultTaskListQuery('mine'), 'mine')).toBe('');
+  });
+
+  it('the workspace filter is an active filter', () => {
+    expect(hasActiveFilters({ ...defaultTaskListQuery('mine'), workspaces: [WS] })).toBe(true);
   });
 });

@@ -18,7 +18,7 @@ type RateLimitRules = Partial<Record<RateLimitScope, RateLimitRule>>;
 const MINUTE = 60;
 const HOUR = 60 * MINUTE;
 
-/** Лимиты Server Actions аутентификации (см. docs/architecture.md, «Безопасность аутентификации»). */
+/** Лимиты Server Actions аутентификации и тяжёлых выгрузок (см. docs/architecture.md, «Безопасность аутентификации»). */
 export const RATE_LIMITS = {
   'sign-in': {
     ip: { windowSeconds: 10 * MINUTE, max: 30 },
@@ -40,6 +40,8 @@ export const RATE_LIMITS = {
   // Действия с подтверждением паролем в профиле: смена пароля, включение и выключение 2FA,
   // перевыпуск резервных кодов — перебор пароля вошедшего пользователя.
   'change-password': { user: { windowSeconds: 10 * MINUTE, max: 5 } },
+  // Выгрузка CSV читает до 10 000 задач за запрос — тяжёлая операция для БД.
+  'tasks.export': { user: { windowSeconds: MINUTE, max: 10 } },
 } as const satisfies Record<string, RateLimitRules>;
 
 export type RateLimitAction = keyof typeof RATE_LIMITS;

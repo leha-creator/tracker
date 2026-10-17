@@ -18,13 +18,18 @@ function isWithin(pathname: string, base: string): boolean {
 }
 
 /**
- * Разделы пространства. «Настройки» скрыты для участников ради UX — доступ проверяет страница.
+ * Разделы пространства, первым — «Обзор». «Настройки» скрыты для участников ради UX — доступ проверяет страница.
  * «Проекты» активны и на странице пространства, и внутри проектов; «Настройки» — только на самой
  * странице настроек, а не в «Участниках», которые лежат под `/settings/members`.
  */
 export function getWorkspaceSections(slug: string, role: WorkspaceRole): NavItem[] {
   const base = `/w/${slug}`;
   const sections: NavItem[] = [
+    {
+      href: `${base}/overview`,
+      label: 'Обзор',
+      isActive: (path) => isWithin(path, `${base}/overview`),
+    },
     {
       href: base,
       label: 'Проекты',

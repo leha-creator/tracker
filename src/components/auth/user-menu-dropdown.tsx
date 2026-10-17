@@ -1,6 +1,13 @@
 'use client';
 
-import { BellIcon, LogOutIcon, ShieldIcon, UserIcon } from 'lucide-react';
+import {
+  BellIcon,
+  KeyboardIcon,
+  ListChecksIcon,
+  LogOutIcon,
+  ShieldIcon,
+  UserIcon,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
 
@@ -13,8 +20,10 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { openShortcutsDialog } from '@/components/hotkeys/shortcuts-dialog';
 import { UserAvatar } from '@/components/users/user-avatar';
 
 const THEME_OPTIONS = [
@@ -68,10 +77,22 @@ export function UserMenuDropdown({
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
+          <Link href="/my-tasks">
+            <ListChecksIcon />
+            Мои задачи
+            <DropdownMenuShortcut>G M</DropdownMenuShortcut>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
           <Link href="/notifications">
             <BellIcon />
             Уведомления
           </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={openShortcutsDialog}>
+          <KeyboardIcon />
+          Горячие клавиши
+          <DropdownMenuShortcut>?</DropdownMenuShortcut>
         </DropdownMenuItem>
         {/* Ссылка скрыта для не-админов ради UX; доступ проверяет сама страница /admin. */}
         {isAdmin && (
