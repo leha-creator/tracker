@@ -2,13 +2,16 @@ export {
   normalizeName,
   pickByIdOrName,
   parseStatusCategory,
+  resolveLabels,
   resolveMember,
   resolveProject,
   resolveStatus,
+  uniqueLabelNames,
 } from './catalog';
-export type { CatalogMember, CatalogProject, CatalogStatus } from './catalog';
+export type { CatalogLabel, CatalogMember, CatalogProject, CatalogStatus } from './catalog';
 export {
   formatTaskDetails,
+  formatTaskHistory,
   formatTaskLine,
   formatTaskList,
   formatWorkspaceContext,

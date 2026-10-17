@@ -28,10 +28,12 @@ tasker/
 │   │   │   │   ├── projects/[projectId]/list/page.tsx    # Список
 │   │   │   │   ├── tasks/[taskId]/page.tsx
 │   │   │   │   ├── docs/                                 # Документы: обзор (?folder, ?q, ?tag, ?kind), new, [documentId], [documentId]/edit
-│   │   │   │   └── settings/members/page.tsx
+│   │   │   │   ├── settings/members/page.tsx
+│   │   │   │   └── settings/labels/page.tsx                # Метки пространства
 │   │   │   └── admin/                # Глобальная админка (роль ADMIN): users/ — пользователи ресурса
 │   │   └── api/
 │   │       ├── auth/[...all]/route.ts         # Better Auth handler
+│   │       ├── cron/reminders/route.ts        # Напоминания о сроке (Bearer CRON_SECRET, вызывает планировщик)
 │   │       ├── documents/[documentId]/file/route.ts # файл документа (302) или Markdown заметки
 │   │       ├── mcp/route.ts                   # MCP-сервер для агентов (Bearer-токен)
 │   │       └── webhooks/github/route.ts       # GitHub webhooks
@@ -62,13 +64,18 @@ tasker/
 │   │   │
 │   │   ├── tasks/
 │   │   │   ├── slices/
-│   │   │   │   ├── task/             # CRUD задачи, номер (#42), срок, приоритет, ответственный
+│   │   │   │   ├── task/             # CRUD задачи, номер (#42), срок, приоритет, ответственный; архив и восстановление ветки (assertTaskActive)
 │   │   │   │   ├── placement/        # размещение задачи в проекте: статус + позиция
 │   │   │   │   ├── subtask/          # дерево подзадач: рекурсивные CTE, смена родителя под блокировкой, прогресс
 │   │   │   │   ├── comment/          # комментарии; @упоминания и уведомления о комментарии
 │   │   │   │   ├── attachment/       # вложения задачи и комментариев: слот загрузки (presigned POST), подтверждение с проверкой размера и сигнатуры, ссылка скачивания, удаление объектов
+│   │   │   │   ├── history/          # история изменений (TaskHistoryEntry): запись в транзакции изменения, слияние правок, чтение
+│   │   │   │   ├── label/            # метки пространства и метки задачи
+│   │   │   │   ├── watcher/          # наблюдатели: автоподписка, подписка вручную, получатели уведомлений
+│   │   │   │   ├── search/           # поиск задач по номеру и названию (для модуля search)
+│   │   │   │   ├── reminder/         # напоминания о сроке: системная функция sendDueReminders без сессии (только для /api/cron/reminders)
 │   │   │   │   └── views/            # запросы для канбана и списка (read-модели); фильтры/сортировка списка — task-list.prisma.ts
-│   │   │   ├── models/               # правила задачи, TaskPlacement, позиции (fractional-indexing), Priority, упоминания (comment-mentions), дерево подзадач (task-tree)
+│   │   │   ├── models/               # правила задачи, TaskPlacement, позиции (fractional-indexing), Priority, упоминания (comment-mentions), дерево подзадач (task-tree), история (task-history), метки (task-label), даты напоминаний (due-reminders)
 │   │   │   ├── client.ts
 │   │   │   └── index.ts
 │   │   │
@@ -94,6 +101,12 @@ tasker/
 │   │   │   │   └── user/             # список пользователей; блокировка, роль, сессии, удаление через плагин admin
 │   │   │   ├── models/               # правила над пользователями (не над собой, администратора — сначала снять роль, единственный владелец), запрос списка
 │   │   │   ├── admin-api.ts          # callAdminApi: вызов API плагина admin + маппинг ошибок
+│   │   │   ├── client.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── search/                   # Глобальный поиск (агрегатор): задачи, документы, участники, пространства
+│   │   │   ├── slices/global/        # globalSearchAction → globalSearch: группы параллельно, каждая проверяет доступ
+│   │   │   ├── models/               # нормализация запроса, минимальная длина, ранжирование совпадений
 │   │   │   ├── client.ts
 │   │   │   └── index.ts
 │   │   │
@@ -182,6 +195,7 @@ tasker/
 - ✅ `agent-mcp` зависит от `api-tokens`, `tasks`, `projects`, `workspaces`, `documents` и `integrations/github`; от него не зависит никто. Инструменты вызывают те же сервисы, что Server Actions, с сессией владельца токена; `workspaceId` берётся только из токена, области — из `session.via`
 - ✅ `agents` зависит от `api-tokens` (отзыв токенов отключённого агента), но не наоборот. `api-tokens`, `notifications`, `workspaces` и `profiles` читают `WorkspaceAgent` и `User.isAgent` своими репозиториями — задокументированное чтение чужой таблицы, чтобы не создавать цикл (`agents` → `api-tokens`, `notifications` ни от кого не зависит)
 - ✅ `documents` зависит от `tasks` (краткие данные и поиск задач для связей), но `tasks` не зависит от `documents`: раздел «Документы» в задаче собирает компонент слоя UI (`components/documents/task-documents`)
+- ✅ `search` зависит от `tasks`, `documents` и `workspaces` (их функции поиска и списки), от него не зависит никто
 - ✅ `admin` зависит от `workspaces` (число пространств, единоличное владение), но не наоборот. Проверки администратора (`requireAdmin`) читают сессию в обход cookie-кеша (`getFreshSession`)
 - ❌ Компоненты и страницы не импортируют `prisma` и репозитории
 - ❌ Actions не вызывают репозитории в обход сервиса
@@ -195,7 +209,9 @@ tasker/
 - **Изменения:** клиентские компоненты вызывают Server Actions. Action возвращает `ActionResult<T>` (`{ ok: true, data } | { ok: false, error: { code, message } }`) и делает `revalidatePath`/`revalidateTag`.
 - **Межмодульные вызовы:** через публичный API (`index.ts`) модуля-поставщика. Если нужно избежать обратной зависимости, используются колбэки или простые доменные события в памяти: например, `tasks` не знает о GitHub, а GitHub-модуль сам подписывается на нужное.
 - **Транзакции:** если операция затрагивает несколько агрегатов (перемещение карточки с пересчётом позиций), репозиторий принимает `Prisma.TransactionClient`, а сервис открывает `prisma.$transaction`.
-- **Авторизация:** централизована в `shared/access`. Каждый сервисный метод, работающий с данными пространства, первым делом вызывает `requireWorkspaceAccess(session, workspaceId, minRole)` (неучастнику — `NOT_FOUND`, низкой роли — `FORBIDDEN`). Страницы `/w/[workspaceSlug]/*` используют `requireWorkspaceAccessBySlug(slug, minRole)` → `notFound()`.
+- **Авторизация:** централизована в `shared/access`. Каждый сервисный метод, работающий с данными пространства, первым делом вызывает `requireWorkspaceAccess(session, workspaceId, minRole)` (неучастнику — `NOT_FOUND`, низкой роли — `FORBIDDEN`). Страницы `/w/[workspaceSlug]/*` используют `requireWorkspaceAccessBySlug(slug, minRole)` → `notFound()`. Архивное пространство guard-функции не пропускают (`NOT_FOUND`); исключение — `allowArchived` для настроек у владельца (восстановление и удаление).
+- **Архив вместо удаления.** Задачи, проекты и пространства получают `archivedAt` и скрываются из списков, но читаются по ссылке. Изменения архивной задачи отклоняет `assertTaskActive`; «удалить навсегда» — только архивную сущность. Архив задачи — вся ветка подзадач одной меткой времени.
+- **Системные вызовы без сессии.** Кроме обработчиков вебхука GitHub, такая функция одна — `sendDueReminders` (`tasks`): её вызывает только `POST /api/cron/reminders` после проверки `CRON_SECRET`. Идемпотентность — уникальность `TaskDueReminder(taskId, kind, dueDate)`.
 - **Права в пространстве сверх роли.** Владелец имеет все права; участнику владелец выдаёт отдельные права (сейчас — `manageProjects` и `manageDocuments`, флаги `WorkspaceMember.canManageProjects` / `canManageDocuments`, объявлены в плагине с `input: false`; право → колонка — `PERMISSION_FLAGS`). Сервисы проверяют их через `requireWorkspacePermission(session, workspaceId, permission)`, страницы — через `access.permissions`. Флаг меняет сервис участников через репозиторий: у плагина нет API для дополнительных полей.
 - **Удаление колонки с задачами.** Жизненный цикл статуса принадлежит `projects`, поэтому `deleteStatus` в той же транзакции переводит размещения удаляемого статуса в выбранный (`statusRepository.reassignPlacements`, меняется только `statusId`) — единственное место, где `projects` пишет в таблицу модуля `tasks`. FK размещения на статус — `NO ACTION`: статус с задачами без переноса не удалить, каскад проекта проходит.
 - **Вложения.** Браузер загружает файл прямо в хранилище по presigned POST (политика фиксирует ключ, тип и размер), сервер только выдаёт слот и подтверждает загрузку. Скачивание — через `GET /api/attachments/[id]`: проверка доступа и 302 на presigned GET. Строки вложений удаляются каскадом вместе с задачей и комментарием, объекты хранилища удаляют сервисы `deleteTask` / `deleteComment` / `deleteAttachment` после удаления строк.

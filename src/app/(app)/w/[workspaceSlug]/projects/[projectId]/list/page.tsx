@@ -12,7 +12,12 @@ import { TaskListToolbar } from '@/components/tasks/task-list/task-list-toolbar'
 import { Button } from '@/components/ui/button';
 import { getPullRequestBadges } from '@/modules/integrations/github';
 import { listStatuses } from '@/modules/projects';
-import { hasActiveFilters, listProjectTasks, parseTaskListParams } from '@/modules/tasks';
+import {
+  hasActiveFilters,
+  listLabels,
+  listProjectTasks,
+  parseTaskListParams,
+} from '@/modules/tasks';
 import { listMembers } from '@/modules/workspaces';
 
 import { loadProjectPage } from '../_lib/load-project';
@@ -54,10 +59,11 @@ async function ListSection({ params, searchParams }: Props) {
   const projectPath = `/w/${workspace.slug}/projects/${project.id}`;
   const basePath = `${projectPath}/list`;
   // Статусы — из модуля projects, участники — из workspaces, строки — из tasks.
-  const [page, statuses, members] = await Promise.all([
+  const [page, statuses, members, labels] = await Promise.all([
     listProjectTasks(session, workspace.id, project.id, query),
     listStatuses(session, workspace.id, project.id),
     listMembers(session, workspace.id),
+    listLabels(session, workspace.id),
   ]);
   const shown = { ...query, page: page.page };
   const pullRequests = await getPullRequestBadges(
@@ -73,6 +79,7 @@ async function ListSection({ params, searchParams }: Props) {
           currentUserId: session.user.id,
           members: members.map(({ userId, name }) => ({ userId, name })),
           statuses: statuses.map(({ id, name, color }) => ({ id, name, color })),
+          labels: labels.map(({ id, name, color }) => ({ id, name, color })),
         }}
       />
       {page.total === 0 ? (

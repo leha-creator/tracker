@@ -1,5 +1,6 @@
 import type { TaskPriority } from '../../models';
 import type { SubtaskProgress } from '../../models/task-tree';
+import type { TaskLabelRefDto } from '../label/label.dto';
 import type { TaskAncestorDto } from '../subtask/subtask.dto';
 import type { TaskListItemDto, TaskUserDto } from '../task/task.dto';
 
@@ -18,6 +19,8 @@ export interface BoardCardDto {
   parent: TaskAncestorDto | null;
   /** Прогресс подзадач; null — подзадач нет. */
   subtaskProgress: SubtaskProgress | null;
+  /** Метки по имени (карточка показывает первые `TASK_LABELS_ON_CARD`). */
+  labels: TaskLabelRefDto[];
 }
 
 /** Карточки доски по id статуса (колонки); порядок — по позиции. */

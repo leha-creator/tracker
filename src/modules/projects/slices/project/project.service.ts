@@ -9,7 +9,9 @@ import { createLogger } from '@/shared/logger';
 
 import {
   assertCanCreateProject,
+  assertCanDeleteProject,
   assertDeleteConfirmed,
+  assertProjectNotArchived,
   countTasksByCategory,
   isEntityId,
   normalizeProjectName,
@@ -32,6 +34,8 @@ function toProjectDto(row: ProjectRow): ProjectDto {
     icon: resolveEntityIcon(row.icon, row.id),
     createdAt: row.createdAt,
     tasksCount: row._count.placements,
+    archivedAt: row.archivedAt,
+    archivedByName: row.archivedBy?.name ?? null,
   };
 }
 
@@ -53,18 +57,21 @@ async function loadProject(workspaceId: string, projectId: string): Promise<Proj
   return row;
 }
 
+/** Проекты пространства: по умолчанию активные, `archived` — только архивные. */
 export async function listProjects(
   session: AuthSession,
   workspaceId: string,
+  options: { archived?: boolean } = {},
 ): Promise<ProjectListItemDto[]> {
   await requireWorkspaceAccess(session, workspaceId);
   const userId = session.user.id;
+  const archived = options.archived ?? false;
   // Срок — дата без времени, «сегодня» — в UTC (как у фильтра «Просрочено» в задачах).
   const today = new Date().toISOString().slice(0, 10);
-  log.debug({ userId, workspaceId, today }, '[project.listProjects]');
+  log.debug({ userId, workspaceId, today, archived }, '[project.listProjects]');
 
   const [rows, stats] = await Promise.all([
-    projectRepository.listByWorkspace(workspaceId),
+    projectRepository.listByWorkspace(workspaceId, archived),
     projectRepository.taskStatsByWorkspace(workspaceId, userId, today),
   ]);
   const statsByProject = new Map(stats.map((row) => [row.projectId, row]));
@@ -87,6 +94,7 @@ export async function listProjects(
       myOpenCount: projectStats?.mine ?? 0,
       lastActivityAt:
         tasksActivity && tasksActivity > row.updatedAt ? tasksActivity : row.updatedAt,
+      archivedAt: row.archivedAt,
     };
   });
 }
@@ -165,7 +173,13 @@ export async function updateProject(
   const { workspaceId, projectId } = input;
   await requireWorkspacePermission(session, workspaceId, 'manageProjects');
   log.debug({ userId: session.user.id, workspaceId, projectId }, '[project.updateProject] start');
-  await loadProject(workspaceId, projectId);
+  const project = await loadProject(workspaceId, projectId);
+  try {
+    assertProjectNotArchived(project);
+  } catch (error) {
+    log.warn({ workspaceId, projectId }, '[project.updateProject] archived project');
+    throw error;
+  }
   const name = normalizeProjectName(input.name);
   if (await projectRepository.isNameTaken(workspaceId, name, projectId)) {
     log.warn({ workspaceId, projectId }, '[project.updateProject] name taken');
@@ -194,7 +208,55 @@ export async function updateProject(
   return toProjectDto(await loadProject(workspaceId, projectId));
 }
 
-/** Удаляет проект со статусами. Возвращает slug пространства для редиректа. */
+/**
+ * Отправляет проект в архив: доска и статусы только для чтения, задачи остаются в пространстве.
+ * Повторный вызов для архивного проекта ничего не меняет.
+ */
+export async function archiveProject(
+  session: AuthSession,
+  input: { workspaceId: string; projectId: string },
+): Promise<ProjectDto> {
+  return setProjectArchived(session, input, true);
+}
+
+/** Возвращает проект из архива. */
+export async function restoreProject(
+  session: AuthSession,
+  input: { workspaceId: string; projectId: string },
+): Promise<ProjectDto> {
+  return setProjectArchived(session, input, false);
+}
+
+async function setProjectArchived(
+  session: AuthSession,
+  input: { workspaceId: string; projectId: string },
+  archive: boolean,
+): Promise<ProjectDto> {
+  const { workspaceId, projectId } = input;
+  const userId = session.user.id;
+  await requireWorkspacePermission(session, workspaceId, 'manageProjects');
+  log.debug({ userId, workspaceId, projectId, archive }, '[project.setArchived] start');
+
+  await loadProject(workspaceId, projectId);
+  const count = await projectRepository.setArchived(
+    workspaceId,
+    projectId,
+    archive
+      ? { archivedAt: new Date(), archivedById: userId }
+      : { archivedAt: null, archivedById: null },
+  );
+  if (count === 0) {
+    log.debug({ workspaceId, projectId, archive }, '[project.setArchived] already in state');
+  } else {
+    log.info(
+      { workspaceId, projectId, userId },
+      archive ? '[project] archived' : '[project] restored',
+    );
+  }
+  return toProjectDto(await loadProject(workspaceId, projectId));
+}
+
+/** Удаляет архивный проект со статусами. Возвращает slug пространства для редиректа. */
 export async function deleteProject(
   session: AuthSession,
   input: { workspaceId: string; projectId: string; confirmName: string },
@@ -204,6 +266,12 @@ export async function deleteProject(
   log.debug({ userId: session.user.id, workspaceId, projectId }, '[project.deleteProject] start');
 
   const project = await loadProject(workspaceId, projectId);
+  try {
+    assertCanDeleteProject(project);
+  } catch (error) {
+    log.warn({ workspaceId, projectId }, '[project.deleteProject] project is not archived');
+    throw error;
+  }
   try {
     assertDeleteConfirmed(project.name, input.confirmName);
   } catch (error) {

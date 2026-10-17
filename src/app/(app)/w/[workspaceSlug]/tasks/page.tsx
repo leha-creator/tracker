@@ -12,7 +12,7 @@ import { TaskListToolbar } from '@/components/tasks/task-list/task-list-toolbar'
 import { Button } from '@/components/ui/button';
 import { getPullRequestBadges } from '@/modules/integrations/github';
 import { listProjects } from '@/modules/projects';
-import { hasActiveFilters, listTasks, parseTaskListParams } from '@/modules/tasks';
+import { hasActiveFilters, listLabels, listTasks, parseTaskListParams } from '@/modules/tasks';
 import { listMembers } from '@/modules/workspaces';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
 
@@ -51,10 +51,11 @@ async function TasksSection({ params, searchParams }: Props) {
   const query = parseTaskListParams(raw, 'workspace');
   const basePath = `/w/${workspace.slug}/tasks`;
   // Фильтры — из модулей workspaces и projects, строки — из tasks: модули друг о друге не знают.
-  const [page, members, projects] = await Promise.all([
+  const [page, members, projects, labels] = await Promise.all([
     listTasks(session, workspace.id, query),
     listMembers(session, workspace.id),
     listProjects(session, workspace.id),
+    listLabels(session, workspace.id),
   ]);
   // Номер страницы мог быть ограничен последней — показываем фактический.
   const shown = { ...query, page: page.page };
@@ -82,6 +83,7 @@ async function TasksSection({ params, searchParams }: Props) {
             currentUserId: session.user.id,
             members: members.map(({ userId, name }) => ({ userId, name })),
             projects: projects.map(({ id, name }) => ({ id, name })),
+            labels: labels.map(({ id, name, color }) => ({ id, name, color })),
           }}
         />
         {page.total === 0 ? (

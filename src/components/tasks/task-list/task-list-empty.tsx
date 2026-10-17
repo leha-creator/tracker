@@ -19,7 +19,19 @@ interface TaskListEmptyProps {
 export function TaskListEmpty({ filtered, query, scope, basePath, children }: TaskListEmptyProps) {
   return (
     <div className="grid justify-items-center gap-3 rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground transition-opacity group-data-pending/list:opacity-60">
-      {filtered ? (
+      {query.archived && !filtered ? (
+        <>
+          <p>В архиве нет задач.</p>
+          <Button asChild variant="outline" size="sm">
+            <Link
+              href={taskListHref(basePath, { ...query, archived: false, page: 1 }, scope)}
+              scroll={false}
+            >
+              К активным задачам
+            </Link>
+          </Button>
+        </>
+      ) : filtered ? (
         <>
           <p>Ничего не найдено. Измените поиск или фильтры.</p>
           <Button asChild variant="outline" size="sm">

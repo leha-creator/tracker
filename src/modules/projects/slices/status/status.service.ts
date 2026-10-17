@@ -7,6 +7,7 @@ import { NotFoundError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
 import {
+  assertProjectNotArchived,
   isEntityId,
   parseStatusColor,
   StatusSet,
@@ -51,9 +52,16 @@ async function mutateStatusSet(
   await requireWorkspacePermission(session, workspaceId, 'manageProjects');
 
   return prisma.$transaction(async (tx) => {
-    if (!(await statusRepository.lockProject(tx, workspaceId, projectId))) {
+    const project = await statusRepository.lockProject(tx, workspaceId, projectId);
+    if (!project) {
       log.warn({ workspaceId, projectId, operation }, '[status] project not found in workspace');
       throw new NotFoundError('Проект не найден');
+    }
+    try {
+      assertProjectNotArchived(project);
+    } catch (error) {
+      log.warn({ workspaceId, projectId, operation }, '[status] archived project');
+      throw error;
     }
     const statuses = (await statusRepository.listByProject(workspaceId, projectId, tx)).map(
       toStatusDto,

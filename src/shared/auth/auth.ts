@@ -71,6 +71,8 @@ function workspacesPlugin(requireEmailVerification: boolean) {
           // Ключ задач (TSK-42). input: false — эндпоинты плагина поле не принимают,
           // его проставляет и меняет только сервис пространств (src/modules/workspaces/slices/workspace).
           taskKey: { type: 'string', required: false, input: false },
+          // Пространство в архиве — так же, только сервис пространств.
+          archivedAt: { type: 'date', required: false, input: false },
         },
       },
       member: {

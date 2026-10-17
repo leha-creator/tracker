@@ -32,6 +32,10 @@ const deleteObjects = vi.fn<(keys: readonly string[]) => Promise<number>>();
 const notify =
   vi.fn<(events: { type: string; recipientId: string; payload: object }[]) => Promise<void>>();
 
+const ensureWatchers = vi.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve());
+vi.mock('../watcher/watcher.service', () => ({
+  ensureWatchers: (...args: unknown[]) => ensureWatchers(...args),
+}));
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
   requireWorkspaceAccess: (...args: Parameters<typeof requireWorkspaceAccess>) =>
@@ -56,6 +60,24 @@ vi.mock('../attachment/attachment.repository', () => ({
 vi.mock('@/shared/storage', () => ({
   deleteObjects: (keys: readonly string[]) => deleteObjects(keys),
 }));
+const recordHistory = vi.fn<(...args: unknown[]) => Promise<void>>();
+vi.mock('../history/history.service', () => ({
+  historyAuthorOf: (s: AuthSession) => ({
+    actorId: s.user.id,
+    viaTokenId: s.via?.tokenId ?? null,
+    source: null,
+  }),
+  recordHistory: (...args: unknown[]) => recordHistory(...args),
+  userSnapshot: (_tx: unknown, userId: string | null) =>
+    Promise.resolve(userId === null ? null : { id: userId, name: `Имя ${userId}` }),
+}));
+const assertTaskActive = vi.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve());
+vi.mock('./task-archive.guard', () => ({
+  assertTaskActive: (...args: unknown[]) => assertTaskActive(...args),
+}));
+const findArchiveState = vi.fn<(...args: unknown[]) => Promise<unknown>>();
+const archiveMany = vi.fn<(...args: unknown[]) => Promise<number>>();
+const restoreMany = vi.fn<(...args: unknown[]) => Promise<number>>();
 vi.mock('./task.repository', () => ({
   taskRepository: {
     nextNumber: () => nextNumber(),
@@ -65,6 +87,9 @@ vi.mock('./task.repository', () => ({
     update: (...args: unknown[]) => updateRow(...args),
     delete: (...args: unknown[]) => deleteRow(...args),
     listByNumbers: (...args: unknown[]) => listByNumbers(...args),
+    findArchiveState: (...args: unknown[]) => findArchiveState(...args),
+    archiveMany: (...args: unknown[]) => archiveMany(...args),
+    restoreMany: (...args: unknown[]) => restoreMany(...args),
   },
 }));
 vi.mock('../placement/placement.repository', () => ({
@@ -94,8 +119,15 @@ vi.mock('../subtask/subtask.repository', () => ({
   },
 }));
 
-const { createTask, deleteTask, getTaskByNumber, resolveTaskRefs, updateTask } =
-  await import('./task.service');
+const {
+  archiveTask,
+  createTask,
+  deleteTask,
+  getTaskByNumber,
+  resolveTaskRefs,
+  restoreTask,
+  updateTask,
+} = await import('./task.service');
 
 const session: AuthSession = {
   user: {
@@ -126,6 +158,9 @@ function taskRow(overrides: Record<string, unknown> = {}) {
     createdById: 'author',
     parentId: null,
     _count: { subtasks: 0 },
+    labels: [],
+    archivedAt: null,
+    archivedBy: null,
     createdAt: new Date('2026-10-15T10:00:00.000Z'),
     updatedAt: new Date('2026-10-15T10:00:00.000Z'),
     workspace: { slug: 'team', name: 'Команда', taskKey: 'TM' },
@@ -209,6 +244,10 @@ describe('createTask with a parent', () => {
       expect.anything(),
       expect.objectContaining({ createdViaTokenId: 'tok-1' }),
     );
+    expect(recordHistory.mock.calls[0]?.[1]).toMatchObject({
+      author: { actorId: 'user-1', viaTokenId: 'tok-1' },
+      changes: [{ kind: 'created' }],
+    });
   });
 
   it('returns NOT_FOUND for a parent outside the workspace', async () => {
@@ -275,6 +314,10 @@ describe('createTask', () => {
       }),
     );
     expect(createPlacement).not.toHaveBeenCalled();
+    expect(ensureWatchers).toHaveBeenCalledWith(expect.anything(), 'ws-1', TASK_ID, [
+      'user-1',
+      null,
+    ]);
   });
 
   it('places the task at the end of the status column', async () => {
@@ -369,8 +412,30 @@ describe('updateTask', () => {
       dueDate: null,
       assigneeId: null,
     });
-    expect(updateRow).toHaveBeenCalledWith('ws-1', TASK_ID, { dueDate: null, assigneeId: null });
+    expect(updateRow).toHaveBeenCalledWith(
+      'ws-1',
+      TASK_ID,
+      { dueDate: null, assigneeId: null },
+      expect.anything(),
+    );
     expect(isWorkspaceMember).not.toHaveBeenCalled();
+  });
+
+  it('records changed fields in history', async () => {
+    await updateTask(session, {
+      workspaceId: 'ws-1',
+      taskId: TASK_ID,
+      title: 'Новое название',
+      assigneeId: 'user-2',
+    });
+    expect(recordHistory).toHaveBeenCalledTimes(1);
+    const { author, changes } = recordHistory.mock.calls[0]?.[1] as {
+      author: unknown;
+      changes: { kind: string; data: unknown }[];
+    };
+    expect(author).toEqual({ actorId: 'user-1', viaTokenId: null, source: null });
+    expect(changes.map((change) => change.kind)).toEqual(['title', 'assignee']);
+    expect(changes[1]?.data).toMatchObject({ to: { id: 'user-2', name: 'Имя user-2' } });
   });
 
   it('checks a newly assigned user', async () => {
@@ -417,6 +482,20 @@ describe('createTask notifications', () => {
 });
 
 describe('deleteTask', () => {
+  const ARCHIVED_AT = new Date('2026-10-16T10:00:00.000Z');
+  beforeEach(() => {
+    findById.mockResolvedValue(taskRow({ archivedAt: ARCHIVED_AT }));
+  });
+
+  it('deletes only an archived task', async () => {
+    accessAs('owner');
+    findById.mockResolvedValue(taskRow());
+    await expect(
+      deleteTask(session, { workspaceId: 'ws-1', taskId: TASK_ID }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(deleteRow).not.toHaveBeenCalled();
+  });
+
   it('forbids a member to delete a task of another author', async () => {
     await expect(
       deleteTask(session, { workspaceId: 'ws-1', taskId: TASK_ID }),
@@ -512,5 +591,71 @@ describe('resolveTaskRefs', () => {
     listByNumbers.mockClear();
     await expect(resolveTaskRefs('ws-1', [])).resolves.toEqual([]);
     expect(listByNumbers).not.toHaveBeenCalled();
+  });
+});
+
+describe('archiveTask / restoreTask', () => {
+  const CHILD = '0192f3a0-0000-7000-8000-000000000011';
+  const input = { workspaceId: 'ws-1', taskId: TASK_ID };
+
+  it('archives the whole subtree with one archivedAt and records history on the root', async () => {
+    subtreeIds.mockResolvedValue([TASK_ID, CHILD]);
+    archiveMany.mockResolvedValue(2);
+    await expect(archiveTask(session, input)).resolves.toEqual({ descendants: 1 });
+    expect(lockTree).toHaveBeenCalled();
+    const [, workspaceId, ids, data] = archiveMany.mock.calls[0] as [
+      unknown,
+      string,
+      string[],
+      { archivedAt: Date; archivedById: string },
+    ];
+    expect([workspaceId, ids, data.archivedById]).toEqual(['ws-1', [TASK_ID, CHILD], 'user-1']);
+    expect(recordHistory.mock.calls[0]?.[1]).toMatchObject({
+      taskId: TASK_ID,
+      changes: [{ kind: 'archived', data: { descendants: 1 } }],
+    });
+  });
+
+  it('rejects archiving an archived task', async () => {
+    findById.mockResolvedValue(taskRow({ archivedAt: new Date() }));
+    await expect(archiveTask(session, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(archiveMany).not.toHaveBeenCalled();
+  });
+
+  it('restores tasks archived by the same operation', async () => {
+    const archivedAt = new Date('2026-10-16T10:00:00.000Z');
+    findArchiveState.mockResolvedValue({ archivedAt, parent: null });
+    subtreeIds.mockResolvedValue([TASK_ID, CHILD]);
+    restoreMany.mockResolvedValue(2);
+    await expect(restoreTask(session, input)).resolves.toEqual({ descendants: 1 });
+    expect(restoreMany).toHaveBeenCalledWith(
+      expect.anything(),
+      'ws-1',
+      [TASK_ID, CHILD],
+      archivedAt,
+    );
+    expect(recordHistory.mock.calls[0]?.[1]).toMatchObject({
+      changes: [{ kind: 'restored', data: { descendants: 1 } }],
+    });
+  });
+
+  it('does not restore a subtask while its parent is archived', async () => {
+    findArchiveState.mockResolvedValue({
+      archivedAt: new Date(),
+      parent: { archivedAt: new Date() },
+    });
+    await expect(restoreTask(session, input)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: expect.stringMatching(/Родительская задача в архиве/),
+    });
+    expect(restoreMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects editing an archived task', async () => {
+    findById.mockResolvedValue(taskRow({ archivedAt: new Date() }));
+    await expect(updateTask(session, { ...input, title: 'Новое' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    expect(updateRow).not.toHaveBeenCalled();
   });
 });

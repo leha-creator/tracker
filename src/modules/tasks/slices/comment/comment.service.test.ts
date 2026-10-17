@@ -21,6 +21,18 @@ const bindToComment = vi.fn<(...args: unknown[]) => Promise<number>>();
 const keysForComment = vi.fn<(...args: unknown[]) => Promise<string[]>>();
 const deleteStoredObjects = vi.fn<(keys: readonly string[], context: object) => Promise<void>>();
 
+const ensureWatchers = vi.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve());
+const listWatcherIds = vi.fn<() => Promise<string[]>>(() =>
+  Promise.resolve(['user-assignee', 'user-creator']),
+);
+const assertTaskActive = vi.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve());
+vi.mock('../task/task-archive.guard', () => ({
+  assertTaskActive: (...args: unknown[]) => assertTaskActive(...args),
+}));
+vi.mock('../watcher/watcher.service', () => ({
+  ensureWatchers: (...args: unknown[]) => ensureWatchers(...args),
+  listWatcherIds: () => listWatcherIds(),
+}));
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
   requireWorkspaceAccess: (...args: Parameters<typeof requireWorkspaceAccess>) =>
@@ -291,6 +303,10 @@ describe('createComment', () => {
       commentId: COMMENT_ID,
       payload: { taskNumber: 7, workspaceSlug: 'team' },
     });
+    // Автор и упомянутые подписываются на задачу.
+    expect(ensureWatchers.mock.calls[0]?.[3]).toEqual(
+      expect.arrayContaining(['user-1', 'user-assignee', 'user-other']),
+    );
   });
 
   it('does not notify when the comment is rejected', async () => {

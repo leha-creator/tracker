@@ -2,5 +2,10 @@
 // Клиентским компонентам — './client' (без server-only кода).
 export * from './client';
 
-export { getProject, listProjects } from './slices/project/project.service';
+export {
+  archiveProject,
+  getProject,
+  listProjects,
+  restoreProject,
+} from './slices/project/project.service';
 export { listStatuses, listWorkspaceStatuses } from './slices/status/status.service';

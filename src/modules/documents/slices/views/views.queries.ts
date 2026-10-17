@@ -15,6 +15,7 @@ import { toDocumentSummaryDto } from '../document/document.mapper';
 import type { DocumentSummaryRow } from '../document/document.select';
 import { getWorkspaceStorageUsage } from '../file/file.service';
 import { folderNotFound, getFolderPaths, listFolderTree } from '../folder/folder.service';
+import type { LinkedDocumentDto } from '../task-link/task-link.dto';
 import type { DocumentListPageDto, DocumentsOverviewDto } from './views.dto';
 import { buildDocumentOrderBy, buildDocumentWhere } from './documents-list.prisma';
 import { viewsRepository } from './views.repository';
@@ -121,4 +122,26 @@ export async function getDocumentsOverview(
   ]);
   log.debug({ workspaceId, userId: session.user.id, recent: rows.length }, '[views.overview]');
   return { usage, recent: await withPaths(workspaceId, rows) };
+}
+
+/**
+ * Поиск документов пространства по части названия — для палитры Cmd+K. Только видимые документы
+ * (заметки и загруженные файлы), недавно изменённые выше.
+ */
+export async function searchDocuments(
+  session: AuthSession,
+  workspaceId: string,
+  q: string,
+  limit: number,
+): Promise<LinkedDocumentDto[]> {
+  await requireWorkspaceAccess(session, workspaceId);
+  const text = q.trim().toLocaleLowerCase('ru');
+  if (!text || limit <= 0) return [];
+  const rows = await viewsRepository.searchByTitle(workspaceId, text, limit);
+  // Текст запроса не логируем — только его длину.
+  log.debug(
+    { workspaceId, userId: session.user.id, qLength: text.length, found: rows.length },
+    '[views.searchDocuments]',
+  );
+  return withPaths(workspaceId, rows);
 }

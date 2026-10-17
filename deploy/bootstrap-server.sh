@@ -12,7 +12,7 @@
 #   - создаёт docker-сеть edge;
 #   - добавляет ключ деплоя Tasker в authorized_keys пользователя deploy;
 #   - создаёт /opt/tasker/.env со сгенерированными секретами, если его ещё нет (существующий не трогает);
-#   - ставит backup.sh и systemd-таймеры резервных копий;
+#   - ставит backup.sh и systemd-таймеры резервных копий, reminders.sh и таймер напоминаний о сроке;
 #   - включает MSS clamping для трафика контейнеров (deploy/host/docker-mss-clamp.service).
 # Секреты в вывод не печатаются.
 set -eu
@@ -59,6 +59,7 @@ fi
 # --- каталог приложения ----------------------------------------------------------
 install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 750 "$APP_DIR" "$APP_DIR/backups"
 install -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$SRC/tasker/backup.sh" "$APP_DIR/backup.sh"
+install -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$SRC/tasker/reminders.sh" "$APP_DIR/reminders.sh"
 log "app dir: ok ($APP_DIR)"
 
 # --- ключ деплоя -----------------------------------------------------------------
@@ -93,6 +94,7 @@ else
     -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" \
     -e "s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$(openssl rand -hex 24)|" \
     -e "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=$(openssl rand -hex 32)|" \
+    -e "s|^CRON_SECRET=.*|CRON_SECRET=$(openssl rand -hex 32)|" \
     -e "s|^ADMIN_EMAILS=.*|ADMIN_EMAILS=$ADMIN_EMAILS|" \
     "$SRC/tasker/.env.example" > "$APP_DIR/.env"
   chown "$DEPLOY_USER:$DEPLOY_USER" "$APP_DIR/.env"
@@ -106,6 +108,9 @@ if [ -d "$SRC/tasker/systemd" ] && command -v systemctl > /dev/null 2>&1; then
   systemctl daemon-reload
   systemctl enable --now tasker-backup-db.timer tasker-backup-files.timer > /dev/null
   log "backup timers: ok ($(systemctl list-timers 'tasker-backup-*' --no-legend | wc -l) active)"
+  # Без CRON_SECRET в .env эндпоинт отвечает 404 — таймер включаем всё равно, он просто не шлёт.
+  systemctl enable --now tasker-reminders.timer > /dev/null
+  log "reminders timer: ok"
 else
   log "backup timers: skip (no systemd units or systemctl)"
 fi

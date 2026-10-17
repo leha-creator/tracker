@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertAssigneeIsMember,
+  assertCanDeletePermanently,
   assertCanDeleteTask,
+  assertNotArchived,
+  canDeletePermanently,
   formatTaskKey,
   isTaskOpen,
   isTaskOverdue,
@@ -114,5 +117,28 @@ describe('isTaskOpen', () => {
     [['done', 'done'], false],
   ])('%j → %s', (categories, expected) => {
     expect(isTaskOpen(categories)).toBe(expected);
+  });
+});
+
+describe('архив', () => {
+  const archived = { createdById: 'author', archivedAt: new Date('2026-10-16T10:00:00.000Z') };
+  const active = { createdById: 'author', archivedAt: null };
+
+  it('assertNotArchived: архивная задача только для чтения', () => {
+    expect(() => assertNotArchived(active)).not.toThrow();
+    expect(() => assertNotArchived(archived)).toThrow(/в архиве/);
+  });
+
+  it('удалить навсегда — только архивную и только автор или владелец', () => {
+    expect(canDeletePermanently(archived, { userId: 'author', role: 'member' })).toBe(true);
+    expect(canDeletePermanently(archived, { userId: 'other', role: 'owner' })).toBe(true);
+    expect(canDeletePermanently(archived, { userId: 'other', role: 'member' })).toBe(false);
+    expect(canDeletePermanently(active, { userId: 'author', role: 'owner' })).toBe(false);
+    expect(() => assertCanDeletePermanently(active, { userId: 'author', role: 'owner' })).toThrow(
+      /только задачу из архива/,
+    );
+    expect(() => assertCanDeletePermanently(archived, { userId: 'other', role: 'member' })).toThrow(
+      /автор или владелец/,
+    );
   });
 });

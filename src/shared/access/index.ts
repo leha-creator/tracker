@@ -7,7 +7,7 @@ export {
   requireWorkspaceAccessBySlug,
   requireWorkspacePermission,
 } from './workspace-access';
-export type { WorkspaceAccess, WorkspaceContext } from './workspace-access';
+export type { WorkspaceAccess, WorkspaceAccessOptions, WorkspaceContext } from './workspace-access';
 export {
   hasWorkspaceRole,
   parseWorkspaceRole,

@@ -3,15 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { ValidationError } from '@/shared/errors';
 
 import {
+  formatTaskHistory,
   normalizeName,
   parseStatusCategory,
   parseTaskRef,
+  resolveLabels,
   resolveMember,
   resolveProject,
   resolveStatus,
   taskKeyOf,
   taskUrl,
   type CatalogProject,
+  uniqueLabelNames,
 } from '.';
 
 const project: CatalogProject = {
@@ -134,5 +137,59 @@ describe('resolveMember', () => {
   it('неоднозначное имя и неучастник — ошибки', () => {
     expect(() => resolveMember(members, 'Борис', 'u-1')).toThrow(/несколько/);
     expect(() => resolveMember(members, 'x@example.com', 'u-1')).toThrow(/не найден/);
+  });
+});
+
+describe('formatTaskHistory', () => {
+  const at = new Date('2026-10-17T09:30:00Z');
+  const item = {
+    id: 'h1',
+    kind: 'status' as const,
+    text: 'Статус в «Разработка»: К выполнению → В работе',
+    actor: { userId: 'u1', name: 'Анна', image: null, isAgent: false },
+    source: null,
+    via: { tokenName: 'Ноутбук' },
+    createdAt: at,
+    updatedAt: at,
+  };
+
+  it('lists changes with author, token and time', () => {
+    const text = formatTaskHistory('TSK-1', { total: 1, items: [item] });
+    expect(text).toContain('# TSK-1 · change history');
+    expect(text).toContain('2026-10-17, 09:30 UTC · Анна via Ноутбук: Статус в «Разработка»');
+  });
+
+  it('marks GitHub automation and truncated history', () => {
+    const github = { ...item, actor: null, source: 'github', via: null };
+    const text = formatTaskHistory('TSK-1', { total: 3, items: [github] });
+    expect(text).toContain('(latest 1 of 3)');
+    expect(text).toContain('· GitHub: ');
+  });
+
+  it('says when there are no changes', () => {
+    expect(formatTaskHistory('TSK-1', { total: 0, items: [] })).toContain('_No changes._');
+  });
+});
+
+describe('uniqueLabelNames / resolveLabels', () => {
+  const labels = [
+    { id: 'l-1', name: 'bug' },
+    { id: 'l-2', name: 'Ёлка' },
+  ];
+
+  it('убирает пустые и повторы без учёта регистра, оставляя первое написание', () => {
+    expect(uniqueLabelNames(['  UI ', 'ui', '', 'Back  end', 'back end', 'елка', 'Ёлка'])).toEqual([
+      'UI',
+      'Back end',
+      'елка',
+    ]);
+  });
+
+  it('находит метки по имени и id, неизвестная — ошибка со списком', () => {
+    expect(resolveLabels(labels, ['BUG', 'l-1', 'елка']).map((label) => label.id)).toEqual([
+      'l-1',
+      'l-2',
+    ]);
+    expect(() => resolveLabels(labels, ['feature'])).toThrow(/«feature» не найден.*«bug»/);
   });
 });

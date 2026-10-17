@@ -24,6 +24,20 @@ const taskRef = {
 
 const commentRef = { ...taskRef, commentExcerpt: z.string() };
 
+/** Смена статуса задачи в проекте: имена — снимок на момент события. */
+const statusChangeRef = {
+  ...taskRef,
+  projectName: z.string(),
+  fromStatus: z.string(),
+  toStatus: z.string(),
+};
+
+/** Срок задачи (`YYYY-MM-DD`) — снимок значения, о котором напоминание. */
+const dueDateRef = {
+  ...taskRef,
+  dueDate: z.iso.date(),
+};
+
 /** PR GitHub, привязанный к задаче: ссылка ведёт на задачу, адрес PR — для письма. */
 const pullRequestRef = {
   ...taskRef,
@@ -48,6 +62,9 @@ export const NOTIFICATION_PAYLOAD_SCHEMAS = {
     ...pullRequestRef,
     reviewState: z.enum(['approved', 'changes_requested']),
   }),
+  task_status_changed: z.object(statusChangeRef),
+  task_due_soon: z.object(dueDateRef),
+  task_overdue: z.object(dueDateRef),
 } satisfies Record<NotificationType, z.ZodType>;
 
 export type NotificationPayloadMap = {
@@ -93,6 +110,9 @@ export function buildNotificationHref(notification: TypedNotification): string {
     case 'pr_linked':
     case 'pr_merged':
     case 'pr_review':
+    case 'task_status_changed':
+    case 'task_due_soon':
+    case 'task_overdue':
       return `/w/${notification.payload.workspaceSlug}/tasks/${notification.payload.taskNumber}`;
     case 'mention':
     case 'task_comment': {
@@ -165,7 +185,37 @@ function baseNotificationText(notification: TypedNotification): NotificationText
         subject: taskSubject(notification.payload),
         excerpt: notification.payload.pullRequestTitle || null,
       };
+    case 'task_status_changed':
+      return {
+        title: `Статус: ${notification.payload.fromStatus} → ${notification.payload.toStatus}`,
+        subject: taskSubject(notification.payload),
+        excerpt: `Проект «${notification.payload.projectName}»`,
+      };
+    case 'task_due_soon':
+      return {
+        title: 'Завтра срок задачи',
+        subject: taskSubject(notification.payload),
+        excerpt: `Срок: ${formatDueDate(notification.payload.dueDate)}`,
+      };
+    case 'task_overdue':
+      return {
+        title: 'Срок задачи прошёл',
+        subject: taskSubject(notification.payload),
+        excerpt: `Срок был ${formatDueDate(notification.payload.dueDate)}`,
+      };
   }
+}
+
+const DUE_DATE_FORMAT = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+/** `2026-10-18` → «18 октября 2026 г.»: дата без времени — в UTC, без сдвига суток. */
+function formatDueDate(isoDate: string): string {
+  return DUE_DATE_FORMAT.format(new Date(`${isoDate}T00:00:00.000Z`));
 }
 
 function pullRequestName(payload: { repositoryFullName: string; pullRequestNumber: number }) {

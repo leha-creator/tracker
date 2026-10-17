@@ -14,18 +14,49 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { deleteWorkspaceAction, type FormState } from '@/modules/workspaces/client';
+import {
+  archiveWorkspaceAction,
+  deleteWorkspaceAction,
+  type FormState,
+} from '@/modules/workspaces/client';
 
-/** Удаление пространства с подтверждением вводом названия (сервер проверяет совпадение сам). */
+const TEXTS = {
+  archive: {
+    trigger: 'Архивировать пространство',
+    title: (name: string) => `Архивировать «${name}»?`,
+    description:
+      'Пространство пропадёт у всех участников, токены агентов и GitHub перестанут работать. Данные сохранятся — восстановить его можно с главной страницы.',
+    confirm: 'В архив',
+    pending: 'Архивируем…',
+  },
+  delete: {
+    trigger: 'Удалить навсегда',
+    title: (name: string) => `Удалить «${name}»?`,
+    description:
+      'Пространство, участники и приглашения будут удалены без возможности восстановления.',
+    confirm: 'Удалить навсегда',
+    pending: 'Удаляем…',
+  },
+} as const;
+
+/**
+ * Архивирование или удаление пространства с подтверждением вводом названия (сервер проверяет
+ * совпадение сам). Удалить навсегда можно только пространство из архива.
+ */
 export function DeleteWorkspaceDialog({
   workspaceId,
   name,
+  mode = 'delete',
+  triggerSize,
 }: {
   workspaceId: string;
   name: string;
+  mode?: 'archive' | 'delete';
+  triggerSize?: 'sm';
 }) {
+  const text = TEXTS[mode];
   const [state, formAction, pending] = useActionState<FormState, FormData>(
-    deleteWorkspaceAction,
+    mode === 'archive' ? archiveWorkspaceAction : deleteWorkspaceAction,
     null,
   );
   const [confirmName, setConfirmName] = useState('');
@@ -35,15 +66,16 @@ export function DeleteWorkspaceDialog({
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="destructive">Удалить пространство</Button>
+        <Button variant={mode === 'archive' ? 'outline' : 'destructive'} size={triggerSize}>
+          {text.trigger}
+        </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <form action={formAction} className="grid gap-4" noValidate>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить «{name}»?</AlertDialogTitle>
+            <AlertDialogTitle>{text.title(name)}</AlertDialogTitle>
             <AlertDialogDescription>
-              Пространство, участники и приглашения будут удалены без возможности восстановления.
-              Введите название пространства, чтобы подтвердить.
+              {text.description} Введите название пространства, чтобы подтвердить.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <input type="hidden" name="workspaceId" value={workspaceId} />
@@ -61,10 +93,10 @@ export function DeleteWorkspaceDialog({
             {/* Обычная кнопка submit: AlertDialogAction закрыл бы диалог до ответа сервера. */}
             <Button
               type="submit"
-              variant="destructive"
+              variant={mode === 'archive' ? 'default' : 'destructive'}
               disabled={pending || confirmName.trim() !== name}
             >
-              {pending ? 'Удаляем…' : 'Удалить навсегда'}
+              {pending ? text.pending : text.confirm}
             </Button>
           </AlertDialogFooter>
         </form>

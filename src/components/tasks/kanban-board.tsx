@@ -58,6 +58,8 @@ interface KanbanBoardProps {
   cards: BoardCardsDto;
   /** Индикаторы PR по id задачи (интеграция GitHub). */
   pullRequests?: PullRequestBadgesDto;
+  /** Проект в архиве: без перетаскивания и быстрого создания, карточки открывают задачу. */
+  readOnly?: boolean;
 }
 
 interface DragOrigin {
@@ -75,6 +77,7 @@ export function KanbanBoard({
   statuses,
   cards,
   pullRequests = {},
+  readOnly = false,
 }: KanbanBoardProps) {
   const dndId = useId();
   const router = useRouter();
@@ -112,6 +115,8 @@ export function KanbanBoard({
       },
     }),
   );
+  // Хуки вызываются всегда; доске только для чтения — пустой набор сенсоров.
+  const noSensors = useSensors();
 
   const statusOf = (id: UniqueIdentifier): string | null => {
     const value = String(id);
@@ -218,7 +223,7 @@ export function KanbanBoard({
   return (
     <DndContext
       id={dndId}
-      sensors={sensors}
+      sensors={readOnly ? noSensors : sensors}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
@@ -259,6 +264,7 @@ export function KanbanBoard({
               projectId={projectId}
               shouldSuppressClick={() => Date.now() - droppedAt.current < CLICK_SUPPRESS_MS}
               reduceMotion={reduceMotion}
+              readOnly={readOnly}
             />
           ))}
         </ol>
@@ -289,6 +295,7 @@ interface BoardColumnProps {
   projectId: string;
   shouldSuppressClick: () => boolean;
   reduceMotion: boolean;
+  readOnly: boolean;
 }
 
 /** Колонка доски: заголовок, сортируемый список карточек (зона броска — вся колонка). */
@@ -302,6 +309,7 @@ function BoardColumn({
   projectId,
   shouldSuppressClick,
   reduceMotion,
+  readOnly,
 }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: columnId(status.id) });
 
@@ -341,19 +349,24 @@ function BoardColumn({
                 pullRequest={pullRequests[card.taskId]}
                 shouldSuppressClick={shouldSuppressClick}
                 reduceMotion={reduceMotion}
+                disabled={readOnly}
               />
             </li>
           ))}
         </ul>
       </SortableContext>
-      <div className="grid px-3 pt-1 pb-3">
-        <QuickCreateTask
-          workspaceId={workspaceId}
-          projectId={projectId}
-          statusId={status.id}
-          statusName={status.name}
-        />
-      </div>
+      {readOnly ? (
+        <div className="pb-2" />
+      ) : (
+        <div className="grid px-3 pt-1 pb-3">
+          <QuickCreateTask
+            workspaceId={workspaceId}
+            projectId={projectId}
+            statusId={status.id}
+            statusName={status.name}
+          />
+        </div>
+      )}
     </li>
   );
 }

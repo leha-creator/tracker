@@ -4,6 +4,9 @@ import { prisma, type TransactionClient } from '@/shared/db';
 
 import type { PositionedStatus } from '../../models';
 
+/** Размещения неархивных задач — для счётчиков проекта. */
+const ACTIVE_PLACEMENTS = { where: { task: { archivedAt: null } } } as const;
+
 const PROJECT_SELECT = {
   id: true,
   workspaceId: true,
@@ -11,15 +14,18 @@ const PROJECT_SELECT = {
   description: true,
   icon: true,
   createdAt: true,
+  archivedAt: true,
+  archivedBy: { select: { name: true } },
   workspace: { select: { slug: true } },
-  _count: { select: { placements: true } },
+  _count: { select: { placements: ACTIVE_PLACEMENTS } },
 } as const;
 
 // Все запросы — с workspaceId в where: проект из чужого пространства не находится (защита от IDOR).
 export const projectRepository = {
-  listByWorkspace(workspaceId: string) {
+  /** Активные или (`archived`) архивные проекты пространства. */
+  listByWorkspace(workspaceId: string, archived = false) {
     return prisma.project.findMany({
-      where: { workspaceId },
+      where: { workspaceId, archivedAt: archived ? { not: null } : null },
       orderBy: { name: 'asc' },
       select: {
         id: true,
@@ -27,11 +33,27 @@ export const projectRepository = {
         description: true,
         icon: true,
         updatedAt: true,
-        _count: { select: { placements: true } },
+        archivedAt: true,
+        _count: { select: { placements: ACTIVE_PLACEMENTS } },
         // Задачи по категориям — через число размещений в каждом статусе.
-        statuses: { select: { category: true, _count: { select: { placements: true } } } },
+        statuses: {
+          select: { category: true, _count: { select: { placements: ACTIVE_PLACEMENTS } } },
+        },
       },
     });
+  },
+
+  /** Архивирует или восстанавливает проект; возвращает число изменённых строк. */
+  async setArchived(
+    workspaceId: string,
+    projectId: string,
+    data: { archivedAt: Date | null; archivedById: string | null },
+  ): Promise<number> {
+    const { count } = await prisma.project.updateMany({
+      where: { id: projectId, workspaceId, archivedAt: data.archivedAt ? null : { not: null } },
+      data,
+    });
+    return count;
   },
 
   /**
@@ -50,7 +72,7 @@ export const projectRepository = {
       FROM "TaskPlacement" p
       JOIN "ProjectStatus" s ON s."id" = p."statusId"
       JOIN "Task" t ON t."id" = p."taskId"
-      WHERE p."workspaceId" = ${workspaceId}
+      WHERE p."workspaceId" = ${workspaceId} AND t."archivedAt" IS NULL
       GROUP BY p."projectId"`;
     return rows.map((row) => ({
       projectId: row.projectId,

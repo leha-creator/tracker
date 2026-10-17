@@ -6,13 +6,22 @@ import { ViaAgentBadge } from '@/components/agents/via-agent-badge';
 import { TaskDocumentsSection } from '@/components/documents/task-documents/task-documents-section';
 import { TaskGithubSection } from '@/components/github/task-github-section';
 import { listProjects, listWorkspaceStatuses } from '@/modules/projects';
-import { getTaskByNumber, listTaskComments, type MentionCandidate } from '@/modules/tasks';
+import {
+  getTaskByNumber,
+  listLabels,
+  listTaskComments,
+  listTaskWatchers,
+  type MentionCandidate,
+} from '@/modules/tasks';
 import { listMembers } from '@/modules/workspaces';
 import type { AuthSession } from '@/shared/auth';
 import { NotFoundError } from '@/shared/errors';
 
 import { AddToProjectForm } from '../add-to-project-form';
 import { TaskAttachmentsSection } from '../attachments/task-attachments-section';
+import { TaskHistorySection } from '../history/task-history-section';
+import { TaskLabelsEditor } from '../labels/task-labels-editor';
+import { TaskWatchButton } from '../watchers/task-watch-button';
 import { CommentForm } from '../comments/comment-form';
 import { CommentList } from '../comments/comment-list';
 import { ParentPicker } from '../subtasks/parent-picker';
@@ -20,6 +29,7 @@ import { TaskBreadcrumbs } from '../subtasks/task-breadcrumbs';
 import { TaskSubtasksSection } from '../subtasks/task-subtasks-section';
 import { TaskDescriptionEditor, TaskPropertiesEditor, TaskTitleEditor } from '../task-details-form';
 import { TaskPlacements } from '../task-placements';
+import { TaskArchiveBanner } from './task-archive-banner';
 import { TaskPanelNotFound } from './task-panel-not-found';
 import { TaskProperty, TaskPropertyList } from './task-property';
 import { TaskSaveStatusProvider } from './task-save-status';
@@ -40,6 +50,9 @@ export interface TaskDetailsViewProps {
   /** Лента целиком (`comments=all`) и адрес, который её включает. */
   allComments: boolean;
   showAllCommentsHref: string;
+  /** Вся история изменений (`history=all`) и адрес, который её включает. */
+  allHistory: boolean;
+  showAllHistoryHref: string;
   /** Полноэкранная страница задачи. */
   pageHref: string;
   /** Адрес другой задачи (подзадачи, родителя): в той же панели или на странице. */
@@ -61,6 +74,8 @@ export async function TaskDetailsView({
   returnTo,
   allComments,
   showAllCommentsHref,
+  allHistory,
+  showAllHistoryHref,
   pageHref,
   taskHref,
   newSubtaskHref,
@@ -74,10 +89,12 @@ export async function TaskDetailsView({
     return <TaskPanelNotFound closeHref={closeHref} />;
   }
 
-  const [members, projects, statusesByProject] = await Promise.all([
+  const [members, projects, statusesByProject, labels, watchers] = await Promise.all([
     listMembers(session, workspace.id),
     listProjects(session, workspace.id),
     listWorkspaceStatuses(session, workspace.id),
+    listLabels(session, workspace.id),
+    listTaskWatchers(session, workspace.id, task.id),
   ]);
   const mentionCandidates = members.map(({ userId, name, email, image }) => ({
     userId,
@@ -89,8 +106,10 @@ export async function TaskDetailsView({
   const freeProjects = projects.filter((project) => !placedIds.has(project.id));
   // На странице задача — заголовок страницы, в панели — раздел поверх доски или списка.
   const Heading = variant === 'page' ? 'h1' : 'h2';
-  const deleteFields: Record<string, string> = { workspaceId: workspace.id, taskId: task.id };
+  const actionFields = { workspaceId: workspace.id, taskId: task.id };
+  const deleteFields: Record<string, string> = { ...actionFields };
   if (returnTo) deleteFields.returnTo = returnTo;
+  const archived = task.archivedAt !== null;
 
   return (
     // key: другая задача — новые поля с её значениями (поля не пересоздаются после сохранения).
@@ -102,18 +121,45 @@ export async function TaskDetailsView({
             <span className="font-mono text-xs text-muted-foreground tabular-nums">{task.key}</span>
           }
         >
+          <TaskWatchButton
+            workspaceId={workspace.id}
+            taskId={task.id}
+            currentUser={{
+              userId: session.user.id,
+              name: session.user.name,
+              image: session.user.image,
+            }}
+            initial={watchers}
+          />
           <TaskViewActions
             variant={variant}
             pageHref={pageHref}
             closeHref={closeHref}
             taskKey={task.key}
-            canDelete={task.canDelete}
+            archived={archived}
             descendantCount={task.descendantCount}
-            deleteFields={deleteFields}
+            actionFields={actionFields}
           />
         </TaskToolbar>
 
-        <div className="@container grid flex-1 content-start gap-6 px-4 py-5 sm:px-6">
+        {task.archivedAt && (
+          <TaskArchiveBanner
+            taskKey={task.key}
+            archivedAt={task.archivedAt}
+            archivedByName={task.archivedBy?.name ?? null}
+            canDeletePermanently={task.canDeletePermanently}
+            descendantCount={task.descendantCount}
+            fields={deleteFields}
+          />
+        )}
+
+        {/* Архивная задача — только для чтения: fieldset выключает все поля и кнопки внутри,
+            ссылки (проекты, подзадачи, файлы) работают. */}
+        <fieldset
+          disabled={archived}
+          aria-label={archived ? 'Задача в архиве, только чтение' : undefined}
+          className="@container grid min-w-0 flex-1 content-start gap-6 px-4 py-5 sm:px-6"
+        >
           <header className="grid gap-1">
             {/* Видимое название — поле ввода; заголовок документа — для навигации скринридером. */}
             <Heading id="task-heading" className="sr-only">
@@ -172,6 +218,15 @@ export async function TaskDetailsView({
                   statusesByProject={statusesByProject}
                 />
               </div>
+            </TaskProperty>
+            <TaskProperty labelId="task-labels-label" label="Метки">
+              <TaskLabelsEditor
+                workspaceId={workspace.id}
+                taskId={task.id}
+                value={task.labels}
+                options={labels.map(({ id, name, color }) => ({ id, name, color }))}
+                labelledBy="task-labels-label"
+              />
             </TaskProperty>
             <TaskProperty labelId="task-parent-label" label="Родитель">
               <ParentPicker
@@ -239,6 +294,16 @@ export async function TaskDetailsView({
             />
           </Suspense>
 
+          <Suspense fallback={<div className="h-5 w-32 animate-pulse rounded-md bg-muted" />}>
+            <TaskHistorySection
+              session={session}
+              workspaceId={workspace.id}
+              taskId={task.id}
+              all={allHistory}
+              showAllHref={showAllHistoryHref}
+            />
+          </Suspense>
+
           <section aria-labelledby="task-comments-heading" className="grid gap-3 border-t pt-5">
             <Suspense fallback={<div className="h-32 animate-pulse rounded-xl bg-muted" />}>
               <TaskComments
@@ -251,16 +316,18 @@ export async function TaskDetailsView({
               />
             </Suspense>
           </section>
-        </div>
+        </fieldset>
 
-        <div className="sticky bottom-0 z-10 border-t bg-background px-4 py-3 sm:px-6">
-          <CommentForm
-            docked
-            workspaceId={workspace.id}
-            taskId={task.id}
-            members={mentionCandidates}
-          />
-        </div>
+        {!archived && (
+          <div className="sticky bottom-0 z-10 border-t bg-background px-4 py-3 sm:px-6">
+            <CommentForm
+              docked
+              workspaceId={workspace.id}
+              taskId={task.id}
+              members={mentionCandidates}
+            />
+          </div>
+        )}
       </article>
     </TaskSaveStatusProvider>
   );

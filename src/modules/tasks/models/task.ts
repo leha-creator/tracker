@@ -42,6 +42,31 @@ export function assertCanDeleteTask(task: { createdById: string | null }, actor:
   }
 }
 
+export const ARCHIVED_TASK_MESSAGE = 'Задача в архиве — восстановите её, чтобы изменить';
+
+/** Архивная задача только для чтения: любое изменение — ошибка. */
+export function assertNotArchived(task: { archivedAt: Date | null }): void {
+  if (task.archivedAt) throw new ValidationError(ARCHIVED_TASK_MESSAGE);
+}
+
+/** Удалить навсегда можно только архивную задачу — тем, кто может её удалить. */
+export function canDeletePermanently(
+  task: { createdById: string | null; archivedAt: Date | null },
+  actor: TaskActor,
+): boolean {
+  return task.archivedAt !== null && canDeleteTask(task, actor);
+}
+
+export function assertCanDeletePermanently(
+  task: { createdById: string | null; archivedAt: Date | null },
+  actor: TaskActor,
+): void {
+  if (!task.archivedAt) {
+    throw new ValidationError('Удалить навсегда можно только задачу из архива');
+  }
+  assertCanDeleteTask(task, actor);
+}
+
 /** Ответственным можно назначить только участника пространства. */
 export function assertAssigneeIsMember(isMember: boolean): void {
   if (!isMember) {

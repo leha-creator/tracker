@@ -22,6 +22,8 @@ type ProjectRow = {
   name: string;
   description: string | null;
   createdAt: Date;
+  archivedAt: Date | null;
+  archivedBy: { name: string } | null;
   workspace: { slug: string };
   _count: { placements: number };
 };
@@ -30,7 +32,9 @@ const countInWorkspace = vi.fn<() => Promise<number>>();
 const isNameTaken = vi.fn<() => Promise<boolean>>();
 const createWithStatuses = vi.fn<(...args: unknown[]) => Promise<ProjectRow>>();
 const deleteProject = vi.fn<() => Promise<number>>();
-const listByWorkspace = vi.fn<() => Promise<unknown[]>>();
+const listByWorkspace = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
+const setArchived = vi.fn<(...args: unknown[]) => Promise<number>>();
+const updateProject = vi.fn<() => Promise<number>>();
 const taskStatsByWorkspace = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
@@ -50,17 +54,21 @@ vi.mock('./project.repository', () => ({
     isNameTaken: () => isNameTaken(),
     createWithStatuses: (...args: unknown[]) => createWithStatuses(...args),
     delete: () => deleteProject(),
-    listByWorkspace: () => listByWorkspace(),
+    listByWorkspace: (...args: unknown[]) => listByWorkspace(...args),
+    setArchived: (...args: unknown[]) => setArchived(...args),
     taskStatsByWorkspace: (...args: unknown[]) => taskStatsByWorkspace(...args),
-    update: vi.fn(),
+    update: () => updateProject(),
   },
 }));
 
 const {
+  archiveProject,
   createProject,
   deleteProject: deleteProjectService,
   getProject,
   listProjects,
+  restoreProject,
+  updateProject: updateProjectService,
 } = await import('./project.service');
 
 const session: AuthSession = {
@@ -83,8 +91,15 @@ const projectRow: ProjectRow = {
   name: 'Сайт',
   description: null,
   createdAt: new Date('2026-10-15'),
+  archivedAt: null,
+  archivedBy: null,
   workspace: { slug: 'team' },
   _count: { placements: 0 },
+};
+const archivedRow: ProjectRow = {
+  ...projectRow,
+  archivedAt: new Date('2026-10-16'),
+  archivedBy: { name: 'User' },
 };
 
 function allow() {
@@ -187,9 +202,22 @@ describe('getProject', () => {
 });
 
 describe('deleteProject', () => {
-  it('rejects wrong confirmation name', async () => {
+  it('rejects deleting an active project', async () => {
     allow();
     findInWorkspace.mockResolvedValue(projectRow);
+    await expect(
+      deleteProjectService(session, {
+        workspaceId: 'ws-1',
+        projectId: PROJECT_ID,
+        confirmName: 'Сайт',
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(deleteProject).not.toHaveBeenCalled();
+  });
+
+  it('rejects wrong confirmation name', async () => {
+    allow();
+    findInWorkspace.mockResolvedValue(archivedRow);
     await expect(
       deleteProjectService(session, {
         workspaceId: 'ws-1',
@@ -202,7 +230,7 @@ describe('deleteProject', () => {
 
   it('deletes and returns workspace slug', async () => {
     allow();
-    findInWorkspace.mockResolvedValue(projectRow);
+    findInWorkspace.mockResolvedValue(archivedRow);
     deleteProject.mockResolvedValue(1);
     await expect(
       deleteProjectService(session, {
@@ -214,6 +242,62 @@ describe('deleteProject', () => {
   });
 });
 
+describe('archiveProject / restoreProject', () => {
+  const input = { workspaceId: 'ws-1', projectId: PROJECT_ID };
+
+  it('is forbidden without manageProjects', async () => {
+    requireWorkspacePermission.mockRejectedValue(new ForbiddenError());
+    await expect(archiveProject(session, input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(setArchived).not.toHaveBeenCalled();
+  });
+
+  it('archives with the actor and returns the archived DTO', async () => {
+    allow();
+    findInWorkspace.mockResolvedValueOnce(projectRow).mockResolvedValueOnce(archivedRow);
+    setArchived.mockResolvedValue(1);
+
+    const project = await archiveProject(session, input);
+
+    expect(setArchived).toHaveBeenCalledWith('ws-1', PROJECT_ID, {
+      archivedAt: expect.any(Date),
+      archivedById: 'user-1',
+    });
+    expect(project).toMatchObject({ archivedAt: archivedRow.archivedAt, archivedByName: 'User' });
+  });
+
+  it('restores by clearing the archive fields', async () => {
+    allow();
+    findInWorkspace.mockResolvedValueOnce(archivedRow).mockResolvedValueOnce(projectRow);
+    setArchived.mockResolvedValue(1);
+
+    const project = await restoreProject(session, input);
+
+    expect(setArchived).toHaveBeenCalledWith('ws-1', PROJECT_ID, {
+      archivedAt: null,
+      archivedById: null,
+    });
+    expect(project).toMatchObject({ archivedAt: null, archivedByName: null });
+  });
+
+  it('returns NOT_FOUND for a project of another workspace', async () => {
+    allow();
+    findInWorkspace.mockResolvedValue(null);
+    await expect(restoreProject(session, input)).rejects.toBeInstanceOf(NotFoundError);
+    expect(setArchived).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateProject', () => {
+  it('rejects editing an archived project', async () => {
+    allow();
+    findInWorkspace.mockResolvedValue(archivedRow);
+    await expect(
+      updateProjectService(session, { workspaceId: 'ws-1', projectId: PROJECT_ID, name: 'Новый' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(updateProject).not.toHaveBeenCalled();
+  });
+});
+
 describe('listProjects', () => {
   const listRow = {
     id: PROJECT_ID,
@@ -221,6 +305,7 @@ describe('listProjects', () => {
     description: null,
     icon: 'rocket',
     updatedAt: new Date('2026-10-10T10:00:00Z'),
+    archivedAt: null,
     _count: { placements: 5 },
     statuses: [
       { category: 'todo', _count: { placements: 2 } },
@@ -242,6 +327,7 @@ describe('listProjects', () => {
 
     const [project] = await listProjects(session, 'ws-1');
 
+    expect(listByWorkspace).toHaveBeenCalledWith('ws-1', false);
     expect(taskStatsByWorkspace).toHaveBeenCalledWith(
       'ws-1',
       'user-1',
@@ -268,5 +354,15 @@ describe('listProjects', () => {
       myOpenCount: 0,
       lastActivityAt: listRow.updatedAt,
     });
+  });
+
+  it('lists archived projects on request', async () => {
+    listByWorkspace.mockResolvedValue([{ ...listRow, archivedAt: new Date('2026-10-16') }]);
+    taskStatsByWorkspace.mockResolvedValue([]);
+
+    const [project] = await listProjects(session, 'ws-1', { archived: true });
+
+    expect(listByWorkspace).toHaveBeenCalledWith('ws-1', true);
+    expect(project?.archivedAt).toEqual(new Date('2026-10-16'));
   });
 });

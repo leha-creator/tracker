@@ -67,3 +67,8 @@ export const deleteProjectSchema = z.object({
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type DeleteProjectInput = z.infer<typeof deleteProjectSchema>;
+
+export const archiveProjectSchema = z.object({
+  workspaceId: workspaceIdField,
+  projectId: entityIdField,
+});

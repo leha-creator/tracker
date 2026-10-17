@@ -59,9 +59,13 @@ export interface TaskListQuery {
   priorities: TaskPriority[];
   /** id участников, `me` или `none` (не назначен). */
   assignees: string[];
+  /** id меток: задача хотя бы с одной из них. */
+  labels: string[];
   due: TaskDueFilter | null;
   /** Только задачи верхнего уровня (без подзадач), URL `level=top`. */
   topLevelOnly: boolean;
+  /** Только архивные задачи (URL `archived=1`); иначе — только активные. */
+  archived: boolean;
   sort: TaskListSort;
   dir: SortDirection;
   /** Номер страницы с 1. */
@@ -104,8 +108,10 @@ export function defaultTaskListQuery(scope: TaskListScope): TaskListQuery {
     projects: [],
     priorities: [],
     assignees: [],
+    labels: [],
     due: null,
     topLevelOnly: false,
+    archived: false,
     sort,
     dir: DEFAULT_DIRECTION[sort],
     page: 1,
@@ -168,10 +174,12 @@ export function parseTaskListParams(raw: RawParams, scope: TaskListScope): TaskL
   }
   query.priorities = parseList(raw.priority, isPriority);
   query.assignees = parseList(raw.assignee, isAssigneeFilter);
+  query.labels = parseList(raw.label, isEntityIdItem);
 
   const due = first(raw.due);
   query.due = due && isDueFilter(due) ? due : null;
   query.topLevelOnly = first(raw.level) === TASK_LIST_LEVEL_TOP;
+  query.archived = first(raw.archived) === '1';
 
   const sort = first(raw.sort);
   if (sort && isSort(sort) && isSortAllowed(sort, scope)) query.sort = sort;
@@ -195,8 +203,10 @@ export function serializeTaskListParams(query: TaskListQuery, scope: TaskListSco
   }
   if (query.priorities.length) params.set('priority', query.priorities.join(','));
   if (query.assignees.length) params.set('assignee', query.assignees.join(','));
+  if (query.labels.length) params.set('label', query.labels.join(','));
   if (query.due) params.set('due', query.due);
   if (query.topLevelOnly) params.set('level', TASK_LIST_LEVEL_TOP);
+  if (query.archived) params.set('archived', '1');
   if (query.sort !== DEFAULT_SORT[scope] && isSortAllowed(query.sort, scope)) {
     params.set('sort', query.sort);
   }
@@ -229,14 +239,22 @@ export function hasActiveFilters(query: TaskListQuery): boolean {
     query.projects.length > 0 ||
     query.priorities.length > 0 ||
     query.assignees.length > 0 ||
+    query.labels.length > 0 ||
     query.due !== null ||
     query.topLevelOnly
   );
 }
 
-/** Сбрасывает фильтры и поиск, сохраняя сортировку. */
+/**
+ * Сбрасывает фильтры и поиск, сохраняя сортировку и режим «Архив» (это раздел, а не фильтр).
+ */
 export function clearFilters(query: TaskListQuery, scope: TaskListScope): TaskListQuery {
-  return { ...defaultTaskListQuery(scope), sort: query.sort, dir: query.dir };
+  return {
+    ...defaultTaskListQuery(scope),
+    sort: query.sort,
+    dir: query.dir,
+    archived: query.archived,
+  };
 }
 
 /** Поиск `#42`, `42` или `TSK-42` → номер задачи, иначе null. */

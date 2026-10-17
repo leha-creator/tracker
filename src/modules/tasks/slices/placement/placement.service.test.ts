@@ -9,7 +9,8 @@ import { TASK_PLACEMENT_LIMIT } from '../../models';
 type PlacementRow = { taskId: string; projectId: string; statusId: string; position: string };
 
 const requireWorkspaceAccess = vi.fn<() => Promise<WorkspaceAccess>>();
-const taskExists = vi.fn<() => Promise<boolean>>();
+type ArchiveState = { taskArchived: boolean; projectArchived: boolean } | null;
+const findArchiveState = vi.fn<() => Promise<ArchiveState>>();
 const findStatus =
   vi.fn<() => Promise<{ id: string; projectId: string; category: string } | null>>();
 const listProjectIds = vi.fn<() => Promise<string[]>>();
@@ -21,6 +22,16 @@ const deletePlacement = vi.fn<(...args: unknown[]) => Promise<number>>();
 const listColumn = vi.fn<() => Promise<{ taskId: string; position: string }[]>>();
 const updatePositions = vi.fn<(...args: unknown[]) => Promise<void>>();
 const listWithCategory = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
+const recordHistory = vi.fn<(...args: unknown[]) => Promise<void>>();
+const statusSnapshots = vi.fn((_tx: unknown, _workspaceId: string, ids: string[]) => {
+  const refs = new Map(
+    ids.map((id) => [
+      id,
+      { status: { id, name: `Статус ${id.slice(-2)}` }, project: { id: 'p', name: 'Проект' } },
+    ]),
+  );
+  return Promise.resolve(refs);
+});
 
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
@@ -28,6 +39,7 @@ vi.mock('@/shared/access', async (importOriginal) => ({
 }));
 vi.mock('@/modules/projects', () => ({
   isEntityId: (value: string) => /^[0-9a-f-]{36}$/i.test(value),
+  ARCHIVED_PROJECT_MESSAGE: 'Проект в архиве — восстановите его, чтобы изменить',
 }));
 vi.mock('@/shared/db', () => ({
   prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn({}) },
@@ -36,9 +48,26 @@ vi.mock('@/shared/db', () => ({
   isUniqueViolation: (error: unknown) =>
     typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002',
 }));
+const notifyWatchersAboutStatus = vi.fn<(notice: unknown) => Promise<number>>(() =>
+  Promise.resolve(1),
+);
+vi.mock('../watcher/watcher.service', () => ({
+  notifyWatchersAboutStatus: (notice: unknown) => notifyWatchersAboutStatus(notice),
+}));
+vi.mock('../history/history.service', () => ({
+  GITHUB_HISTORY_AUTHOR: { actorId: null, viaTokenId: null, source: 'github' },
+  historyAuthorOf: (s: AuthSession) => ({
+    actorId: s.user.id,
+    viaTokenId: s.via?.tokenId ?? null,
+    source: null,
+  }),
+  recordHistory: (...args: unknown[]) => recordHistory(...args),
+  statusSnapshots: (tx: unknown, workspaceId: string, ids: string[]) =>
+    statusSnapshots(tx, workspaceId, ids),
+}));
 vi.mock('./placement.repository', () => ({
   placementRepository: {
-    taskExists: () => taskExists(),
+    findArchiveState: () => findArchiveState(),
     findStatus: () => findStatus(),
     listProjectIds: () => listProjectIds(),
     lastPosition: () => lastPosition(),
@@ -90,7 +119,7 @@ beforeEach(() => {
     role: 'member',
     permissions: { manageProjects: false, manageDocuments: false },
   });
-  taskExists.mockResolvedValue(true);
+  findArchiveState.mockResolvedValue({ taskArchived: false, projectArchived: false });
   findStatus.mockResolvedValue({ id: S2, projectId: PROJECT_ID, category: 'in_progress' });
   listProjectIds.mockResolvedValue([]);
   lastPosition.mockResolvedValue(null);
@@ -142,7 +171,7 @@ describe('addToProject', () => {
   });
 
   it('returns NOT_FOUND for a task of another workspace', async () => {
-    taskExists.mockResolvedValue(false);
+    findArchiveState.mockResolvedValue(null);
     await expect(addToProject(session, input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });
@@ -161,12 +190,19 @@ describe('changeStatus', () => {
     expect(key).toEqual({ taskId: TASK_ID, projectId: PROJECT_ID });
     expect(data.statusId).toBe(S2);
     expect(data.position > 'a9').toBe(true);
+    expect(notifyWatchersAboutStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: TASK_ID,
+        actor: { id: 'user-1', name: session.user.name },
+      }),
+    );
   });
 
   it('does nothing for the same status', async () => {
     await changeStatus(session, { ...input, statusId: S1 });
     expect(findStatus).not.toHaveBeenCalled();
     expect(updateStatus).not.toHaveBeenCalled();
+    expect(notifyWatchersAboutStatus).not.toHaveBeenCalled();
   });
 
   it('rejects a status of another project', async () => {
@@ -195,9 +231,13 @@ describe('removeFromProject', () => {
       taskId: TASK_ID,
       projectId: PROJECT_ID,
     });
-    expect(deletePlacement).toHaveBeenCalledWith('ws-1', {
-      taskId: TASK_ID,
-      projectId: PROJECT_ID,
+    expect(deletePlacement).toHaveBeenCalledWith(
+      'ws-1',
+      { taskId: TASK_ID, projectId: PROJECT_ID },
+      expect.anything(),
+    );
+    expect(recordHistory.mock.calls[0]?.[1]).toMatchObject({
+      changes: [{ kind: 'project_removed', data: { project: { name: 'Проект' } } }],
     });
   });
 
@@ -257,6 +297,24 @@ describe('movePlacement', () => {
     expect(findStatus).not.toHaveBeenCalled();
     expect(written()).toMatchObject({ statusId: S1 });
     expect(written().position > 'a1').toBe(true);
+  });
+
+  it('records history only when the column changes', async () => {
+    listColumn.mockResolvedValue([{ taskId: A, position: 'a0' }]);
+    await movePlacement(session, moveInput);
+    expect(recordHistory).toHaveBeenCalledTimes(1);
+    expect(recordHistory.mock.calls[0]?.[1]).toMatchObject({
+      author: { actorId: 'user-1', viaTokenId: null, source: null },
+      changes: [{ kind: 'status', data: { from: { id: S1 }, to: { id: S2 } } }],
+    });
+
+    recordHistory.mockClear();
+    listColumn.mockResolvedValue([
+      { taskId: TASK_ID, position: 'a0' },
+      { taskId: A, position: 'a1' },
+    ]);
+    await movePlacement(session, { ...moveInput, statusId: S1, prevTaskId: A });
+    expect(recordHistory).not.toHaveBeenCalled();
   });
 
   it('does nothing when the card already stands under the anchor', async () => {
@@ -335,6 +393,16 @@ describe('changePlacementStatusBySystem', () => {
     await expect(changePlacementStatusBySystem(systemInput)).resolves.toBe(true);
     expect(requireWorkspaceAccess).not.toHaveBeenCalled();
     expect(updateStatus).toHaveBeenCalledTimes(1);
+    expect(recordHistory).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        author: { actorId: null, viaTokenId: null, source: 'github' },
+        changes: [expect.objectContaining({ kind: 'status' })],
+      }),
+    );
+    expect(notifyWatchersAboutStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ actor: null, systemName: 'GitHub' }),
+    );
   });
 
   it('reports no change for the same status', async () => {
@@ -367,5 +435,40 @@ describe('listPlacementsForAutomation', () => {
     expect(listWithCategory).toHaveBeenCalledWith('ws-1', [TASK_ID]);
     await expect(listPlacementsForAutomation('ws-1', ['bad'])).resolves.toEqual([]);
     expect(listWithCategory).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('archive', () => {
+  it('rejects changes of an archived task with VALIDATION_ERROR', async () => {
+    findArchiveState.mockResolvedValue({ taskArchived: true, projectArchived: false });
+    await expect(changeStatus(session, input)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: expect.stringMatching(/Задача в архиве/),
+    });
+    await expect(addToProject(session, input)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(movePlacement(session, { ...input, prevTaskId: null })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    await expect(removeFromProject(session, input)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    expect(updateStatus).not.toHaveBeenCalled();
+    expect(deletePlacement).not.toHaveBeenCalled();
+  });
+
+  it('rejects changes in an archived project', async () => {
+    findArchiveState.mockResolvedValue({ taskArchived: false, projectArchived: true });
+    await expect(changeStatus(session, input)).rejects.toMatchObject({
+      message: expect.stringMatching(/Проект в архиве/),
+    });
+  });
+
+  it('system skips an archived task without an error', async () => {
+    findArchiveState.mockResolvedValue({ taskArchived: true, projectArchived: false });
+    await expect(
+      changePlacementStatusBySystem({ ...input, reason: 'github_pr_merged' }),
+    ).resolves.toBe(false);
+    expect(updateStatus).not.toHaveBeenCalled();
+    expect(notifyWatchersAboutStatus).not.toHaveBeenCalled();
   });
 });

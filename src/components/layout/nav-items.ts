@@ -48,11 +48,12 @@ export function getWorkspaceSections(slug: string, role: WorkspaceRole): NavItem
     sections.push({
       href: `${base}/settings`,
       label: 'Настройки',
-      // Подразделы настроек (GitHub, агенты) — тоже «Настройки»; «Участники» — отдельная вкладка.
+      // Подразделы настроек (GitHub, агенты, метки) — тоже «Настройки»; «Участники» — отдельная вкладка.
       isActive: (path) =>
         path === `${base}/settings` ||
         isWithin(path, `${base}/settings/github`) ||
-        isWithin(path, `${base}/settings/agents`),
+        isWithin(path, `${base}/settings/agents`) ||
+        isWithin(path, `${base}/settings/labels`),
     });
   }
   return sections;

@@ -107,9 +107,10 @@ export const subtaskRepository = {
   },
 
   /** Прямые подзадачи по номеру. */
-  listChildren(workspaceId: string, parentId: string) {
+  /** Подзадачи; `activeOnly` — без архивных (у активного родителя архивные не показываются). */
+  listChildren(workspaceId: string, parentId: string, activeOnly = false) {
     return prisma.task.findMany({
-      where: { workspaceId, parentId },
+      where: { workspaceId, parentId, ...(activeOnly && { archivedAt: null }) },
       orderBy: { number: 'asc' },
       select: CHILD_SELECT,
     });
@@ -119,7 +120,12 @@ export const subtaskRepository = {
   childrenCategories(workspaceId: string, parentIds: string[]) {
     if (parentIds.length === 0) return Promise.resolve([]);
     return prisma.task.findMany({
-      where: { workspaceId, parentId: { in: parentIds } },
+      // Как в listSubtasks: у активного родителя архивные подзадачи не считаются.
+      where: {
+        workspaceId,
+        parentId: { in: parentIds },
+        OR: [{ archivedAt: null }, { parent: { archivedAt: { not: null } } }],
+      },
       select: {
         parentId: true,
         placements: { select: { status: { select: { category: true } } } },
@@ -151,6 +157,8 @@ export const subtaskRepository = {
       where: {
         workspaceId,
         id: { notIn: excludeIds },
+        // В архивную задачу подзадачу не перенести.
+        archivedAt: null,
         ...(text && {
           OR: [
             ...(number !== undefined ? [{ number }] : []),

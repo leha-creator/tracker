@@ -15,12 +15,23 @@ export const placementRepository = {
     });
   },
 
-  async taskExists(tx: TransactionClient, workspaceId: string, taskId: string): Promise<boolean> {
-    const row = await tx.task.findFirst({
+  /** Архивность задачи и проекта; null — задачи или проекта нет в пространстве. */
+  async findArchiveState(
+    tx: TransactionClient,
+    workspaceId: string,
+    taskId: string,
+    projectId: string,
+  ): Promise<{ taskArchived: boolean; projectArchived: boolean } | null> {
+    const task = await tx.task.findFirst({
       where: { id: taskId, workspaceId },
-      select: { id: true },
+      select: { archivedAt: true },
     });
-    return row !== null;
+    const project = await tx.project.findFirst({
+      where: { id: projectId, workspaceId },
+      select: { archivedAt: true },
+    });
+    if (!task || !project) return null;
+    return { taskArchived: task.archivedAt !== null, projectArchived: project.archivedAt !== null };
   },
 
   /** Позиция последней карточки колонки (побайтный порядок — колонка с COLLATE "C"). */
@@ -63,8 +74,14 @@ export const placementRepository = {
 
   /** Размещения задач с категорией статуса (для автосмены статуса интеграциями). */
   listWithCategory(workspaceId: string, taskIds: string[]) {
+    // Архивные задачи и проекты автосмена статуса не трогает.
     return prisma.taskPlacement.findMany({
-      where: { workspaceId, taskId: { in: taskIds } },
+      where: {
+        workspaceId,
+        taskId: { in: taskIds },
+        task: { archivedAt: null },
+        project: { archivedAt: null },
+      },
       select: {
         taskId: true,
         projectId: true,

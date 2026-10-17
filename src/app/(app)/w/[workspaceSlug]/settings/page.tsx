@@ -58,6 +58,22 @@ async function SettingsSection({
       </Card>
       <Card>
         <CardHeader>
+          <CardTitle>Метки задач</CardTitle>
+          <CardDescription>
+            Общие метки для всех проектов: фильтр в списке задач и цветные метки на карточках.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link
+            href={`/w/${workspace.slug}/settings/labels`}
+            className="text-sm text-primary hover:underline"
+          >
+            Настроить метки
+          </Link>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
           <CardTitle>Агенты</CardTitle>
           <CardDescription>
             Отдельные участники для Claude Code: свои токены, права и ответственный.
@@ -90,13 +106,14 @@ async function SettingsSection({
       </Card>
       <Card className="border-destructive/40">
         <CardHeader>
-          <CardTitle>Опасная зона</CardTitle>
+          <CardTitle>Архив</CardTitle>
           <CardDescription>
-            Удаление пространства нельзя отменить: вместе с ним удаляются участники и приглашения.
+            Архивное пространство пропадает у участников, из MCP и интеграций; данные сохраняются.
+            Восстановить или удалить его навсегда можно с главной страницы.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <DeleteWorkspaceDialog workspaceId={workspace.id} name={workspace.name} />
+          <DeleteWorkspaceDialog workspaceId={workspace.id} name={workspace.name} mode="archive" />
         </CardContent>
       </Card>
     </div>

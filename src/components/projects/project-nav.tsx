@@ -18,6 +18,8 @@ interface ProjectNavProps {
   icon: EntityIcon;
   description: string | null;
   canManage: boolean;
+  /** Проект в архиве: задачи в него не создаются — без «Новой задачи». */
+  archived?: boolean;
 }
 
 /** Шапка проекта: крошки, название, «Новая задача» и вкладки. «Настройки» видны только с правом управления. */
@@ -28,6 +30,7 @@ export function ProjectNav({
   icon,
   description,
   canManage,
+  archived = false,
 }: ProjectNavProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -64,11 +67,13 @@ export function ProjectNav({
             </p>
           )}
         </div>
-        <Button asChild size="sm">
-          <Link href={newTaskHref} scroll={false}>
-            Новая задача
-          </Link>
-        </Button>
+        {!archived && (
+          <Button asChild size="sm">
+            <Link href={newTaskHref} scroll={false}>
+              Новая задача
+            </Link>
+          </Button>
+        )}
       </div>
       <nav
         aria-label="Разделы проекта"

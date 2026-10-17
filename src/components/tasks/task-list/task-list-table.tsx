@@ -23,6 +23,7 @@ import { UserHoverCard } from '@/components/users/user-hover-card';
 
 import { AssigneeAvatar } from '../assignee-avatar';
 import { DueDate } from '../due-date';
+import { LabelChipList } from '../labels/label-chip';
 import { PriorityBadge } from '../priority-badge';
 import {
   parseTaskPanelParam,
@@ -66,6 +67,7 @@ export function TaskListTable({
             ) : (
               <TableHead>Проекты</TableHead>
             )}
+            <TableHead>Метки</TableHead>
             <SortHeader sort="priority" label={TASK_LIST_SORT_LABELS.priority} />
             <SortHeader sort="due" label={TASK_LIST_SORT_LABELS.due} />
             <TableHead>Ответственный</TableHead>
@@ -114,6 +116,9 @@ export function TaskListTable({
                 ) : (
                   <Placements placements={task.placements} />
                 )}
+              </TableCell>
+              <TableCell className="max-w-56">
+                <LabelChipList labels={task.labels} />
               </TableCell>
               <TableCell>
                 <PriorityBadge priority={task.priority} />

@@ -20,6 +20,8 @@ interface SortableTaskCardProps {
   /** true сразу после перетаскивания: клик, завершивший перенос, не должен открывать задачу. */
   shouldSuppressClick: () => boolean;
   reduceMotion: boolean;
+  /** Доска архивного проекта: карточка — обычная ссылка, без перетаскивания. */
+  disabled?: boolean;
 }
 
 /**
@@ -34,10 +36,12 @@ export function SortableTaskCard({
   pullRequest,
   shouldSuppressClick,
   reduceMotion,
+  disabled = false,
 }: SortableTaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.taskId,
     data: { statusId },
+    disabled,
     transition: reduceMotion ? null : undefined,
   });
   // Ссылка остаётся ссылкой: без role="button", tabIndex и aria-pressed от dnd-kit.
@@ -52,7 +56,7 @@ export function SortableTaskCard({
       pullRequest={pullRequest}
       {...listeners}
       aria-describedby={describedBy}
-      aria-roledescription="перетаскиваемая карточка"
+      aria-roledescription={disabled ? undefined : 'перетаскиваемая карточка'}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn('touch-manipulation', isDragging && 'opacity-40')}
       onClickCapture={(event: MouseEvent) => {

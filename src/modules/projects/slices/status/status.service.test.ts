@@ -7,7 +7,7 @@ import type { AuthSession } from '@/shared/auth';
 import type { StatusSet } from '../../models';
 
 const requireWorkspacePermission = vi.fn<() => Promise<WorkspaceAccess>>();
-const lockProject = vi.fn<() => Promise<boolean>>();
+const lockProject = vi.fn<() => Promise<{ archivedAt: Date | null } | null>>();
 interface StatusRowMock {
   id: string;
   name: string;
@@ -71,7 +71,7 @@ beforeEach(() => {
     role: 'owner',
     permissions: { manageProjects: true, manageDocuments: true },
   });
-  lockProject.mockResolvedValue(true);
+  lockProject.mockResolvedValue({ archivedAt: null });
   saveSet.mockReturnValue([]);
   reassignPlacements.mockResolvedValue(0);
   listByProject.mockResolvedValue([
@@ -96,7 +96,7 @@ beforeEach(() => {
 
 describe('status mutations', () => {
   it('returns NOT_FOUND for a project outside the workspace', async () => {
-    lockProject.mockResolvedValue(false);
+    lockProject.mockResolvedValue(null);
     await expect(deleteStatus(session, { ...ref, statusId: S1 })).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });

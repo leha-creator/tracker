@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { isEntityId, type StatusCategory } from '@/modules/projects';
+import { ARCHIVED_PROJECT_MESSAGE, isEntityId, type StatusCategory } from '@/modules/projects';
 import { requireWorkspaceAccess } from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
 import {
@@ -13,7 +13,9 @@ import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
 import {
+  ARCHIVED_TASK_MESSAGE,
   assertCanPlace,
+  type HistoryAuthor,
   comparePositions,
   positionAfter,
   rekeyColumn,
@@ -22,6 +24,13 @@ import {
   type ColumnCard,
   type MovePosition,
 } from '../../models';
+import {
+  GITHUB_HISTORY_AUTHOR,
+  historyAuthorOf,
+  recordHistory,
+  statusSnapshots,
+} from '../history/history.service';
+import { notifyWatchersAboutStatus, type StatusChangeNotice } from '../watcher/watcher.service';
 import { placementRepository } from './placement.repository';
 
 const log = createLogger('tasks.placement');
@@ -48,6 +57,83 @@ async function loadStatus(tx: TransactionClient, workspaceId: string, statusId: 
   return status;
 }
 
+/**
+ * Задача и проект доступны для изменения: есть в пространстве и не в архиве. Для системы
+ * (`skip`) возвращает false вместо ошибки — архивные задачи и проекты она пропускает.
+ */
+async function checkActive(
+  tx: TransactionClient,
+  ref: PlacementRef,
+  mode: 'reject' | 'skip' = 'reject',
+): Promise<boolean> {
+  const state = await placementRepository.findArchiveState(
+    tx,
+    ref.workspaceId,
+    ref.taskId,
+    ref.projectId,
+  );
+  if (!state) {
+    if (mode === 'skip') return false;
+    throw new NotFoundError('Задача или проект не найдены');
+  }
+  if (!state.taskArchived && !state.projectArchived) return true;
+  if (mode === 'skip') {
+    log.debug({ ...ref, ...state }, '[placement] archived, skipped by system');
+    return false;
+  }
+  log.warn({ ...ref, ...state }, '[placement] change of archived task or project rejected');
+  throw new ValidationError(state.taskArchived ? ARCHIVED_TASK_MESSAGE : ARCHIVED_PROJECT_MESSAGE);
+}
+
+/** Имена смены статуса — для уведомления наблюдателей после фиксации транзакции. */
+type StatusChangeNames = Pick<StatusChangeNotice, 'projectName' | 'fromStatus' | 'toStatus'>;
+
+/**
+ * Запись истории о смене статуса размещения (снимок имён статусов и проекта). Возвращает имена
+ * для уведомления; null — статус не найден (удалён параллельно).
+ */
+async function recordStatusChange(
+  tx: TransactionClient,
+  ref: PlacementRef,
+  author: HistoryAuthor,
+  fromStatusId: string,
+  toStatusId: string,
+): Promise<StatusChangeNames | null> {
+  const refs = await statusSnapshots(tx, ref.workspaceId, [fromStatusId, toStatusId]);
+  const from = refs.get(fromStatusId);
+  const to = refs.get(toStatusId);
+  if (!from || !to) return null;
+  await recordHistory(tx, {
+    workspaceId: ref.workspaceId,
+    taskId: ref.taskId,
+    author,
+    changes: [{ kind: 'status', data: { project: to.project, from: from.status, to: to.status } }],
+  });
+  return { projectName: to.project.name, fromStatus: from.status.name, toStatus: to.status.name };
+}
+
+/** Уведомление наблюдателей о зафиксированной смене статуса (не бросает). */
+async function notifyStatusWatchers(
+  ref: PlacementRef,
+  names: StatusChangeNames | null,
+  actor: StatusChangeNotice['actor'],
+  systemName?: string,
+): Promise<void> {
+  if (!names) return;
+  const recipients = await notifyWatchersAboutStatus({
+    workspaceId: ref.workspaceId,
+    taskId: ref.taskId,
+    ...names,
+    actor,
+    systemName,
+  });
+  log.debug({ taskId: ref.taskId, recipients }, '[placement] watchers notified');
+}
+
+function actorOf(session: AuthSession): StatusChangeNotice['actor'] {
+  return { id: session.user.id, name: session.user.name };
+}
+
 type MoveInput = PlacementRef & { statusId: string; prevTaskId: string | null };
 
 function alreadyPlaced(): ConflictError {
@@ -71,10 +157,7 @@ export async function addToProject(
 
   try {
     await prisma.$transaction(async (tx) => {
-      if (!(await placementRepository.taskExists(tx, workspaceId, taskId))) {
-        log.warn({ workspaceId, taskId }, '[placement.addToProject] task not found');
-        throw new NotFoundError('Задача не найдена');
-      }
+      await checkActive(tx, input);
       const status = await loadStatus(tx, workspaceId, statusId);
       if (status.projectId !== projectId) {
         log.warn({ workspaceId, statusId, projectId }, '[placement] status of another project');
@@ -100,6 +183,15 @@ export async function addToProject(
         statusId,
         position: positionAfter(last),
       });
+      const snapshot = (await statusSnapshots(tx, workspaceId, [statusId])).get(statusId);
+      if (snapshot) {
+        await recordHistory(tx, {
+          workspaceId,
+          taskId,
+          author: historyAuthorOf(session),
+          changes: [{ kind: 'project_added', data: snapshot }],
+        });
+      }
     });
   } catch (error) {
     // Предварительная проверка выше; P2002 — только при гонке двух одинаковых запросов.
@@ -125,12 +217,13 @@ export async function changeStatus(
     '[placement.changeStatus] start',
   );
 
-  const from = await applyStatusChange(input);
+  const { from, names } = await applyStatusChange(input, historyAuthorOf(session), 'reject');
   if (from === statusId) {
     log.debug({ workspaceId, taskId, projectId, statusId }, '[placement.changeStatus] unchanged');
     return;
   }
   log.info({ workspaceId, taskId, projectId, from, to: statusId }, '[placement] status changed');
+  await notifyStatusWatchers(input, names, actorOf(session));
 }
 
 /**
@@ -144,7 +237,7 @@ export async function changePlacementStatusBySystem(
 ): Promise<boolean> {
   const { workspaceId, taskId, projectId, statusId, reason } = input;
   assertIds(input, statusId);
-  const from = await applyStatusChange(input);
+  const { from, names } = await applyStatusChange(input, GITHUB_HISTORY_AUTHOR, 'skip');
   if (from === statusId) {
     log.debug(
       { workspaceId, taskId, projectId, statusId, reason },
@@ -156,19 +249,26 @@ export async function changePlacementStatusBySystem(
     { workspaceId, taskId, projectId, from, to: statusId, reason },
     '[placement] status changed by system',
   );
+  await notifyStatusWatchers(input, names, null, 'GitHub');
   return true;
 }
 
-/** Статус размещения → в конец колонки нового статуса. Возвращает прежний статус. */
-async function applyStatusChange(input: PlacementRef & { statusId: string }): Promise<string> {
+/** Статус размещения → в конец колонки нового статуса. Возвращает прежний статус и имена смены. */
+async function applyStatusChange(
+  input: PlacementRef & { statusId: string },
+  author: HistoryAuthor,
+  mode: 'reject' | 'skip',
+): Promise<{ from: string; names: StatusChangeNames | null }> {
   const { workspaceId, taskId, projectId, statusId } = input;
   return prisma.$transaction(async (tx) => {
+    // Архивное система пропускает — как «статус не изменился».
+    if (!(await checkActive(tx, input, mode))) return { from: statusId, names: null };
     const row = await placementRepository.find(tx, workspaceId, taskId, projectId);
     if (!row) {
       log.warn({ workspaceId, taskId, projectId }, '[placement.changeStatus] not placed');
       throw new NotFoundError('Задачи нет в этом проекте');
     }
-    if (row.statusId === statusId) return row.statusId;
+    if (row.statusId === statusId) return { from: row.statusId, names: null };
 
     const status = await loadStatus(tx, workspaceId, statusId);
     const placement = new TaskPlacement(row.taskId, row.projectId, row.statusId, row.position);
@@ -189,7 +289,8 @@ async function applyStatusChange(input: PlacementRef & { statusId: string }): Pr
       { taskId, projectId },
       { statusId: placement.statusId, position: placement.position },
     );
-    return row.statusId;
+    const names = await recordStatusChange(tx, input, author, row.statusId, placement.statusId);
+    return { from: row.statusId, names };
   });
 }
 
@@ -226,11 +327,25 @@ export async function removeFromProject(session: AuthSession, input: PlacementRe
     '[placement.removeFromProject] start',
   );
 
-  const count = await placementRepository.delete(workspaceId, { taskId, projectId });
-  if (count === 0) {
-    log.warn({ workspaceId, taskId, projectId }, '[placement.removeFromProject] not placed');
-    throw new NotFoundError('Задачи нет в этом проекте');
-  }
+  await prisma.$transaction(async (tx) => {
+    await checkActive(tx, input);
+    const row = await placementRepository.find(tx, workspaceId, taskId, projectId);
+    const snapshot =
+      row && (await statusSnapshots(tx, workspaceId, [row.statusId])).get(row.statusId);
+    const count = await placementRepository.delete(workspaceId, { taskId, projectId }, tx);
+    if (count === 0) {
+      log.warn({ workspaceId, taskId, projectId }, '[placement.removeFromProject] not placed');
+      throw new NotFoundError('Задачи нет в этом проекте');
+    }
+    if (snapshot) {
+      await recordHistory(tx, {
+        workspaceId,
+        taskId,
+        author: historyAuthorOf(session),
+        changes: [{ kind: 'project_removed', data: { project: snapshot.project } }],
+      });
+    }
+  });
   log.info({ workspaceId, taskId, projectId }, '[placement] removed');
 }
 
@@ -244,9 +359,10 @@ export async function movePlacement(session: AuthSession, input: MoveInput): Pro
   assertIds(input, statusId);
   if (prevTaskId !== null && !isEntityId(prevTaskId)) throw new NotFoundError('Задача не найдена');
 
-  let result: { from: string; moved: boolean };
+  let result: { from: string; moved: boolean; names: StatusChangeNames | null };
   try {
     result = await prisma.$transaction(async (tx) => {
+      await checkActive(tx, input);
       const row = await placementRepository.find(tx, workspaceId, taskId, projectId);
       if (!row) {
         log.warn({ workspaceId, taskId, projectId }, '[placement.movePlacement] not placed');
@@ -274,7 +390,7 @@ export async function movePlacement(session: AuthSession, input: MoveInput): Pro
         );
         move = resolveMove(input, rekeyed);
       }
-      if (move.kind !== 'position') return { from: row.statusId, moved: false };
+      if (move.kind !== 'position') return { from: row.statusId, moved: false, names: null };
 
       const placement = new TaskPlacement(row.taskId, row.projectId, row.statusId, row.position);
       try {
@@ -292,7 +408,11 @@ export async function movePlacement(session: AuthSession, input: MoveInput): Pro
         { taskId, projectId },
         { statusId: placement.statusId, position: placement.position },
       );
-      return { from: row.statusId, moved: true };
+      const names =
+        row.statusId !== placement.statusId
+          ? await recordStatusChange(tx, input, historyAuthorOf(session), row.statusId, statusId)
+          : null;
+      return { from: row.statusId, moved: true, names };
     });
   } catch (error) {
     // Статус удалили параллельно с броском: составной FK размещения на статус.
@@ -311,6 +431,7 @@ export async function movePlacement(session: AuthSession, input: MoveInput): Pro
     { workspaceId, taskId, projectId, from: result.from, to: statusId, userId: session.user.id },
     '[placement] moved',
   );
+  await notifyStatusWatchers(input, result.names, actorOf(session));
 }
 
 /** resolveMovePosition с логированием отклонённого якоря (устаревший или сама карточка). */

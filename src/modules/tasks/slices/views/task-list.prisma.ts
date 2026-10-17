@@ -50,6 +50,8 @@ export function buildTaskWhere(query: TaskListQuery, ctx: TaskListContext): Pris
 
   if (query.topLevelOnly) and.push({ parentId: null });
 
+  if (query.labels.length > 0) and.push({ labels: { some: { labelId: { in: query.labels } } } });
+
   if (query.assignees.length > 0) {
     const ids = query.assignees
       .filter((value) => value !== TASK_LIST_NONE)
@@ -97,7 +99,12 @@ export function buildTaskWhere(query: TaskListQuery, ctx: TaskListContext): Pris
     }
   }
 
-  return { workspaceId: ctx.workspaceId, ...(and.length > 0 ? { AND: and } : {}) };
+  return {
+    workspaceId: ctx.workspaceId,
+    // Архивные — только в режиме «Архив», активные — во всех остальных.
+    archivedAt: query.archived ? { not: null } : null,
+    ...(and.length > 0 ? { AND: and } : {}),
+  };
 }
 
 /** Размещения проекта: статус и «не выполнена» — по статусу в этом проекте, как на доске. */

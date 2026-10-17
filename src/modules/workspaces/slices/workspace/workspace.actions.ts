@@ -10,15 +10,19 @@ import { formValues, type FormState } from '@/shared/types';
 
 import type { WorkspaceSummaryDto } from './workspace.dto';
 import {
+  archiveWorkspaceSchema,
   createWorkspaceSchema,
   deleteWorkspaceSchema,
   renameWorkspaceSchema,
+  restoreWorkspaceSchema,
   updateTaskKeySchema,
 } from './workspace.schema';
 import {
+  archiveWorkspace,
   createWorkspace,
   deleteWorkspace,
   renameWorkspace,
+  restoreWorkspace,
   updateTaskKey,
 } from './workspace.service';
 
@@ -80,6 +84,41 @@ export async function deleteWorkspaceAction(
   revalidatePath('/', 'layout');
   log.debug({ to: '/' }, '[workspaces.actions.delete] redirect');
   redirect('/');
+}
+
+/** В архив: пространство больше не открывается — уводим на главную, где есть раздел архива. */
+export async function archiveWorkspaceAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  try {
+    const input = archiveWorkspaceSchema.parse(Object.fromEntries(formData));
+    const session = await requireUser();
+    await archiveWorkspace(session, input);
+  } catch (error) {
+    return {
+      ...toActionError(error, { action: 'archiveWorkspace' }),
+      values: formValues(formData, ['confirmName']),
+    };
+  }
+  revalidatePath('/', 'layout');
+  log.debug({ to: '/' }, '[workspaces.actions.archive] redirect');
+  redirect('/');
+}
+
+export async function restoreWorkspaceAction(
+  _prev: FormState<WorkspaceSummaryDto>,
+  formData: FormData,
+): Promise<FormState<WorkspaceSummaryDto>> {
+  try {
+    const input = restoreWorkspaceSchema.parse(Object.fromEntries(formData));
+    const session = await requireUser();
+    const workspace = await restoreWorkspace(session, input);
+    revalidatePath('/', 'layout');
+    return { ok: true, data: workspace };
+  } catch (error) {
+    return { ...toActionError(error, { action: 'restoreWorkspace' }), values: {} };
+  }
 }
 
 export async function updateTaskKeyAction(

@@ -28,6 +28,16 @@ export interface WorkspaceAccess {
   memberId: string;
   role: WorkspaceRole;
   permissions: WorkspacePermissions;
+  /** Пространство в архиве — бывает только при `allowArchived` (у владельца). */
+  archived?: boolean;
+}
+
+export interface WorkspaceAccessOptions {
+  /**
+   * Пустить в архивное пространство (только владельца): настройки, восстановление и удаление.
+   * Без флага архивное пространство для всех — NOT_FOUND.
+   */
+  allowArchived?: boolean;
 }
 
 export interface WorkspaceContext {
@@ -38,6 +48,7 @@ export interface WorkspaceContext {
     name: string;
     taskKey: string | null;
     icon: EntityIcon;
+    archivedAt: Date | null;
   };
   access: WorkspaceAccess;
 }
@@ -46,7 +57,13 @@ export interface WorkspaceContext {
 const findMembership = cache((workspaceId: string, userId: string) =>
   prisma.workspaceMember.findUnique({
     where: { workspaceId_userId: { workspaceId, userId } },
-    select: { id: true, role: true, canManageProjects: true, canManageDocuments: true },
+    select: {
+      id: true,
+      role: true,
+      canManageProjects: true,
+      canManageDocuments: true,
+      workspace: { select: { archivedAt: true } },
+    },
   }),
 );
 
@@ -59,6 +76,7 @@ const findWorkspaceBySlug = cache((slug: string, userId: string) =>
       name: true,
       taskKey: true,
       icon: true,
+      archivedAt: true,
       members: {
         where: { userId },
         select: { id: true, role: true, canManageProjects: true, canManageDocuments: true },
@@ -68,13 +86,27 @@ const findWorkspaceBySlug = cache((slug: string, userId: string) =>
 );
 
 /**
+ * Архивное пространство открыто только владельцу и только с `allowArchived`.
+ * true — доступ разрешён.
+ */
+function isArchiveAllowed(
+  archivedAt: Date | null,
+  role: WorkspaceRole,
+  options: WorkspaceAccessOptions,
+): boolean {
+  return !archivedAt || (options.allowArchived === true && role === 'owner');
+}
+
+/**
  * Проверяет, что пользователь — участник пространства с ролью не ниже `minRole`.
- * Для сервисов: неучастнику — NOT_FOUND (не раскрываем существование), низкой роли — FORBIDDEN.
+ * Для сервисов: неучастнику и в архивном пространстве — NOT_FOUND (не раскрываем
+ * существование), низкой роли — FORBIDDEN.
  */
 export async function requireWorkspaceAccess(
   session: AuthSession,
   workspaceId: string,
   minRole: WorkspaceRole = 'member',
+  options: WorkspaceAccessOptions = {},
 ): Promise<WorkspaceAccess> {
   const userId = session.user.id;
   if (session.user.banned) {
@@ -97,6 +129,12 @@ export async function requireWorkspaceAccess(
     throw new ForbiddenError();
   }
 
+  const { archivedAt } = membership.workspace;
+  if (!isArchiveAllowed(archivedAt, role, options)) {
+    log.debug({ userId, workspaceId }, '[access] archived workspace denied');
+    throw new NotFoundError('Пространство не найдено');
+  }
+
   log.debug({ userId, workspaceId, role }, '[access.requireWorkspaceAccess]');
   return {
     userId,
@@ -104,6 +142,7 @@ export async function requireWorkspaceAccess(
     memberId: membership.id,
     role,
     permissions: resolveWorkspacePermissions(role, membership),
+    ...(archivedAt ? { archived: true } : {}),
   };
 }
 
@@ -137,12 +176,13 @@ export async function requireWorkspacePermission(
 }
 
 /**
- * Для страниц `/w/[workspaceSlug]`: без сессии — редирект на вход, неучастнику или при
- * недостаточной роли — 404.
+ * Для страниц `/w/[workspaceSlug]`: без сессии — редирект на вход, неучастнику, при
+ * недостаточной роли и в архивном пространстве (кроме `allowArchived` у владельца) — 404.
  */
 export async function requireWorkspaceAccessBySlug(
   slug: string,
   minRole: WorkspaceRole = 'member',
+  options: WorkspaceAccessOptions = {},
 ): Promise<WorkspaceContext> {
   const session = await requireUserOrRedirect(`/w/${slug}`);
   const userId = session.user.id;
@@ -163,6 +203,11 @@ export async function requireWorkspaceAccessBySlug(
     notFound();
   }
 
+  if (!isArchiveAllowed(workspace.archivedAt, role, options)) {
+    log.debug({ userId, workspaceId: workspace.id }, '[access] archived workspace denied');
+    notFound();
+  }
+
   log.debug({ userId, workspaceId: workspace.id, role }, '[access.requireWorkspaceAccessBySlug]');
   return {
     session,
@@ -172,6 +217,7 @@ export async function requireWorkspaceAccessBySlug(
       name: workspace.name,
       taskKey: workspace.taskKey,
       icon: resolveEntityIcon(workspace.icon, workspace.id),
+      archivedAt: workspace.archivedAt,
     },
     access: {
       userId,
@@ -179,6 +225,7 @@ export async function requireWorkspaceAccessBySlug(
       memberId: membership.id,
       role,
       permissions: resolveWorkspacePermissions(role, membership),
+      ...(workspace.archivedAt ? { archived: true } : {}),
     },
   };
 }

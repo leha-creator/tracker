@@ -22,7 +22,7 @@ import {
   type TaskListScope,
 } from '../../models';
 import { getSubtaskProgress } from '../subtask/subtask.service';
-import { toParentRef, toTaskListItem, toUserDto } from '../task/task.mapper';
+import { toLabelRefs, toParentRef, toTaskListItem, toUserDto } from '../task/task.mapper';
 import {
   buildPlacementOrderBy,
   buildPlacementWhere,
@@ -58,6 +58,7 @@ function toBoardCard(
     assignee: toUserDto(row.task.assignee),
     parent: toParentRef(row.task.parent, taskKey),
     subtaskProgress: progress.get(row.taskId) ?? null,
+    labels: toLabelRefs(row.task.labels),
   };
 }
 
@@ -127,8 +128,10 @@ function logList(request: ListRequest, page: TaskListPageDto, clampedFrom?: numb
         projects: query.projects.length,
         priorities: query.priorities.length,
         assignees: query.assignees.length,
+        labels: query.labels.length,
         due: query.due,
         topLevelOnly: query.topLevelOnly,
+        archived: query.archived,
       },
       hasQuery: query.q !== '',
       sort: query.sort,

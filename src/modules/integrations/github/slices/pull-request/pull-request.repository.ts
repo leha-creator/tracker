@@ -22,11 +22,11 @@ export interface PullRequestWrite {
 }
 
 export const pullRequestRepository = {
-  /** Пространства, где репозиторий выбран владельцем и задан ключ задач. */
+  /** Активные (не архивные) пространства, где репозиторий выбран владельцем и задан ключ задач. */
   listRepositoryWorkspaces(db: TransactionClient, repositoryId: bigint) {
     return db.workspaceGithubRepository
       .findMany({
-        where: { repositoryId, workspace: { taskKey: { not: null } } },
+        where: { repositoryId, workspace: { taskKey: { not: null }, archivedAt: null } },
         select: { workspace: { select: { id: true, slug: true, name: true, taskKey: true } } },
       })
       .then((rows) =>

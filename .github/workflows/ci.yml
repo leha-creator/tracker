@@ -363,8 +363,8 @@ jobs:
         env:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          echo "::group::compose.yml, backup.sh, release.env -> ${APP_DIR}; tracker.caddy -> ${EDGE_DIR}/sites"
-          scp deploy/tasker/compose.yml deploy/tasker/backup.sh "target:${APP_DIR}/"
+          echo "::group::compose.yml, backup.sh, reminders.sh, release.env -> ${APP_DIR}; tracker.caddy -> ${EDGE_DIR}/sites"
+          scp deploy/tasker/compose.yml deploy/tasker/backup.sh deploy/tasker/reminders.sh "target:${APP_DIR}/"
           printf 'TASKER_TAG=%s\n' "${TAG}" | ssh target "cat > ${APP_DIR}/release.env"
           # Edge-прокси не видит переменных окружения стека — домен подставляется в файл сайта.
           sed "s/__DOMAIN__/${DOMAIN}/" deploy/tasker/tracker.caddy | ssh target "cat > ${EDGE_DIR}/sites/tracker.caddy"

@@ -9,13 +9,16 @@ import {
   suggestBranchName,
 } from '@/modules/integrations/github';
 import {
+  listLabels,
   listProjectTasks,
   listSubtasks,
   listTaskAttachments,
   listTaskComments,
+  listTaskHistory,
   listTasks,
   parseTaskListParams,
   TASK_DUE_FILTERS,
+  TASK_LIST_MAX_VALUES,
   TASK_LIST_QUERY_MAX_LENGTH,
   TASK_PRIORITIES,
 } from '@/modules/tasks';
@@ -27,10 +30,12 @@ import { actorOf, type McpContext } from '../context';
 import {
   formatTaskDetails,
   formatTaskDocuments,
+  formatTaskHistory,
   formatTaskList,
   formatWorkspaceContext,
   normalizeName,
   parseStatusCategory,
+  resolveLabels,
   resolveMember,
   resolveProject,
   taskUrl,
@@ -54,8 +59,9 @@ export const taskRefArg = z
 
 export async function getWorkspaceContextTool(ctx: McpContext): Promise<string> {
   const projects = await loadCatalog(ctx);
-  const [members, githubGuide] = await Promise.all([
+  const [members, labels, githubGuide] = await Promise.all([
     loadMembers(ctx),
+    listLabels(ctx.session, ctx.workspace.id),
     loadGithubGuide(ctx, projects),
   ]);
   return formatWorkspaceContext({
@@ -64,6 +70,7 @@ export async function getWorkspaceContextTool(ctx: McpContext): Promise<string> 
     actor: actorOf(ctx),
     projects,
     members,
+    labels,
     githubGuide,
   });
 }
@@ -86,8 +93,17 @@ export const listTasksArgs = {
     .optional()
     .describe('"me", "none" (unassigned), or a member userId, email or name'),
   priority: z.array(z.enum(TASK_PRIORITIES)).max(5).optional(),
+  labels: z
+    .array(z.string().min(1).max(64))
+    .max(TASK_LIST_MAX_VALUES)
+    .optional()
+    .describe('Label names or ids: tasks with any of them'),
   due: z.enum(TASK_DUE_FILTERS).optional(),
   topLevelOnly: z.boolean().optional().describe('Hide subtasks'),
+  archived: z
+    .boolean()
+    .optional()
+    .describe('List archived tasks instead of active ones (archived tasks are hidden by default)'),
   sort: z
     .enum(['number', 'title', 'priority', 'due', 'status'])
     .optional()
@@ -122,9 +138,15 @@ export async function listTasksTool(ctx: McpContext, args: ListTasksArgs): Promi
   if (args.priority?.length) raw.priority = args.priority.join(',');
   if (args.due) raw.due = args.due;
   if (args.topLevelOnly) raw.level = 'top';
+  if (args.archived) raw.archived = '1';
   if (args.sort) raw.sort = args.sort;
   if (args.dir) raw.dir = args.dir;
   if (args.page) raw.page = String(args.page);
+
+  if (args.labels?.length) {
+    const labels = resolveLabels(await listLabels(ctx.session, ctx.workspace.id), args.labels);
+    raw.label = labels.map((label) => label.id).join(',');
+  }
 
   if (args.assignee) {
     const value = args.assignee.trim().toLowerCase();
@@ -182,13 +204,15 @@ export async function getTaskTool(
 ): Promise<string> {
   const task = await findTask(ctx, args.task);
   const workspaceId = ctx.workspace.id;
-  const [subtasks, comments, pullRequests, branchesAndCommits, attachments] = await Promise.all([
-    listSubtasks(ctx.session, workspaceId, task.id),
-    listTaskComments(ctx.session, workspaceId, task.id),
-    listTaskPullRequests(ctx.session, workspaceId, task.id),
-    listTaskBranchesAndCommits(ctx.session, workspaceId, task.id),
-    listTaskAttachments(ctx.session, workspaceId, task.id),
-  ]);
+  const [subtasks, comments, pullRequests, branchesAndCommits, attachments, history] =
+    await Promise.all([
+      listSubtasks(ctx.session, workspaceId, task.id),
+      listTaskComments(ctx.session, workspaceId, task.id),
+      listTaskPullRequests(ctx.session, workspaceId, task.id),
+      listTaskBranchesAndCommits(ctx.session, workspaceId, task.id),
+      listTaskAttachments(ctx.session, workspaceId, task.id),
+      listTaskHistory(ctx.session, workspaceId, task.id, { limit: GET_TASK_HISTORY_LIMIT }),
+    ]);
   const documents = await listTaskDocuments(ctx.session, workspaceId, task.id);
   const details = formatTaskDetails({
     task,
@@ -199,8 +223,28 @@ export async function getTaskTool(
     pullRequests,
     branchesAndCommits,
     attachments,
+    history,
   });
   return `${details}\n\n${formatTaskDocuments(documents)}`;
+}
+
+/** Сколько последних изменений показывать в get_task. */
+const GET_TASK_HISTORY_LIMIT = 5;
+/** Максимум записей в одном ответе get_task_history. */
+const HISTORY_TOOL_MAX = 50;
+
+export async function getTaskHistoryTool(
+  ctx: McpContext,
+  args: { task: string | number; limit?: number },
+): Promise<string> {
+  const task = await findTask(ctx, args.task);
+  const limit = args.limit ?? 20;
+  const history = await listTaskHistory(ctx.session, ctx.workspace.id, task.id, { limit });
+  log.debug(
+    { workspaceId: ctx.workspace.id, taskId: task.id, total: history.total, limit },
+    '[mcp.get_task_history]',
+  );
+  return formatTaskHistory(task.key, history);
 }
 
 export function registerReadTools(server: McpServer, ctx: McpContext): void {
@@ -209,7 +253,7 @@ export function registerReadTools(server: McpServer, ctx: McpContext): void {
     {
       title: 'Workspace context',
       description:
-        'Projects with their statuses (ids, names, categories), members (for assignee and @mentions) and the GitHub linking rules of this workspace. Call this first.',
+        'Projects with their statuses (ids, names, categories), members (for assignee and @mentions), task labels and the GitHub linking rules of this workspace. Call this first.',
       annotations: READ_ONLY,
     },
     () => runTool(ctx, 'get_workspace_context', () => getWorkspaceContextTool(ctx)),
@@ -220,7 +264,7 @@ export function registerReadTools(server: McpServer, ctx: McpContext): void {
     {
       title: 'List tasks',
       description:
-        'Search and filter tasks of the workspace (50 per page). Returns key, title, status in each project, assignee, priority, due date and parent of subtasks.',
+        'Search and filter tasks of the workspace (50 per page). Returns key, title, status in each project, assignee, priority, due date, labels and parent of subtasks.',
       inputSchema: listTasksArgs,
       annotations: READ_ONLY,
     },
@@ -237,5 +281,26 @@ export function registerReadTools(server: McpServer, ctx: McpContext): void {
       annotations: READ_ONLY,
     },
     (args) => runTool(ctx, 'get_task', () => getTaskTool(ctx, args)),
+  );
+
+  server.registerTool(
+    'get_task_history',
+    {
+      title: 'Get task history',
+      description:
+        'Change history of a task, newest first: status changes in each project, assignee, due date, priority, title, parent, labels, archiving — with who made each change (people, agents, GitHub automation).',
+      inputSchema: {
+        task: taskRefArg,
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(HISTORY_TOOL_MAX)
+          .optional()
+          .describe(`How many latest changes to return (default 20, max ${HISTORY_TOOL_MAX})`),
+      },
+      annotations: READ_ONLY,
+    },
+    (args) => runTool(ctx, 'get_task_history', () => getTaskHistoryTool(ctx, args)),
   );
 }

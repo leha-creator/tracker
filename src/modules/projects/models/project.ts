@@ -36,3 +36,17 @@ export function assertCanCreateProject(projectsCount: number): void {
     throw new ValidationError(`В пространстве может быть не больше ${PROJECT_LIMIT} проектов`);
   }
 }
+
+export const ARCHIVED_PROJECT_MESSAGE = 'Проект в архиве — восстановите его, чтобы изменить';
+
+/** Архивный проект только для чтения: доска, статусы и размещения не меняются. */
+export function assertProjectNotArchived(project: { archivedAt: Date | null }): void {
+  if (project.archivedAt) throw new ValidationError(ARCHIVED_PROJECT_MESSAGE);
+}
+
+/** Удалить навсегда можно только архивный проект. */
+export function assertCanDeleteProject(project: { archivedAt: Date | null }): void {
+  if (!project.archivedAt) {
+    throw new ValidationError('Удалить навсегда можно только проект из архива');
+  }
+}

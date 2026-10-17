@@ -44,6 +44,8 @@ async function TaskSection({ params, searchParams }: Props) {
       closeHref={`/w/${workspace.slug}/tasks`}
       allComments={raw.comments === 'all'}
       showAllCommentsHref={withSearchParam(pageHref, raw, 'comments', 'all')}
+      allHistory={raw.history === 'all'}
+      showAllHistoryHref={withSearchParam(pageHref, raw, 'history', 'all')}
       pageHref={pageHref}
       taskHref={(number) => taskPageHref(workspace.slug, number)}
       newSubtaskHref={(parent) => newTaskPageHref(workspace.slug, parent)}

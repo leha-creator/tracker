@@ -29,4 +29,14 @@ export const viewsRepository = {
       select: DOCUMENT_SUMMARY_SELECT,
     });
   },
+
+  /** Часть названия (titleKey в нижнем регистре, GIN-индекс pg_trgm), недавно изменённые выше. */
+  searchByTitle(workspaceId: string, textKey: string, take: number) {
+    return prisma.document.findMany({
+      where: { workspaceId, ...VISIBLE_DOCUMENT_WHERE, titleKey: { contains: textKey } },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      take,
+      select: DOCUMENT_SUMMARY_SELECT,
+    });
+  },
 };

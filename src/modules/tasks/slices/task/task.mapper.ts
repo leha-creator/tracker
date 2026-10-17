@@ -2,7 +2,8 @@ import 'server-only';
 
 import { parseStatusColor } from '@/modules/projects';
 
-import { formatTaskKey, isTaskOverdue, toIsoDate } from '../../models';
+import { formatTaskKey, isTaskOverdue, parseLabelColor, toIsoDate } from '../../models';
+import type { TaskLabelRefDto } from '../label/label.dto';
 import type { TaskRow } from './task.repository';
 import type { TaskListRow } from './task.select';
 import type { TaskAncestorDto } from '../subtask/subtask.dto';
@@ -65,6 +66,17 @@ export function toTaskListItem(row: TaskListRow, today: string): TaskListItemDto
   };
 }
 
+/** Метки задачи из выборки `TASK_LABELS_SELECT`. */
+export function toLabelRefs(
+  rows: readonly { label: { id: string; name: string; color: string } }[],
+): TaskLabelRefDto[] {
+  return rows.map(({ label }) => ({
+    id: label.id,
+    name: label.name,
+    color: parseLabelColor(label.color),
+  }));
+}
+
 /** Общие поля карточки/строки: ключ, срок, просрочка, размещения. */
 export function toTaskSummary(row: TaskRow | TaskListRow, today: string) {
   const dueDate = row.dueDate ? toIsoDate(row.dueDate) : null;
@@ -79,5 +91,6 @@ export function toTaskSummary(row: TaskRow | TaskListRow, today: string) {
     ),
     assignee: toUserDto(row.assignee),
     placements,
+    labels: toLabelRefs(row.labels),
   };
 }

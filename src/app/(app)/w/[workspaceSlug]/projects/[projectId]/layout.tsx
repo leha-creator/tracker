@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 
+import { ProjectArchivedBanner } from '@/components/projects/project-archived-banner';
 import { ProjectNav } from '@/components/projects/project-nav';
 
 import { loadProjectPage } from './_lib/load-project';
@@ -21,14 +22,26 @@ export default function ProjectLayout({ children, params }: Props) {
 async function ProjectHeader({ params }: Pick<Props, 'params'>) {
   const { workspaceSlug, projectId } = await params;
   const { workspace, project, access } = await loadProjectPage(workspaceSlug, projectId);
+  const basePath = `/w/${workspace.slug}/projects/${project.id}`;
   return (
-    <ProjectNav
-      basePath={`/w/${workspace.slug}/projects/${project.id}`}
-      projectsHref={`/w/${workspace.slug}`}
-      name={project.name}
-      icon={project.icon}
-      description={project.description}
-      canManage={access.permissions.manageProjects}
-    />
+    // Одна строка сетки оболочки: доска растягивается на вторую (globals.css, data-project-shell).
+    <div className="grid gap-4">
+      <ProjectNav
+        basePath={basePath}
+        projectsHref={`/w/${workspace.slug}`}
+        name={project.name}
+        icon={project.icon}
+        description={project.description}
+        canManage={access.permissions.manageProjects}
+        archived={project.archivedAt !== null}
+      />
+      {project.archivedAt && (
+        <ProjectArchivedBanner
+          archivedAt={project.archivedAt}
+          archivedByName={project.archivedByName}
+          settingsHref={access.permissions.manageProjects ? `${basePath}/settings` : undefined}
+        />
+      )}
+    </div>
   );
 }

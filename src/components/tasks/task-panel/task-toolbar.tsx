@@ -1,6 +1,6 @@
 'use client';
 
-import { Link2, Maximize2, MoreHorizontal, PanelRightClose, Trash2, X } from 'lucide-react';
+import { Archive, Link2, Maximize2, MoreHorizontal, PanelRightClose, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -14,8 +14,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { deleteTaskAction } from '@/modules/tasks/client';
+import { archiveTaskAction } from '@/modules/tasks/client';
 
+import { useRunTaskAction } from './run-task-action';
 import { TaskSaveIndicator } from './task-save-status';
 
 /** Полоса над задачей: слева — ключ или заголовок режима, справа — действия. */
@@ -60,21 +61,20 @@ interface TaskViewActionsProps {
   pageHref: string;
   closeHref: string;
   taskKey: string;
-  canDelete: boolean;
-  /** Сколько подзадач всех уровней удалится вместе с задачей. */
+  /** Задача в архиве: действия архива — в баннере, меню «⋯» не показывается. */
+  archived: boolean;
+  /** Сколько подзадач всех уровней уйдёт в архив вместе с задачей. */
   descendantCount: number;
-  /** Скрытые поля удаления: id и адрес возврата (панель закрывается на той же странице). */
-  deleteFields: Record<string, string>;
+  /** Скрытые поля действий: id пространства и задачи. */
+  actionFields: Record<string, string>;
 }
 
-/** Текст подтверждения удаления: с подзадачами — сколько их удалится. */
-function deleteTaskDescription(descendantCount: number): string {
-  const base = 'Задача исчезнет со всех досок вместе с комментариями и файлами.';
-  const subtasks =
-    descendantCount > 0
-      ? ` Подзадачи всех уровней тоже будут удалены (всего: ${descendantCount}).`
-      : '';
-  return `${base}${subtasks} Действие нельзя отменить.`;
+/** Текст подтверждения архивирования задачи с подзадачами. */
+function archiveTaskDescription(descendantCount: number): string {
+  return (
+    `Подзадачи всех уровней тоже уйдут в архив (всего: ${descendantCount}). ` +
+    'Задачи пропадут с досок и из списка; восстановить их можно в любой момент.'
+  );
 }
 
 /** Действия открытой задачи: статус сохранения, ссылка, развернуть, меню «⋯», закрыть. */
@@ -83,12 +83,13 @@ export function TaskViewActions({
   pageHref,
   closeHref,
   taskKey,
-  canDelete,
+  archived,
   descendantCount,
-  deleteFields,
+  actionFields,
 }: TaskViewActionsProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const onOpenChange = useCallback((open: boolean) => setConfirmOpen(open), []);
+  const { pending, run } = useRunTaskAction();
 
   async function copyLink() {
     try {
@@ -97,6 +98,12 @@ export function TaskViewActions({
     } catch {
       toast.error('Не удалось скопировать ссылку');
     }
+  }
+
+  function archive() {
+    // С подзадачами — подтверждение с их числом, без них действие обратимо и не спрашивает.
+    if (descendantCount > 0) setConfirmOpen(true);
+    else run(archiveTaskAction, actionFields, `Задача ${taskKey} в архиве`);
   }
 
   return (
@@ -121,7 +128,7 @@ export function TaskViewActions({
           </Link>
         </Button>
       )}
-      {canDelete && (
+      {!archived && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -130,29 +137,31 @@ export function TaskViewActions({
               size="icon-sm"
               aria-label={`Действия с задачей ${taskKey}`}
               title="Ещё"
+              disabled={pending}
             >
               <MoreHorizontal />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-48">
-            <DropdownMenuItem variant="destructive" onSelect={() => setConfirmOpen(true)}>
-              <Trash2 />
-              Удалить задачу…
+            <DropdownMenuItem onSelect={archive}>
+              <Archive />
+              {descendantCount > 0 ? 'В архив…' : 'В архив'}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )}
       <TaskCloseLink href={closeHref} variant={variant} />
       {/* Диалог вне меню: закрытие меню не должно размонтировать открытый диалог. */}
-      {canDelete && confirmOpen && (
+      {!archived && confirmOpen && (
         <ConfirmActionDialog
           open
           onOpenChange={onOpenChange}
-          action={deleteTaskAction}
-          fields={deleteFields}
-          title={`Удалить задачу ${taskKey}?`}
-          description={deleteTaskDescription(descendantCount)}
-          confirmLabel="Удалить"
+          action={archiveTaskAction}
+          fields={actionFields}
+          title={`Отправить задачу ${taskKey} в архив?`}
+          description={archiveTaskDescription(descendantCount)}
+          confirmLabel="В архив"
+          confirmVariant="default"
         />
       )}
     </>

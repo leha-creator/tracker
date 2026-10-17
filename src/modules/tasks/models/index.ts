@@ -13,8 +13,12 @@ export {
 export type { MentionCandidate, MentionQuery, MentionRange } from './comment-mentions';
 export { comparePositions, positionAfter, positionBetween, rekeyColumn } from './position';
 export {
+  ARCHIVED_TASK_MESSAGE,
   assertAssigneeIsMember,
+  assertCanDeletePermanently,
   assertCanDeleteTask,
+  assertNotArchived,
+  canDeletePermanently,
   canDeleteTask,
   formatTaskKey,
   isTaskOpen,
@@ -73,6 +77,41 @@ export {
   TASK_SUBTASKS_LIMIT,
 } from './task-tree';
 export type { SubtaskProgress } from './task-tree';
+export {
+  describeHistoryChange,
+  diffTaskFields,
+  HISTORY_MERGE_WINDOW_MS,
+  isTaskHistoryKind,
+  mergeHistoryChange,
+  parseHistoryData,
+  shouldMergeHistory,
+  TASK_HISTORY_KINDS,
+  TASK_HISTORY_PAGE_SIZE,
+} from './task-history';
+export type {
+  HistoryAuthor,
+  HistoryNamedRef,
+  HistoryTaskRef,
+  TaskFieldsSnapshot,
+  TaskHistoryChange,
+  TaskHistoryDataMap,
+  TaskHistoryKind,
+} from './task-history';
+export {
+  assertCanAssignLabels,
+  assertCanCreateLabel,
+  DEFAULT_TASK_LABEL_COLOR,
+  diffLabels,
+  labelNameKey,
+  normalizeLabelName,
+  parseLabelColor,
+  TASK_LABEL_COLORS,
+  TASK_LABEL_NAME_MAX_LENGTH,
+  TASK_LABELS_ON_CARD,
+  TASK_LABELS_PER_TASK,
+  TASK_LABELS_PER_WORKSPACE,
+} from './task-label';
+export type { TaskLabelColor } from './task-label';
 export { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from './task-priority';
 export type { TaskPriority } from './task-priority';
 export {
@@ -109,3 +148,10 @@ export type {
   TaskListScope,
   TaskListSort,
 } from './task-list-query';
+export {
+  pickReminderRecipients,
+  REMINDER_BATCH_SIZE,
+  reminderDates,
+  TASK_REMINDER_KINDS,
+} from './due-reminders';
+export type { TaskReminderKind } from './due-reminders';

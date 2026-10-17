@@ -60,18 +60,18 @@ export const statusRepository = {
 
   /**
    * Блокирует строку проекта до конца транзакции: параллельные изменения набора статусов
-   * выполняются по очереди и не перезаписывают друг друга. false — проекта нет в пространстве.
+   * выполняются по очереди и не перезаписывают друг друга. null — проекта нет в пространстве.
    */
   async lockProject(
     tx: TransactionClient,
     workspaceId: string,
     projectId: string,
-  ): Promise<boolean> {
-    const rows = await tx.$queryRaw<{ id: string }[]>`
-      SELECT "id" FROM "Project"
+  ): Promise<{ archivedAt: Date | null } | null> {
+    const rows = await tx.$queryRaw<{ archivedAt: Date | null }[]>`
+      SELECT "archivedAt" FROM "Project"
       WHERE "id" = ${projectId}::uuid AND "workspaceId" = ${workspaceId}
       FOR UPDATE`;
-    return rows.length > 0;
+    return rows[0] ?? null;
   },
 
   /**

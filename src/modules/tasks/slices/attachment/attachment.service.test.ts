@@ -31,6 +31,10 @@ const storage = {
   deleteObjects: vi.fn<(keys: readonly string[]) => Promise<number>>(),
 };
 
+const assertTaskActive = vi.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve());
+vi.mock('../task/task-archive.guard', () => ({
+  assertTaskActive: (...args: unknown[]) => assertTaskActive(...args),
+}));
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
   requireWorkspaceAccess: (...args: Parameters<typeof requireWorkspaceAccess>) =>

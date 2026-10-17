@@ -141,6 +141,70 @@ describe('GitHub notifications', () => {
   });
 });
 
+describe('task_status_changed', () => {
+  const payload = {
+    ...task,
+    taskKey: 'TSK-42',
+    projectName: 'Сайт',
+    fromStatus: 'К выполнению',
+    toStatus: 'В работе',
+  };
+  const notification = {
+    type: 'task_status_changed' as const,
+    payload,
+    commentId: null,
+    invitationId: null,
+  };
+
+  it('validates the payload: statuses are required', () => {
+    expect(parseNotificationPayload('task_status_changed', payload)).toEqual(payload);
+    expect(parseNotificationPayload('task_status_changed', task)).toBeNull();
+  });
+
+  it('links to the task and names both statuses and the project', () => {
+    expect(buildNotificationHref(notification)).toBe('/w/team/tasks/42');
+    expect(formatNotificationText(notification)).toEqual({
+      title: 'Статус: К выполнению → В работе',
+      subject: `TSK-42 ${task.taskTitle}`,
+      excerpt: 'Проект «Сайт»',
+    });
+  });
+});
+
+describe('task_due_soon / task_overdue', () => {
+  const payload = { ...task, taskKey: 'TSK-42', dueDate: '2026-10-18' };
+
+  it('validates the payload: dueDate is an ISO date', () => {
+    expect(parseNotificationPayload('task_due_soon', payload)).toEqual(payload);
+    expect(parseNotificationPayload('task_overdue', task)).toBeNull();
+    expect(
+      parseNotificationPayload('task_overdue', { ...payload, dueDate: '18.10.2026' }),
+    ).toBeNull();
+  });
+
+  it('links to the task and shows the due date without a day shift', () => {
+    const dueSoon = {
+      type: 'task_due_soon' as const,
+      payload,
+      commentId: null,
+      invitationId: null,
+    };
+    const overdue = { ...dueSoon, type: 'task_overdue' as const };
+
+    expect(buildNotificationHref(dueSoon)).toBe('/w/team/tasks/42');
+    expect(formatNotificationText(dueSoon)).toEqual({
+      title: 'Завтра срок задачи',
+      subject: `TSK-42 ${task.taskTitle}`,
+      excerpt: 'Срок: 18 октября 2026 г.',
+    });
+    expect(formatNotificationText(overdue)).toEqual({
+      title: 'Срок задачи прошёл',
+      subject: `TSK-42 ${task.taskTitle}`,
+      excerpt: 'Срок был 18 октября 2026 г.',
+    });
+  });
+});
+
 describe('forAgent', () => {
   it('adds the agent to the title', () => {
     const text = formatNotificationText({

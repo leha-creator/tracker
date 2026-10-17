@@ -5,13 +5,19 @@ import { z } from 'zod';
 
 import {
   addToProject,
+  archiveTask,
   changeStatus,
   COMMENT_ATTACHMENTS_LIMIT,
   createComment,
   createTask,
+  ensureLabelsByNames,
+  restoreTask,
+  setTaskLabels,
   setTaskParent,
   TASK_COMMENT_MAX_LENGTH,
   TASK_DESCRIPTION_MAX_LENGTH,
+  TASK_LABEL_NAME_MAX_LENGTH,
+  TASK_LABELS_PER_TASK,
   TASK_PRIORITIES,
   TASK_TITLE_MAX_LENGTH,
   updateTask,
@@ -27,6 +33,7 @@ import {
   resolveStatus,
   taskKeyOf,
   taskUrl,
+  uniqueLabelNames,
   type CatalogProject,
 } from '../models';
 import { runTool, type ToolOutput } from '../tool-result';
@@ -151,6 +158,13 @@ export const updateTaskArgs = {
   priority: z.enum(TASK_PRIORITIES).optional(),
   dueDate: dueDateArg.nullable().optional().describe('null clears the due date'),
   assignee: assigneeArg.nullable().optional().describe('null unassigns'),
+  labels: z
+    .array(z.string().min(1).max(TASK_LABEL_NAME_MAX_LENGTH))
+    .max(TASK_LABELS_PER_TASK)
+    .optional()
+    .describe(
+      'Full set of label names (case-insensitive); unknown names are created, [] removes all labels',
+    ),
 };
 
 type UpdateTaskArgs = {
@@ -160,6 +174,7 @@ type UpdateTaskArgs = {
   priority?: (typeof TASK_PRIORITIES)[number];
   dueDate?: string | null;
   assignee?: string | null;
+  labels?: string[];
 };
 
 /** Поля задачи в журнале — по-русски. */
@@ -169,33 +184,65 @@ const FIELD_TITLES: Record<string, string> = {
   priority: 'приоритет',
   dueDate: 'срок',
   assignee: 'ответственного',
+  labels: 'метки',
 };
+
+/** Метки задачи по именам: недостающие создаются. Возвращает имена поставленных меток. */
+async function setLabelsByNames(
+  ctx: McpContext,
+  taskId: string,
+  names: readonly string[],
+): Promise<string[]> {
+  const { labels, created } = await ensureLabelsByNames(
+    ctx.session,
+    ctx.workspace.id,
+    uniqueLabelNames(names),
+  );
+  const saved = await setTaskLabels(ctx.session, {
+    workspaceId: ctx.workspace.id,
+    taskId,
+    labelIds: labels.map((label) => label.id),
+  });
+  log.info(
+    { taskId, count: saved.length, created, tokenId: ctx.tokenId },
+    '[mcp.update_task] labels',
+  );
+  return saved.map((label) => label.name);
+}
 
 export async function updateTaskTool(ctx: McpContext, args: UpdateTaskArgs): Promise<ToolOutput> {
   const task = await findTask(ctx, args.task);
-  const changed = (['title', 'description', 'priority', 'dueDate', 'assignee'] as const).filter(
+  const fields = (['title', 'description', 'priority', 'dueDate', 'assignee'] as const).filter(
     (field) => args[field] !== undefined,
   );
+  const changed = args.labels !== undefined ? [...fields, 'labels' as const] : fields;
   if (changed.length === 0) throw new ValidationError('Нечего менять: укажите хотя бы одно поле');
 
   let assigneeId: string | null | undefined;
   if (args.assignee === null) assigneeId = null;
   else if (args.assignee !== undefined) assigneeId = await resolveAssigneeId(ctx, args.assignee);
 
-  await updateTask(ctx.session, {
-    workspaceId: ctx.workspace.id,
-    taskId: task.id,
-    title: args.title,
-    description: args.description === '' ? null : args.description,
-    priority: args.priority,
-    dueDate: args.dueDate,
-    assigneeId,
-  });
+  if (fields.length > 0) {
+    await updateTask(ctx.session, {
+      workspaceId: ctx.workspace.id,
+      taskId: task.id,
+      title: args.title,
+      description: args.description === '' ? null : args.description,
+      priority: args.priority,
+      dueDate: args.dueDate,
+      assigneeId,
+    });
+  }
+  const labels = args.labels ? await setLabelsByNames(ctx, task.id, args.labels) : null;
   log.info({ taskId: task.id, fields: changed, tokenId: ctx.tokenId }, '[mcp.update_task] updated');
+  const labelsText = labels ? ` Labels: ${labels.join(', ') || 'none'}.` : '';
   return {
-    text: `Updated ${task.key}: ${changed.join(', ')}.`,
+    text: `Updated ${task.key}: ${changed.join(', ')}.${labelsText}`,
     activity: {
-      summary: `Изменил ${task.key}: ${changed.map((field) => FIELD_TITLES[field]).join(', ')}`,
+      summary:
+        labels && fields.length === 0
+          ? `Поставил метки ${task.key}: ${labels.join(', ') || 'без меток'}`
+          : `Изменил ${task.key}: ${changed.map((field) => FIELD_TITLES[field]).join(', ')}`,
       targetKey: task.key,
     },
   };
@@ -288,6 +335,31 @@ export async function setTaskParentTool(
       };
 }
 
+/** В архив или из архива — вместе с подзадачами (как в интерфейсе). */
+export async function setTaskArchivedTool(
+  ctx: McpContext,
+  args: { task: string | number },
+  archive: boolean,
+): Promise<ToolOutput> {
+  const task = await findTask(ctx, args.task);
+  const input = { workspaceId: ctx.workspace.id, taskId: task.id };
+  const { descendants } = archive
+    ? await archiveTask(ctx.session, input)
+    : await restoreTask(ctx.session, input);
+  const tool = archive ? 'archive_task' : 'restore_task';
+  log.info({ taskId: task.id, descendants, tokenId: ctx.tokenId }, `[mcp.${tool}] done`);
+  const subtasks = descendants > 0 ? ` with ${descendants} subtask(s)` : '';
+  return archive
+    ? {
+        text: `${task.key} archived${subtasks}. It is hidden from boards and lists; restore_task brings it back.`,
+        activity: { summary: `Отправил ${task.key} в архив`, targetKey: task.key },
+      }
+    : {
+        text: `${task.key} restored${subtasks}.`,
+        activity: { summary: `Восстановил ${task.key} из архива`, targetKey: task.key },
+      };
+}
+
 export async function addCommentTool(
   ctx: McpContext,
   args: { task: string | number; body?: string; attachmentIds?: string[] },
@@ -329,7 +401,7 @@ export function registerWriteTools(server: McpServer, ctx: McpContext): void {
     {
       title: 'Update task',
       description:
-        'Change title, description, priority, due date or assignee. Omitted fields stay as they are; null clears a field.',
+        'Change title, description, priority, due date, assignee or labels. Omitted fields stay as they are; null clears a field. labels replaces the whole set.',
       inputSchema: updateTaskArgs,
       annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
@@ -361,6 +433,30 @@ export function registerWriteTools(server: McpServer, ctx: McpContext): void {
       annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     (args) => runTool(ctx, 'set_task_parent', () => setTaskParentTool(ctx, args)),
+  );
+
+  server.registerTool(
+    'archive_task',
+    {
+      title: 'Archive task',
+      description:
+        'Move a task and all its subtasks to the archive instead of deleting it: it disappears from boards and lists and becomes read-only. Use it only when the user asks to archive or remove a task.',
+      inputSchema: { task: taskRefArg },
+      annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    (args) => runTool(ctx, 'archive_task', () => setTaskArchivedTool(ctx, args, true)),
+  );
+
+  server.registerTool(
+    'restore_task',
+    {
+      title: 'Restore task',
+      description:
+        'Bring an archived task back together with the subtasks archived with it. A subtask of an archived parent cannot be restored on its own — restore the parent.',
+      inputSchema: { task: taskRefArg },
+      annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    (args) => runTool(ctx, 'restore_task', () => setTaskArchivedTool(ctx, args, false)),
   );
 
   server.registerTool(

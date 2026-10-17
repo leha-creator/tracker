@@ -7,6 +7,9 @@ export const NOTIFICATION_TYPES = [
   'pr_linked',
   'pr_merged',
   'pr_review',
+  'task_status_changed',
+  'task_due_soon',
+  'task_overdue',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -41,8 +44,8 @@ export const NOTIFICATION_TYPE_INFO: Record<NotificationType, NotificationTypeIn
     defaults: { inApp: true, email: true },
   },
   task_comment: {
-    label: 'Комментарии к моим задачам',
-    description: 'Новый комментарий к задаче, где вы ответственный или автор',
+    label: 'Комментарии к задачам',
+    description: 'Комментарии к задачам, за которыми вы следите',
     channels: ['inApp', 'email'],
     defaults: { inApp: true, email: false },
   },
@@ -67,6 +70,24 @@ export const NOTIFICATION_TYPE_INFO: Record<NotificationType, NotificationTypeIn
   pr_review: {
     label: 'Ревью моих PR',
     description: 'Ваш pull request одобрили или запросили изменения (нужен привязанный GitHub)',
+    channels: ['inApp', 'email'],
+    defaults: { inApp: true, email: true },
+  },
+  task_status_changed: {
+    label: 'Смена статуса',
+    description: 'Статус задачи, за которой вы следите, изменился',
+    channels: ['inApp', 'email'],
+    defaults: { inApp: true, email: false },
+  },
+  task_due_soon: {
+    label: 'Срок завтра',
+    description: 'Завтра срок задачи, где вы ответственный',
+    channels: ['inApp', 'email'],
+    defaults: { inApp: true, email: true },
+  },
+  task_overdue: {
+    label: 'Просроченные задачи',
+    description: 'Прошёл срок задачи, где вы ответственный или за которой следите',
     channels: ['inApp', 'email'],
     defaults: { inApp: true, email: true },
   },

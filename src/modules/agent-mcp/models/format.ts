@@ -7,12 +7,13 @@ import type {
   TaskAttachmentDto,
   TaskCommentsDto,
   TaskDto,
+  TaskHistoryDto,
   TaskListItemDto,
   TaskListPageDto,
   TaskPlacementDto,
 } from '@/modules/tasks/client';
 
-import type { CatalogMember, CatalogProject } from './catalog';
+import type { CatalogLabel, CatalogMember, CatalogProject } from './catalog';
 import { humanSize } from './upload';
 import { describeActor, hasMcpScope, type McpActor } from './tool-scopes';
 
@@ -34,12 +35,17 @@ function dueText(dueDate: string | null, isOverdue: boolean): string | null {
   return isOverdue ? `due ${dueDate} (overdue)` : `due ${dueDate}`;
 }
 
+function labelNames(labels: readonly { name: string }[]): string {
+  return labels.map((label) => label.name).join(', ');
+}
+
 export function formatTaskLine(task: TaskListItemDto | SubtasksDto['items'][number]): string {
   const parts = [placementsText(task.placements)];
   parts.push(task.assignee ? `assignee: ${task.assignee.name}` : 'unassigned');
   if (task.priority !== 'none') parts.push(`priority: ${task.priority}`);
   const due = dueText(task.dueDate, task.isOverdue);
   if (due) parts.push(due);
+  if (task.labels.length) parts.push(`labels: ${labelNames(task.labels)}`);
   if (task.parent) parts.push(`subtask of ${task.parent.key}`);
   if ('subtaskCount' in task && task.subtaskCount > 0) {
     parts.push(`${task.subtaskCount} subtasks`);
@@ -70,6 +76,27 @@ function attachmentLine(file: TaskAttachmentDto): string {
   return `- ${file.fileName} (${humanSize(file.size)}, ${file.contentType}${by}) — attachmentId ${file.id}`;
 }
 
+function historyAuthor(item: TaskHistoryDto['items'][number]): string {
+  const name = item.actor?.name ?? (item.source === 'github' ? 'GitHub' : 'deleted user');
+  return item.via ? `${name} via ${item.via.tokenName}` : name;
+}
+
+function historyLines(history: TaskHistoryDto): string[] {
+  if (history.items.length === 0) return ['_No changes._'];
+  return history.items.map(
+    (item) => `- ${at(item.updatedAt)} · ${historyAuthor(item)}: ${item.text}`,
+  );
+}
+
+/** История изменений задачи (от новых к старым) — ответ get_task_history. */
+export function formatTaskHistory(taskKey: string, history: TaskHistoryDto): string {
+  const shown =
+    history.total > history.items.length
+      ? ` (latest ${history.items.length} of ${history.total})`
+      : '';
+  return [`# ${taskKey} · change history${shown}`, '', ...historyLines(history)].join('\n');
+}
+
 export interface TaskDetailsInput {
   task: TaskDto;
   url: string;
@@ -79,12 +106,20 @@ export interface TaskDetailsInput {
   pullRequests: TaskPullRequestDto[];
   branchesAndCommits: TaskBranchesAndCommitsDto;
   attachments: TaskAttachmentDto[];
+  /** Последние изменения задачи (несколько записей). */
+  history: TaskHistoryDto;
 }
 
 export function formatTaskDetails(input: TaskDetailsInput): string {
   const { task, subtasks, comments, pullRequests, branchesAndCommits } = input;
   const lines: string[] = [`# ${task.key} · ${task.title}`, '', `URL: ${input.url}`];
 
+  if (task.archivedAt) {
+    const by = task.archivedBy ? ` by ${task.archivedBy.name}` : '';
+    lines.push(
+      `ARCHIVED: since ${at(task.archivedAt)}${by}. Read-only — call restore_task before changing it.`,
+    );
+  }
   if (task.ancestors.length) {
     lines.push(`Parent chain: ${task.ancestors.map((a) => `${a.key} ${a.title}`).join(' › ')}`);
   }
@@ -92,6 +127,7 @@ export function formatTaskDetails(input: TaskDetailsInput): string {
     `Status: ${placementsText(task.placements)}`,
     `Assignee: ${task.assignee?.name ?? 'unassigned'}`,
     `Priority: ${task.priority}`,
+    `Labels: ${task.labels.length ? labelNames(task.labels) : 'none'}`,
     `Due: ${task.dueDate ? `${task.dueDate}${task.isOverdue ? ' (overdue)' : ''}` : 'none'}`,
     `Created: ${at(task.createdAt)} by ${task.createdBy?.name ?? 'unknown'}; updated ${at(task.updatedAt)}`,
   );
@@ -140,6 +176,11 @@ export function formatTaskDetails(input: TaskDetailsInput): string {
   else lines.push(...input.attachments.map(attachmentLine));
   lines.push('_Download with get_attachment_url(attachmentId)._');
 
+  lines.push('', `## Recent changes (${input.history.total})`, ...historyLines(input.history));
+  if (input.history.total > input.history.items.length) {
+    lines.push('_Full history: get_task_history._');
+  }
+
   lines.push('', `## Comments (${comments.total})`);
   if (comments.items.length === 0) lines.push('_No comments._');
   if (comments.truncated) lines.push(`_Showing the latest ${comments.items.length}._`);
@@ -160,6 +201,7 @@ export interface WorkspaceContextInput {
   actor: McpActor;
   projects: readonly CatalogProject[];
   members: readonly CatalogMember[];
+  labels: readonly CatalogLabel[];
   githubGuide: string;
 }
 
@@ -194,6 +236,10 @@ export function formatWorkspaceContext(input: WorkspaceContextInput): string {
     ),
     '',
     'Mention a member in a comment as @Name (exact name from this list).',
+    '',
+    '## Task labels',
+    input.labels.length ? labelNames(input.labels) : '_No labels yet._',
+    'Set labels with update_task (labels: full list of names; unknown names are created). Filter list_tasks by labels.',
     '',
     '## Documents',
     'Specs, ADRs and guides live in workspace Documents: list_documents, list_document_folders, get_document. Documents linked to a task are listed in get_task.',

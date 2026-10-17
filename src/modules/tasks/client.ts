@@ -39,6 +39,7 @@ export {
   TASK_DUE_FILTER_LABELS,
   TASK_DUE_FILTERS,
   TASK_LIST_ME,
+  TASK_LIST_MAX_VALUES,
   TASK_LIST_NONE,
   TASK_LIST_QUERY_MAX_LENGTH,
   TASK_LIST_SORT_LABELS,
@@ -53,6 +54,14 @@ export type {
   TaskListScope,
   TaskListSort,
 } from './models/task-list-query';
+export {
+  TASK_LABEL_COLORS,
+  TASK_LABEL_NAME_MAX_LENGTH,
+  TASK_LABELS_ON_CARD,
+  TASK_LABELS_PER_TASK,
+  TASK_LABELS_PER_WORKSPACE,
+} from './models/task-label';
+export type { TaskLabelColor } from './models/task-label';
 export { TASK_MAX_DEPTH, TASK_SUBTASKS_LIMIT } from './models/task-tree';
 export type { SubtaskProgress } from './models/task-tree';
 export { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from './models/task-priority';
@@ -75,6 +84,18 @@ export {
   updateCommentAction,
 } from './slices/comment/comment.actions';
 export type { TaskCommentDto, TaskCommentsDto } from './slices/comment/comment.dto';
+export type { TaskHistoryDto, TaskHistoryItemDto } from './slices/history/history.dto';
+export {
+  createLabelAction,
+  createLabelFormAction,
+  deleteLabelAction,
+  setTaskLabelsAction,
+  updateLabelAction,
+} from './slices/label/label.actions';
+export type { TaskLabelDto, TaskLabelRefDto } from './slices/label/label.dto';
+export type { TaskSearchResultDto } from './slices/search/search.dto';
+export { setWatchingAction } from './slices/watcher/watcher.actions';
+export type { TaskWatchersDto } from './slices/watcher/watcher.dto';
 export {
   searchParentCandidatesAction,
   setTaskParentAction,
@@ -87,9 +108,11 @@ export type {
 } from './slices/subtask/subtask.dto';
 export { PARENT_SEARCH_MAX_LENGTH } from './slices/subtask/subtask.schema';
 export {
+  archiveTaskAction,
   createTaskAction,
   deleteTaskAction,
   quickCreateTaskAction,
+  restoreTaskAction,
   updateTaskAction,
 } from './slices/task/task.actions';
 export type {

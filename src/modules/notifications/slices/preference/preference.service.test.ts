@@ -62,6 +62,9 @@ describe('getMyNotificationPreferences', () => {
       ['pr_linked', { inApp: true, email: false }],
       ['pr_merged', { inApp: true, email: false }],
       ['pr_review', { inApp: true, email: true }],
+      ['task_status_changed', { inApp: true, email: false }],
+      ['task_due_soon', { inApp: true, email: true }],
+      ['task_overdue', { inApp: true, email: true }],
     ]);
   });
 });

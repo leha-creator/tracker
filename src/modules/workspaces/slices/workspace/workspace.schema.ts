@@ -81,5 +81,10 @@ export const deleteWorkspaceSchema = z.object({
 
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 export type RenameWorkspaceInput = z.infer<typeof renameWorkspaceSchema>;
+/** Архивирование — с подтверждением названием, как удаление. */
+export const archiveWorkspaceSchema = deleteWorkspaceSchema;
+
+export const restoreWorkspaceSchema = z.object({ workspaceId: workspaceIdField });
+
 export type DeleteWorkspaceInput = z.infer<typeof deleteWorkspaceSchema>;
 export type UpdateTaskKeyInput = z.infer<typeof updateTaskKeySchema>;

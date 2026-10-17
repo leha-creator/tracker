@@ -201,4 +201,32 @@ describe('parseEnv', () => {
       expect((caught as EnvValidationError).message).not.toContain('short');
     });
   });
+
+  describe('reminders', () => {
+    it('CRON_SECRET is optional, empty string means unset', () => {
+      expect(parseEnv(VALID_ENV).CRON_SECRET).toBeUndefined();
+      expect(parseEnv({ ...VALID_ENV, CRON_SECRET: '' }).CRON_SECRET).toBeUndefined();
+      const secret = 'x'.repeat(32);
+      expect(parseEnv({ ...VALID_ENV, CRON_SECRET: secret }).CRON_SECRET).toBe(secret);
+    });
+
+    it('rejects short CRON_SECRET without leaking it', () => {
+      expect(() => parseEnv({ ...VALID_ENV, CRON_SECRET: 'too-short-secret' })).toThrow(
+        /CRON_SECRET/,
+      );
+      expect(() => parseEnv({ ...VALID_ENV, CRON_SECRET: 'too-short-secret' })).not.toThrow(
+        /too-short/,
+      );
+    });
+
+    it('REMINDERS_TIMEZONE defaults to Moscow and must be a known zone', () => {
+      expect(parseEnv(VALID_ENV).REMINDERS_TIMEZONE).toBe('Europe/Moscow');
+      expect(parseEnv({ ...VALID_ENV, REMINDERS_TIMEZONE: 'Asia/Tokyo' }).REMINDERS_TIMEZONE).toBe(
+        'Asia/Tokyo',
+      );
+      expect(() => parseEnv({ ...VALID_ENV, REMINDERS_TIMEZONE: 'Mars/Base' })).toThrow(
+        /REMINDERS_TIMEZONE/,
+      );
+    });
+  });
 });

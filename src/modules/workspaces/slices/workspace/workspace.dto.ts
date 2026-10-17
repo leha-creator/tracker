@@ -8,6 +8,8 @@ export interface WorkspaceListItemDto {
   role: WorkspaceRole;
   icon: EntityIcon;
   membersCount: number;
+  /** В архиве с этого момента; null — активное. */
+  archivedAt: Date | null;
 }
 
 export interface WorkspaceSummaryDto {

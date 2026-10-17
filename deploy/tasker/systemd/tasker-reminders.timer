@@ -1,0 +1,12 @@
+# Ежедневные напоминания о сроке задач Tasker — в 09:00 по Москве (часовой пояс — в OnCalendar,
+# от пояса сервера не зависит). Сутки «сегодня/завтра» приложение считает по REMINDERS_TIMEZONE.
+[Unit]
+Description=Daily Tasker due date reminders
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 Europe/Moscow
+Persistent=true
+Unit=tasker-reminders.service
+
+[Install]
+WantedBy=timers.target

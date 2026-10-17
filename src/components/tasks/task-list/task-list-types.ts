@@ -1,4 +1,5 @@
 import type { StatusColor } from '@/modules/projects/client';
+import type { TaskLabelRefDto } from '@/modules/tasks/client';
 
 /** Значения для фильтров: страница собирает их из модулей workspaces и projects. */
 export interface TaskListOptions {
@@ -9,4 +10,6 @@ export interface TaskListOptions {
   projects?: { id: string; name: string }[];
   /** Статусы проекта (только вкладка проекта). */
   statuses?: { id: string; name: string; color: StatusColor }[];
+  /** Метки пространства. */
+  labels: TaskLabelRefDto[];
 }

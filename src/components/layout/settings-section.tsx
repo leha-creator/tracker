@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 interface SettingsSectionProps {
   title: string;
   description?: ReactNode;
+  /** Якорь секции (ссылка вида `#project-archive`). */
+  id?: string;
   children: ReactNode;
 }
 
@@ -10,9 +12,12 @@ interface SettingsSectionProps {
  * Секция страницы настроек без карточки: на lg+ слева заголовок и пояснение, справа поля;
  * секции разделяет тонкая линия (у родителя — `divide-y`, см. SettingsSections).
  */
-export function SettingsSection({ title, description, children }: SettingsSectionProps) {
+export function SettingsSection({ title, description, id, children }: SettingsSectionProps) {
   return (
-    <section className="grid gap-x-10 gap-y-4 py-6 first:pt-2 lg:grid-cols-[15rem_minmax(0,48rem)]">
+    <section
+      id={id}
+      className="grid scroll-mt-20 gap-x-10 gap-y-4 py-6 first:pt-2 lg:grid-cols-[15rem_minmax(0,48rem)]"
+    >
       <div className="grid content-start gap-1">
         <h2 className="text-base font-medium">{title}</h2>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}

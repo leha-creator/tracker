@@ -1,22 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { WorkspaceAccess, WorkspaceRole } from '@/shared/access';
+import type { WorkspaceAccess, WorkspaceAccessOptions, WorkspaceRole } from '@/shared/access';
 import type * as AccessModule from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
 import { ConflictError, ValidationError } from '@/shared/errors';
 
 const requireWorkspaceAccess =
   vi.fn<
-    (session: AuthSession, workspaceId: string, minRole?: WorkspaceRole) => Promise<WorkspaceAccess>
+    (
+      session: AuthSession,
+      workspaceId: string,
+      minRole?: WorkspaceRole,
+      options?: WorkspaceAccessOptions,
+    ) => Promise<WorkspaceAccess>
   >();
 const isTaskKeyTaken = vi.fn<(key: string, except?: string) => Promise<boolean>>();
 const setTaskKey = vi.fn<(workspaceId: string, key: string) => Promise<void>>();
-const findById =
-  vi.fn<
-    (
-      id: string,
-    ) => Promise<{ id: string; slug: string; name: string; taskKey: string | null } | null>
-  >();
+const findById = vi.fn<
+  (id: string) => Promise<{
+    id: string;
+    slug: string;
+    name: string;
+    taskKey: string | null;
+    archivedAt?: Date | null;
+  } | null>
+>();
+const setArchived = vi.fn<(workspaceId: string, archivedAt: Date | null) => Promise<number>>();
+const listForUser = vi.fn<(userId: string, archived?: boolean) => Promise<unknown[]>>();
+const deleteOrganization = vi.fn();
 const findByTaskKeys = vi.fn<(keys: readonly string[]) => Promise<unknown[]>>();
 const createOrganization = vi.fn();
 
@@ -31,7 +42,8 @@ vi.mock('@/shared/db', () => ({
 }));
 vi.mock('./workspace.repository', () => ({
   workspaceRepository: {
-    listForUser: vi.fn(),
+    listForUser: (...args: Parameters<typeof listForUser>) => listForUser(...args),
+    setArchived: (...args: Parameters<typeof setArchived>) => setArchived(...args),
     findById: (...args: Parameters<typeof findById>) => findById(...args),
     isTaskKeyTaken: (...args: Parameters<typeof isTaskKeyTaken>) => isTaskKeyTaken(...args),
     setTaskKey: (...args: Parameters<typeof setTaskKey>) => setTaskKey(...args),
@@ -40,11 +52,18 @@ vi.mock('./workspace.repository', () => ({
 }));
 vi.mock('../../organization-api', () => ({
   callOrganizationApi: (call: (api: unknown, headers: Headers) => Promise<unknown>) =>
-    call({ createOrganization }, new Headers()),
+    call({ createOrganization, deleteOrganization }, new Headers()),
 }));
 
-const { createWorkspace, findWorkspacesByTaskKeys, updateTaskKey } =
-  await import('./workspace.service');
+const {
+  archiveWorkspace,
+  createWorkspace,
+  deleteWorkspace,
+  findWorkspacesByTaskKeys,
+  listMyWorkspaces,
+  restoreWorkspace,
+  updateTaskKey,
+} = await import('./workspace.service');
 
 const session = { user: { id: 'u1' } } as AuthSession;
 const uniqueViolation = Object.assign(new Error('unique'), { code: 'P2002' });
@@ -139,5 +158,78 @@ describe('findWorkspacesByTaskKeys', () => {
     expect(findByTaskKeys).toHaveBeenCalledWith(['TSK']);
     await expect(findWorkspacesByTaskKeys([])).resolves.toEqual([]);
     expect(findByTaskKeys).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('workspace archive', () => {
+  const active = { id: 'w1', slug: 'team', name: 'Команда', taskKey: 'TSK', archivedAt: null };
+  const archived = { ...active, archivedAt: new Date('2026-10-16') };
+
+  beforeEach(() => {
+    requireWorkspaceAccess.mockResolvedValue({} as WorkspaceAccess);
+    setArchived.mockResolvedValue(1);
+  });
+
+  it('archives for the owner after name confirmation', async () => {
+    findById.mockResolvedValue(active);
+    await expect(
+      archiveWorkspace(session, { workspaceId: 'w1', confirmName: ' Команда ' }),
+    ).resolves.toEqual({ id: 'w1', slug: 'team', name: 'Команда' });
+    expect(requireWorkspaceAccess).toHaveBeenCalledWith(session, 'w1', 'owner');
+    expect(setArchived).toHaveBeenCalledWith('w1', expect.any(Date));
+  });
+
+  it('rejects archiving with a wrong name', async () => {
+    findById.mockResolvedValue(active);
+    await expect(
+      archiveWorkspace(session, { workspaceId: 'w1', confirmName: 'Другое' }),
+    ).rejects.toThrow(ValidationError);
+    expect(setArchived).not.toHaveBeenCalled();
+  });
+
+  it('restores with allowArchived for the owner', async () => {
+    findById.mockResolvedValue(archived);
+    await restoreWorkspace(session, { workspaceId: 'w1' });
+    expect(requireWorkspaceAccess).toHaveBeenCalledWith(session, 'w1', 'owner', {
+      allowArchived: true,
+    });
+    expect(setArchived).toHaveBeenCalledWith('w1', null);
+  });
+
+  it('refuses to delete an active workspace', async () => {
+    findById.mockResolvedValue(active);
+    await expect(
+      deleteWorkspace(session, { workspaceId: 'w1', confirmName: 'Команда' }),
+    ).rejects.toThrow(ValidationError);
+    expect(deleteOrganization).not.toHaveBeenCalled();
+  });
+
+  it('deletes an archived workspace after name confirmation', async () => {
+    findById.mockResolvedValue(archived);
+    deleteOrganization.mockResolvedValue({});
+    await deleteWorkspace(session, { workspaceId: 'w1', confirmName: 'Команда' });
+    expect(requireWorkspaceAccess).toHaveBeenCalledWith(session, 'w1', 'owner', {
+      allowArchived: true,
+    });
+    expect(deleteOrganization).toHaveBeenCalledOnce();
+  });
+
+  it('lists archived workspaces on request', async () => {
+    listForUser.mockResolvedValue([
+      {
+        role: 'owner',
+        workspace: {
+          id: 'w1',
+          slug: 'team',
+          name: 'Команда',
+          icon: null,
+          archivedAt: archived.archivedAt,
+          _count: { members: 2 },
+        },
+      },
+    ]);
+    const [workspace] = await listMyWorkspaces(session, { archived: true });
+    expect(listForUser).toHaveBeenCalledWith('u1', true);
+    expect(workspace).toMatchObject({ role: 'owner', archivedAt: archived.archivedAt });
   });
 });

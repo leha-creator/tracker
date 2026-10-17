@@ -13,4 +13,9 @@ export {
   listSoleOwnedWorkspaces,
   sharesWorkspace,
 } from './slices/member/member.service';
-export { findWorkspacesByTaskKeys, listMyWorkspaces } from './slices/workspace/workspace.service';
+export {
+  archiveWorkspace,
+  findWorkspacesByTaskKeys,
+  listMyWorkspaces,
+  restoreWorkspace,
+} from './slices/workspace/workspace.service';

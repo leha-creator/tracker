@@ -96,6 +96,7 @@ function row(
       workspace: { taskKey: null },
       parent: extra.parent ?? null,
       _count: { subtasks: extra.subtasks ?? 0 },
+      labels: [],
     },
   };
 }
@@ -170,6 +171,7 @@ function listRow(number: number, extra: { dueDate?: Date | null; categories?: st
     dueDate: extra.dueDate ?? null,
     assignee: null,
     workspace: { taskKey: null },
+    labels: [],
     placements: (extra.categories ?? []).map((category, index) => ({
       projectId: `p${index}`,
       statusId: `s${index}`,
@@ -275,6 +277,7 @@ describe('getMemberTaskSummary', () => {
           assignee: { id: 'user-2', name: 'Борис', image: null },
           workspace: { taskKey: 'TSK' },
           placements: [],
+          labels: [],
         },
       ],
     });

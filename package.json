@@ -21,6 +21,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
+    "reminders:run": "node --env-file-if-exists=.env scripts/run-reminders.mjs",
     "postinstall": "prisma generate",
     "test": "vitest run",
     "test:watch": "vitest",

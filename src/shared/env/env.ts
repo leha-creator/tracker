@@ -14,6 +14,15 @@ const GITHUB_KEYS = [
   'GITHUB_WEBHOOK_SECRET',
 ] as const;
 
+function isValidTimeZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const optionalNonEmpty = z
   .string()
   .optional()
@@ -80,6 +89,18 @@ const envSchema = z
     GITHUB_APP_CLIENT_ID: optionalNonEmpty,
     GITHUB_APP_CLIENT_SECRET: optionalNonEmpty,
     GITHUB_WEBHOOK_SECRET: optionalNonEmpty,
+
+    /**
+     * Секрет планировщика: `Authorization: Bearer …` у POST /api/cron/reminders. Не задан —
+     * эндпоинт отвечает 404 и напоминания о сроках не рассылаются.
+     */
+    CRON_SECRET: optionalNonEmpty.pipe(z.string().min(32).optional()),
+    /** Часовой пояс напоминаний: какие сутки считаются «сегодня» и «завтра». */
+    REMINDERS_TIMEZONE: z
+      .string()
+      .min(1)
+      .default('Europe/Moscow')
+      .refine(isValidTimeZone, 'Неизвестный часовой пояс IANA'),
   })
   .superRefine((env, ctx) => {
     const missing = GITHUB_KEYS.filter((key) => env[key] === undefined);

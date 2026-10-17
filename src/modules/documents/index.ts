@@ -22,4 +22,4 @@ export {
   listTaskDocuments,
   unlinkDocumentFromTask,
 } from './slices/task-link/task-link.service';
-export { getDocumentsOverview, listDocuments } from './slices/views/views.queries';
+export { getDocumentsOverview, listDocuments, searchDocuments } from './slices/views/views.queries';

@@ -3,7 +3,7 @@ import 'server-only';
 import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/db';
 
-import { TASK_LIST_SELECT } from '../task/task.select';
+import { TASK_LABELS_SELECT, TASK_LIST_SELECT } from '../task/task.select';
 
 const LIST_PLACEMENT_SELECT = {
   status: { select: { category: true } },
@@ -70,7 +70,12 @@ export const viewsRepository = {
     userId: string,
     options: { today: Date; since: Date; take: number },
   ) {
-    const assigned = { workspaceId, assigneeId: userId } satisfies Prisma.TaskWhereInput;
+    // Архивные задачи в сводке участника не считаются.
+    const assigned = {
+      workspaceId,
+      assigneeId: userId,
+      archivedAt: null,
+    } satisfies Prisma.TaskWhereInput;
     const open = { ...assigned, ...OPEN_TASK_WHERE } satisfies Prisma.TaskWhereInput;
     const [
       openCount,
@@ -121,7 +126,7 @@ export const viewsRepository = {
   /** Размещения проекта с полями карточки — один запрос на всю доску. */
   listBoardPlacements(workspaceId: string, projectId: string) {
     return prisma.taskPlacement.findMany({
-      where: { workspaceId, projectId },
+      where: { workspaceId, projectId, task: { archivedAt: null } },
       select: {
         taskId: true,
         statusId: true,
@@ -136,6 +141,7 @@ export const viewsRepository = {
             assignee: { select: { id: true, name: true, image: true } },
             workspace: { select: { taskKey: true } },
             parent: { select: { number: true, title: true } },
+            labels: TASK_LABELS_SELECT,
             _count: { select: { subtasks: true } },
           },
         },
@@ -146,7 +152,7 @@ export const viewsRepository = {
   /** Номер, название и категории статусов задач пространства по id (для других модулей). */
   listTaskSummaries(workspaceId: string, taskIds: string[]) {
     return prisma.task.findMany({
-      where: { workspaceId, id: { in: taskIds } },
+      where: { workspaceId, id: { in: taskIds }, archivedAt: null },
       orderBy: { number: 'desc' },
       select: {
         id: true,

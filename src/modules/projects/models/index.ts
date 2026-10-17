@@ -1,6 +1,9 @@
 export {
+  ARCHIVED_PROJECT_MESSAGE,
   assertCanCreateProject,
+  assertCanDeleteProject,
   assertDeleteConfirmed,
+  assertProjectNotArchived,
   isEntityId,
   normalizeProjectName,
   PROJECT_DESCRIPTION_MAX_LENGTH,

@@ -17,6 +17,16 @@ const listChildren = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
 const childrenCategories = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
 const searchCandidates = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
 
+const assertTaskActive = vi.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve());
+const findArchiveState = vi.fn<(...args: unknown[]) => Promise<unknown>>(() =>
+  Promise.resolve({ archivedAt: null, parent: null }),
+);
+vi.mock('../task/task.repository', () => ({
+  taskRepository: { findArchiveState: (...args: unknown[]) => findArchiveState(...args) },
+}));
+vi.mock('../task/task-archive.guard', () => ({
+  assertTaskActive: (...args: unknown[]) => assertTaskActive(...args),
+}));
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
   requireWorkspaceAccess: (...args: Parameters<typeof requireWorkspaceAccess>) =>
@@ -28,6 +38,19 @@ vi.mock('@/modules/projects', () => ({
 }));
 vi.mock('@/shared/db', () => ({
   prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn({}) },
+}));
+const recordHistory = vi.fn<(...args: unknown[]) => Promise<void>>();
+vi.mock('../history/history.service', () => ({
+  historyAuthorOf: (s: AuthSession) => ({
+    actorId: s.user.id,
+    viaTokenId: s.via?.tokenId ?? null,
+    source: null,
+  }),
+  recordHistory: (...args: unknown[]) => recordHistory(...args),
+  taskSnapshot: (_tx: unknown, _workspaceId: string, taskId: string | null) =>
+    Promise.resolve(
+      taskId === null ? null : { id: taskId, number: 1, key: '#1', title: 'Родитель' },
+    ),
 }));
 vi.mock('./subtask.repository', () => ({
   subtaskRepository: {
@@ -89,6 +112,7 @@ function listRow(id: string, number: number, categories: string[], subtasks = 0)
       status: { name: 'Статус', color: 'gray', category },
     })),
     _count: { subtasks },
+    labels: [],
   };
 }
 
@@ -117,6 +141,9 @@ describe('setTaskParent', () => {
     await setTaskParent(session, { workspaceId: 'ws-1', taskId: TASK, parentId: OTHER });
     expect(lockTree).toHaveBeenCalled();
     expect(setParent).toHaveBeenCalledWith(expect.anything(), 'ws-1', TASK, OTHER);
+    expect(recordHistory.mock.calls[0]?.[1]).toMatchObject({
+      changes: [{ kind: 'parent', data: { from: { id: ROOT }, to: { id: OTHER } } }],
+    });
   });
 
   it('moves a task to the top level', async () => {
@@ -127,6 +154,7 @@ describe('setTaskParent', () => {
   it('does nothing when the parent is unchanged', async () => {
     await setTaskParent(session, { workspaceId: 'ws-1', taskId: TASK, parentId: ROOT });
     expect(setParent).not.toHaveBeenCalled();
+    expect(recordHistory).not.toHaveBeenCalled();
   });
 
   it('rejects moving a task under its own subtask', async () => {

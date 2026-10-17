@@ -27,9 +27,11 @@ export type {
   WorkspaceMemberDto,
 } from './slices/member/member.dto';
 export {
+  archiveWorkspaceAction,
   createWorkspaceAction,
   deleteWorkspaceAction,
   renameWorkspaceAction,
+  restoreWorkspaceAction,
   updateTaskKeyAction,
 } from './slices/workspace/workspace.actions';
 export type {

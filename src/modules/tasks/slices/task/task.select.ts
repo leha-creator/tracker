@@ -13,6 +13,12 @@ export const PLACEMENT_SELECT = {
   },
 } as const satisfies Prisma.Task$placementsArgs;
 
+/** Метки задачи по имени — для страницы задачи, строк списка и карточек доски. */
+export const TASK_LABELS_SELECT = {
+  orderBy: { label: { nameKey: 'asc' } },
+  select: { label: { select: { id: true, name: true, color: true } } },
+} as const satisfies Prisma.Task$labelsArgs;
+
 /** Поля строки списка задач (общие для списка пространства и вкладки проекта). */
 export const TASK_LIST_SELECT = {
   id: true,
@@ -24,6 +30,7 @@ export const TASK_LIST_SELECT = {
   workspace: { select: { taskKey: true } },
   parent: { select: { number: true, title: true } },
   placements: PLACEMENT_SELECT,
+  labels: TASK_LABELS_SELECT,
 } as const satisfies Prisma.TaskSelect;
 
 export type TaskListRow = Prisma.TaskGetPayload<{ select: typeof TASK_LIST_SELECT }>;

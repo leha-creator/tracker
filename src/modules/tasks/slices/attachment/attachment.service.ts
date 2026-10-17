@@ -37,6 +37,7 @@ import {
 import type { AttachmentUploadDto, TaskAttachmentDto } from './attachment.dto';
 import { toAttachmentDto } from './attachment.mapper';
 import { attachmentRepository } from './attachment.repository';
+import { assertTaskActive } from '../task/task-archive.guard';
 import type { AttachmentKey } from './attachment.schema';
 import type { AttachmentRow } from './attachment.select';
 import { deleteStoredObjects } from './attachment.storage';
@@ -123,6 +124,7 @@ export async function requestUpload(
 ): Promise<AttachmentUploadDto> {
   const { workspaceId, taskId, target, size } = input;
   const access = await requireWorkspaceAccess(session, workspaceId);
+  await assertTaskActive(workspaceId, taskId);
   const exists = isEntityId(taskId) && (await attachmentRepository.taskExists(workspaceId, taskId));
   if (!exists) throw taskNotFound(workspaceId, taskId);
 
@@ -193,6 +195,7 @@ export async function completeUpload(
   key: AttachmentKey,
 ): Promise<{ target: AttachmentTarget }> {
   const access = await requireWorkspaceAccess(session, key.workspaceId);
+  await assertTaskActive(key.workspaceId, key.taskId);
   const row = await loadAttachment(key, access);
   if (row.uploaderId !== access.userId) {
     throw attachmentNotFound({ ...key, userId: access.userId, reason: 'not-uploader' });
@@ -246,6 +249,7 @@ export async function deleteAttachment(
   key: AttachmentKey,
 ): Promise<{ target: AttachmentTarget }> {
   const access = await requireWorkspaceAccess(session, key.workspaceId);
+  await assertTaskActive(key.workspaceId, key.taskId);
   const row = await loadAttachment(key, access);
   rejectOnError(() => assertCanDeleteAttachment(row, access), 'forbidden', {
     ...key,

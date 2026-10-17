@@ -2,6 +2,7 @@ import type { StatusCategory, StatusColor } from '@/modules/projects';
 
 import type { TaskPriority } from '../../models';
 import type { SubtaskProgress } from '../../models/task-tree';
+import type { TaskLabelRefDto } from '../label/label.dto';
 import type { TaskAncestorDto } from '../subtask/subtask.dto';
 
 export interface TaskUserDto {
@@ -46,8 +47,16 @@ export interface TaskDto {
   createdAt: Date;
   updatedAt: Date;
   placements: TaskPlacementDto[];
+  /** Метки по имени. */
+  labels: TaskLabelRefDto[];
   /** Может ли текущий пользователь удалить задачу (автор или владелец пространства). */
   canDelete: boolean;
+  /** В архиве с этого момента; null — активная (только чтение, пока в архиве). */
+  archivedAt: Date | null;
+  /** Кто отправил в архив; null — активная или пользователь удалён. */
+  archivedBy: { userId: string; name: string } | null;
+  /** Удалить навсегда: задача в архиве и есть право удаления. */
+  canDeletePermanently: boolean;
   /** Предки от корня к родителю; пусто — задача верхнего уровня. */
   ancestors: TaskAncestorDto[];
   /** Сколько подзадач всех уровней удалится вместе с задачей. */
@@ -66,6 +75,8 @@ export interface TaskListItemDto {
   isOverdue: boolean;
   assignee: TaskUserDto | null;
   placements: TaskPlacementDto[];
+  /** Метки по имени. */
+  labels: TaskLabelRefDto[];
   /** Родитель подзадачи; null — задача верхнего уровня. */
   parent: TaskAncestorDto | null;
 }

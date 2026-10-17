@@ -20,6 +20,8 @@ const updateTask = vi.fn<(...args: unknown[]) => Promise<void>>();
 const addToProject = vi.fn<(...args: unknown[]) => Promise<void>>();
 const changeStatus = vi.fn<(...args: unknown[]) => Promise<void>>();
 const setTaskParent = vi.fn<(...args: unknown[]) => Promise<void>>();
+const archiveTask = vi.fn<(...args: unknown[]) => Promise<{ descendants: number }>>();
+const restoreTask = vi.fn<(...args: unknown[]) => Promise<{ descendants: number }>>();
 const createComment = vi.fn<(...args: unknown[]) => Promise<{ commentId: string }>>();
 const resolveTaskRefs = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
 const getSummary = vi.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -50,6 +52,8 @@ vi.mock('@/modules/tasks', async (importOriginal) => ({
   addToProject: (...args: unknown[]) => addToProject(...args),
   changeStatus: (...args: unknown[]) => changeStatus(...args),
   setTaskParent: (...args: unknown[]) => setTaskParent(...args),
+  archiveTask: (...args: unknown[]) => archiveTask(...args),
+  restoreTask: (...args: unknown[]) => restoreTask(...args),
   createComment: (...args: unknown[]) => createComment(...args),
   resolveTaskRefs: (...args: unknown[]) => resolveTaskRefs(...args),
   requestAttachmentUpload: (...args: unknown[]) => requestUpload(...args),
@@ -90,8 +94,14 @@ vi.mock('@/modules/integrations/github', async (importOriginal) => ({
 }));
 
 const { listTasksTool } = await import('./read-tools');
-const { createTaskTool, setTaskParentTool, setTaskStatusTool, updateTaskTool, addCommentTool } =
-  await import('./write-tools');
+const {
+  createTaskTool,
+  setTaskArchivedTool,
+  setTaskParentTool,
+  setTaskStatusTool,
+  updateTaskTool,
+  addCommentTool,
+} = await import('./write-tools');
 const { previewGithubLinksTool } = await import('./github-tools');
 const { completeUploadTool, getAttachmentUrlTool, requestUploadTool } =
   await import('./attachment-tools');
@@ -156,7 +166,11 @@ function task(overrides: Partial<TaskDto> = {}): TaskDto {
     createdAt: new Date('2026-10-16T10:00:00Z'),
     updatedAt: new Date('2026-10-16T10:00:00Z'),
     placements: [placement(P_DEV, 'Разработка', S_TODO, 'К выполнению')],
+    labels: [],
     canDelete: true,
+    archivedAt: null,
+    archivedBy: null,
+    canDeletePermanently: false,
     ancestors: [],
     descendantCount: 0,
     subtaskProgress: { total: 0, done: 0 },
@@ -327,6 +341,29 @@ describe('set_task_status', () => {
     await expect(setTaskStatusTool(ctx, { task: 42, status: 'todo' })).rejects.toThrow(
       /в нескольких проектах/,
     );
+  });
+});
+
+describe('archive_task и restore_task', () => {
+  it('архивирует задачу с подзадачами и пишет журнал', async () => {
+    archiveTask.mockResolvedValueOnce({ descendants: 2 });
+    const output = await setTaskArchivedTool(ctx, { task: 'TSK-42' }, true);
+    expect(archiveTask).toHaveBeenCalledWith(ctx.session, {
+      workspaceId: 'ws-1',
+      taskId: 'task-42',
+    });
+    expect(textOf(output)).toContain('archived with 2 subtask(s)');
+    expect(output).toMatchObject({ activity: { targetKey: 'TSK-42' } });
+  });
+
+  it('восстанавливает задачу', async () => {
+    restoreTask.mockResolvedValueOnce({ descendants: 0 });
+    const text = textOf(await setTaskArchivedTool(ctx, { task: 42 }, false));
+    expect(restoreTask).toHaveBeenCalledWith(ctx.session, {
+      workspaceId: 'ws-1',
+      taskId: 'task-42',
+    });
+    expect(text).toBe('TSK-42 restored.');
   });
 });
 

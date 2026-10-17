@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDownIcon, ListTreeIcon, SearchIcon, XIcon } from 'lucide-react';
+import { ArchiveIcon, ChevronDownIcon, ListTreeIcon, SearchIcon, XIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { StatusDot } from '@/components/projects/status-badge';
@@ -70,6 +70,11 @@ export function TaskListToolbar({ options }: { options: TaskListOptions }) {
       .filter((member) => member.userId !== options.currentUserId)
       .map((member) => ({ value: member.userId, label: member.name })),
   ];
+  const labelOptions: FilterOption[] = options.labels.map((label) => ({
+    value: label.id,
+    label: label.name,
+    icon: <StatusDot color={label.color} />,
+  }));
 
   return (
     <div className="flex flex-wrap items-center gap-2" role="search" aria-label="Фильтры задач">
@@ -115,6 +120,14 @@ export function TaskListToolbar({ options }: { options: TaskListOptions }) {
         selected={query.assignees}
         onChange={(assignees) => navigate(patchTaskListQuery(query, { assignees }))}
       />
+      {labelOptions.length > 0 && (
+        <TaskListFilter
+          label="Метки"
+          options={labelOptions}
+          selected={query.labels}
+          onChange={(labels) => navigate(patchTaskListQuery(query, { labels }))}
+        />
+      )}
       <DueFilter />
       <Button
         type="button"
@@ -127,6 +140,18 @@ export function TaskListToolbar({ options }: { options: TaskListOptions }) {
       >
         <ListTreeIcon className="text-muted-foreground" />
         Только верхнего уровня
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-pressed={query.archived}
+        title="Показать задачи из архива вместо активных"
+        className={cn(query.archived && 'border-primary/50 bg-primary/5')}
+        onClick={() => navigate(patchTaskListQuery(query, { archived: !query.archived }))}
+      >
+        <ArchiveIcon className="text-muted-foreground" />
+        Архив
       </Button>
       {hasActiveFilters(query) && (
         <Button

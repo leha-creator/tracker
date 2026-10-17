@@ -51,8 +51,10 @@ describe('parseTaskListParams', () => {
       projects: [PROJECT_ID, 'none'],
       priorities: ['high', 'urgent'],
       assignees: ['me', 'none', 'user_1'],
+      labels: [],
       due: 'overdue',
       topLevelOnly: true,
+      archived: false,
       sort: 'due',
       dir: 'desc',
       page: 3,
@@ -65,6 +67,18 @@ describe('parseTaskListParams', () => {
     expect(hasActiveFilters({ ...defaultTaskListQuery('workspace'), topLevelOnly: true })).toBe(
       true,
     );
+  });
+
+  it('label: только id меток, в обоих scope, туда и обратно через URL', () => {
+    for (const scope of ['workspace', 'project'] as const) {
+      const query = parseTaskListParams({ label: `${PROJECT_ID},bug,,${STATUS_ID}` }, scope);
+      expect(query.labels).toEqual([PROJECT_ID, STATUS_ID]);
+      expect(hasActiveFilters(query)).toBe(true);
+      expect(serializeTaskListParams(query, scope)).toBe(`label=${PROJECT_ID}%2C${STATUS_ID}`);
+    }
+    expect(
+      clearFilters(parseTaskListParams({ label: PROJECT_ID }, 'workspace'), 'workspace').labels,
+    ).toEqual([]);
   });
 
   it('отбрасывает мусорные значения', () => {
@@ -265,5 +279,15 @@ describe('страницы', () => {
     [4, 12, [1, 2, 3, 4, 5, 'ellipsis', 12]],
   ])('paginationRange(%d, %d)', (page, pageCount, expected) => {
     expect(paginationRange(page, pageCount)).toEqual(expected);
+  });
+});
+
+describe('archived', () => {
+  it('archived=1 включает режим «Архив», он переживает сброс фильтров', () => {
+    const query = parseTaskListParams({ archived: '1', priority: 'high' }, 'workspace');
+    expect(query.archived).toBe(true);
+    expect(parseTaskListParams({ archived: 'yes' }, 'workspace').archived).toBe(false);
+    expect(serializeTaskListParams(query, 'workspace')).toBe('priority=high&archived=1');
+    expect(clearFilters(query, 'workspace')).toMatchObject({ archived: true, priorities: [] });
   });
 });

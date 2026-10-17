@@ -76,6 +76,7 @@ async function BoardSection({ params }: Pick<Props, 'params'>) {
       statuses={statuses}
       cards={cards}
       pullRequests={pullRequests}
+      readOnly={project.archivedAt !== null}
     />
   );
 }

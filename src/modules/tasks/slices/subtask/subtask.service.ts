@@ -16,7 +16,10 @@ import {
   toIsoDate,
   type SubtaskProgress,
 } from '../../models';
+import { historyAuthorOf, recordHistory, taskSnapshot } from '../history/history.service';
+import { assertTaskActive } from '../task/task-archive.guard';
 import { toTaskListItem } from '../task/task.mapper';
+import { taskRepository } from '../task/task.repository';
 import type { SubtasksDto, TaskAncestorDto, TaskParentOptionDto } from './subtask.dto';
 import { subtaskRepository } from './subtask.repository';
 
@@ -37,7 +40,9 @@ export async function listSubtasks(
 ): Promise<SubtasksDto> {
   await requireWorkspaceAccess(session, workspaceId);
   assertTaskId(taskId);
-  const rows = await subtaskRepository.listChildren(workspaceId, taskId);
+  // У активной задачи архивные подзадачи скрыты; у архивной видны те, что ушли в архив с ней.
+  const parent = await taskRepository.findArchiveState(workspaceId, taskId);
+  const rows = await subtaskRepository.listChildren(workspaceId, taskId, !parent?.archivedAt);
   const today = toIsoDate(new Date());
   const items = rows.map((row) => ({
     ...toTaskListItem(row, today),
@@ -111,6 +116,9 @@ export async function setTaskParent(
 
   const fromParentId = await prisma.$transaction(async (tx) => {
     await subtaskRepository.lockTree(tx, workspaceId);
+    // Архивная задача и архивный новый родитель — только для чтения.
+    await assertTaskActive(workspaceId, taskId, tx);
+    if (parentId) await assertTaskActive(workspaceId, parentId, tx);
     const taskPath = await subtaskRepository.pathIds(workspaceId, taskId, tx);
     if (taskPath.length === 0) {
       log.warn({ workspaceId, taskId }, '[subtask.setTaskParent] task not found');
@@ -144,6 +152,15 @@ export async function setTaskParent(
 
     const count = await subtaskRepository.setParent(tx, workspaceId, taskId, parentId);
     if (count === 0) throw new NotFoundError('Задача не найдена');
+    // Запросы транзакции — по очереди: одно соединение не выполняет их параллельно.
+    const from = await taskSnapshot(tx, workspaceId, currentParentId);
+    const to = await taskSnapshot(tx, workspaceId, parentId);
+    await recordHistory(tx, {
+      workspaceId,
+      taskId,
+      author: historyAuthorOf(session),
+      changes: [{ kind: 'parent', data: { from, to } }],
+    });
     return currentParentId;
   });
 

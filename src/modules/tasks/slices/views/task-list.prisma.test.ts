@@ -17,15 +17,23 @@ function workspaceQuery(patch: Partial<TaskListQuery>): TaskListQuery {
 }
 
 describe('buildTaskWhere', () => {
-  it('always filters by workspace', () => {
+  it('always filters by workspace and hides archived tasks', () => {
     expect(buildTaskWhere(workspaceQuery({}), { ...ctx, scope: 'workspace' })).toEqual({
       workspaceId: 'ws-1',
+      archivedAt: null,
     });
+  });
+
+  it('archived mode shows only archived tasks', () => {
+    expect(
+      buildTaskWhere(workspaceQuery({ archived: true }), { ...ctx, scope: 'workspace' }).archivedAt,
+    ).toEqual({ not: null });
   });
 
   it('searches by title and by task number', () => {
     expect(buildTaskWhere(workspaceQuery({ q: '#42' }), { ...ctx, scope: 'workspace' })).toEqual({
       workspaceId: 'ws-1',
+      archivedAt: null,
       AND: [{ OR: [{ title: { contains: '#42', mode: 'insensitive' } }, { number: 42 }] }],
     });
     expect(
@@ -114,7 +122,7 @@ describe('buildTaskWhere', () => {
         ...ctx,
         scope: 'project',
       }),
-    ).toEqual({ workspaceId: 'ws-1' });
+    ).toEqual({ workspaceId: 'ws-1', archivedAt: null });
   });
 });
 
@@ -131,6 +139,7 @@ describe('buildPlacementWhere', () => {
       status: { category: { not: 'done' } },
       task: {
         workspaceId: 'ws-1',
+        archivedAt: null,
         AND: [{ dueDate: { lt: new Date('2026-10-16T00:00:00.000Z') } }],
       },
     });

@@ -50,6 +50,7 @@ describe('getWorkspaceSections', () => {
     ['/w/a/settings', ['Настройки']],
     ['/w/a/settings/github', ['Настройки']],
     ['/w/a/settings/agents', ['Настройки']],
+    ['/w/a/settings/labels', ['Настройки']],
     ['/w/a/settings/agents/agent-1', ['Настройки']],
   ])('на %s активен раздел %j', (pathname, expected) => {
     expect(activeLabels(owner, pathname)).toEqual(expected);

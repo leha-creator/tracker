@@ -4,7 +4,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { prisma, type TransactionClient } from '@/shared/db';
 
 import type { TaskPriority } from '../../models';
-import { PLACEMENT_SELECT } from './task.select';
+import { PLACEMENT_SELECT, TASK_LABELS_SELECT } from './task.select';
 
 const TASK_SELECT = {
   id: true,
@@ -22,7 +22,10 @@ const TASK_SELECT = {
   assignee: { select: { id: true, name: true, image: true } },
   createdBy: { select: { id: true, name: true, isAgent: true } },
   createdViaToken: { select: { name: true } },
+  archivedAt: true,
+  archivedBy: { select: { id: true, name: true } },
   placements: PLACEMENT_SELECT,
+  labels: TASK_LABELS_SELECT,
 } as const satisfies Prisma.TaskSelect;
 
 /** Поля задачи для ссылок из интеграций (TSK-42 в GitHub). */
@@ -89,14 +92,55 @@ export const taskRepository = {
   },
 
   /** Частичное обновление задачи пространства; возвращает число изменённых строк (0 — не найдена). */
-  async update(workspaceId: string, taskId: string, data: Partial<TaskWriteData>): Promise<number> {
-    const { count } = await prisma.task.updateMany({ where: { id: taskId, workspaceId }, data });
+  async update(
+    workspaceId: string,
+    taskId: string,
+    data: Partial<TaskWriteData>,
+    db: TransactionClient = prisma,
+  ): Promise<number> {
+    const { count } = await db.task.updateMany({ where: { id: taskId, workspaceId }, data });
     return count;
   },
 
   /** Удаляет задачу пространства (размещения — каскадом); возвращает число удалённых строк. */
   async delete(workspaceId: string, taskId: string): Promise<number> {
     const { count } = await prisma.task.deleteMany({ where: { id: taskId, workspaceId } });
+    return count;
+  },
+
+  /** Архивность задачи и её родителя; null — задачи нет в пространстве. */
+  findArchiveState(workspaceId: string, taskId: string, db: TransactionClient = prisma) {
+    return db.task.findFirst({
+      where: { id: taskId, workspaceId },
+      select: { archivedAt: true, parent: { select: { archivedAt: true } } },
+    });
+  },
+
+  /** Архивирует задачи поддерева, ещё не бывшие в архиве. Возвращает число задач. */
+  async archiveMany(
+    tx: TransactionClient,
+    workspaceId: string,
+    taskIds: string[],
+    data: { archivedAt: Date; archivedById: string },
+  ): Promise<number> {
+    const { count } = await tx.task.updateMany({
+      where: { workspaceId, id: { in: taskIds }, archivedAt: null },
+      data,
+    });
+    return count;
+  },
+
+  /** Восстанавливает задачи поддерева, попавшие в архив той же операцией (общий archivedAt). */
+  async restoreMany(
+    tx: TransactionClient,
+    workspaceId: string,
+    taskIds: string[],
+    archivedAt: Date,
+  ): Promise<number> {
+    const { count } = await tx.task.updateMany({
+      where: { workspaceId, id: { in: taskIds }, archivedAt },
+      data: { archivedAt: null, archivedById: null },
+    });
     return count;
   },
 

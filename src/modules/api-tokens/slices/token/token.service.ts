@@ -37,7 +37,14 @@ export interface ApiTokenContext {
 }
 
 type RejectReason =
-  'malformed' | 'unknown' | 'revoked' | 'expired' | 'banned' | 'not_member' | 'agent_disabled';
+  | 'malformed'
+  | 'unknown'
+  | 'revoked'
+  | 'expired'
+  | 'banned'
+  | 'not_member'
+  | 'agent_disabled'
+  | 'workspace_archived';
 
 function reject(reason: RejectReason, tokenId?: string): UnauthorizedError {
   log.warn({ reason, tokenId }, '[api-token.authenticate] rejected');
@@ -239,6 +246,8 @@ export async function authenticateApiToken(
   const state = apiTokenState(row, now);
   if (state !== 'active') throw reject(state, row.id);
   if (isBanned(row.user, now)) throw reject('banned', row.id);
+  // Архивное пространство недоступно агентам: токены не отзываются и снова работают после восстановления.
+  if (row.workspace.archivedAt) throw reject('workspace_archived', row.id);
 
   const agent = row.user.agent;
   if (row.user.isAgent && (!agent || agent.disabledAt || agent.workspaceId !== row.workspace.id)) {
@@ -297,5 +306,6 @@ export async function authenticateApiToken(
     },
     '[api-token.authenticate] ok',
   );
-  return { session, workspace: row.workspace, tokenId: row.id, tokenPrefix: row.prefix, via };
+  const { archivedAt: _archivedAt, ...workspace } = row.workspace;
+  return { session, workspace, tokenId: row.id, tokenPrefix: row.prefix, via };
 }

@@ -9,6 +9,7 @@ import {
 import { PageContainer } from '@/components/layout/page-container';
 import { SidePanel } from '@/components/layout/side-panel';
 import { Button } from '@/components/ui/button';
+import { ArchivedWorkspaces } from '@/components/workspaces/archived-workspaces';
 import { CreateWorkspaceForm } from '@/components/workspaces/create-workspace-form';
 import { WorkspaceList } from '@/components/workspaces/workspace-list';
 import { listMyWorkspaces } from '@/modules/workspaces';
@@ -37,8 +38,17 @@ export default function HomePage({ searchParams }: PageProps<'/'>) {
 
 async function WorkspacesSection() {
   const session = await requireUserOrRedirect('/');
-  const workspaces = await listMyWorkspaces(session);
-  return <WorkspaceList items={workspaces} />;
+  // Архивные — только пространства, где пользователь владелец; пустой раздел не показывается.
+  const [workspaces, archived] = await Promise.all([
+    listMyWorkspaces(session),
+    listMyWorkspaces(session, { archived: true }),
+  ]);
+  return (
+    <>
+      <WorkspaceList items={workspaces} />
+      {archived.length > 0 && <ArchivedWorkspaces items={archived} />}
+    </>
+  );
 }
 
 /** Панель «Новое пространство» по `?create=workspace`; после создания action ведёт в него. */

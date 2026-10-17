@@ -16,6 +16,8 @@ export interface ProjectListItemDto {
   myOpenCount: number;
   /** Последнее изменение задач проекта или самого проекта. */
   lastActivityAt: Date;
+  /** В архиве с этого момента; null — активный. */
+  archivedAt: Date | null;
 }
 
 export interface ProjectDto {
@@ -26,6 +28,10 @@ export interface ProjectDto {
   description: string | null;
   icon: EntityIcon;
   createdAt: Date;
-  /** Число задач, размещённых в проекте. */
+  /** Число задач, размещённых в проекте (без архивных). */
   tasksCount: number;
+  /** В архиве с этого момента (доска только для чтения); null — активный. */
+  archivedAt: Date | null;
+  /** Кто отправил в архив; null — активный или пользователь удалён. */
+  archivedByName: string | null;
 }

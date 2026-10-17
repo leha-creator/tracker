@@ -3,10 +3,15 @@ import 'server-only';
 import { prisma } from '@/shared/db';
 
 export const workspaceRepository = {
-  /** Пространства пользователя с его ролью и числом участников. */
-  listForUser(userId: string) {
+  /**
+   * Пространства пользователя с его ролью и числом участников: активные или (`archived`)
+   * архивные, где он владелец, — остальным архивное пространство недоступно.
+   */
+  listForUser(userId: string, archived = false) {
     return prisma.workspaceMember.findMany({
-      where: { userId },
+      where: archived
+        ? { userId, role: 'owner', workspace: { archivedAt: { not: null } } }
+        : { userId, workspace: { archivedAt: null } },
       orderBy: { workspace: { name: 'asc' } },
       select: {
         role: true,
@@ -16,6 +21,7 @@ export const workspaceRepository = {
             slug: true,
             name: true,
             icon: true,
+            archivedAt: true,
             // Агенты — служебные участники, в счётчик не входят.
             _count: { select: { members: { where: { user: { isAgent: false } } } } },
           },
@@ -27,8 +33,17 @@ export const workspaceRepository = {
   findById(workspaceId: string) {
     return prisma.workspace.findUnique({
       where: { id: workspaceId },
-      select: { id: true, slug: true, name: true, taskKey: true },
+      select: { id: true, slug: true, name: true, taskKey: true, archivedAt: true },
     });
+  },
+
+  /** Архивирует или восстанавливает пространство; 0 — уже в нужном состоянии. */
+  async setArchived(workspaceId: string, archivedAt: Date | null): Promise<number> {
+    const { count } = await prisma.workspace.updateMany({
+      where: { id: workspaceId, archivedAt: archivedAt ? null : { not: null } },
+      data: { archivedAt },
+    });
+    return count;
   },
 
   /** Ключ занят другим пространством (кроме `exceptWorkspaceId`). */
@@ -46,9 +61,10 @@ export const workspaceRepository = {
     await prisma.workspace.update({ where: { id: workspaceId }, data: { icon } });
   },
 
+  /** Активные пространства с этими ключами: архивные интеграции не обрабатывают. */
   findByTaskKeys(taskKeys: readonly string[]) {
     return prisma.workspace.findMany({
-      where: { taskKey: { in: [...taskKeys] } },
+      where: { taskKey: { in: [...taskKeys] }, archivedAt: null },
       select: { id: true, slug: true, name: true, taskKey: true },
     });
   },

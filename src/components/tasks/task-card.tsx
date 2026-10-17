@@ -11,6 +11,7 @@ import type { PullRequestBadgeDto } from '@/modules/integrations/github/client';
 
 import { AssigneeAvatar } from './assignee-avatar';
 import { DueDate } from './due-date';
+import { LabelChipList } from './labels/label-chip';
 import { PriorityBadge } from './priority-badge';
 
 type TaskCardProps = Omit<ComponentProps<typeof Link>, 'href' | 'children'> & {
@@ -52,6 +53,7 @@ export function TaskCard({ card, href, active, pullRequest, className, ...props 
         </span>
       )}
       <span className="line-clamp-3 font-medium break-words">{card.title}</span>
+      <LabelChipList labels={card.labels} />
       <span className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{card.key}</span>
         {pullRequest && <PullRequestIndicator badge={pullRequest} />}

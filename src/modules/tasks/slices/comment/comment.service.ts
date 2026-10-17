@@ -25,6 +25,8 @@ import { toAttachmentDto } from '../attachment/attachment.mapper';
 import { attachmentRepository } from '../attachment/attachment.repository';
 import { deleteStoredObjects } from '../attachment/attachment.storage';
 import { toCreatedVia, toUserDto } from '../task/task.mapper';
+import { assertTaskActive } from '../task/task-archive.guard';
+import { ensureWatchers, listWatcherIds } from '../watcher/watcher.service';
 import type { TaskCommentDto, TaskCommentsDto } from './comment.dto';
 import { commentRepository, type CommentRow, type CommentTaskRow } from './comment.repository';
 import { EMPTY_COMMENT_MESSAGE } from './comment.schema';
@@ -84,8 +86,8 @@ async function loadComment(key: CommentKey): Promise<CommentRow> {
 }
 
 /**
- * Уведомления о комментарии: упомянутым — `mention`, ответственному и автору задачи (только для
- * нового комментария) — `task_comment`. При правке — только новые упоминания. Не бросает.
+ * Уведомления о комментарии: упомянутым — `mention`, наблюдателям задачи (только для нового
+ * комментария) — `task_comment`. При правке — только новые упоминания. Не бросает.
  */
 async function notifyAboutComment(input: {
   session: AuthSession;
@@ -97,13 +99,17 @@ async function notifyAboutComment(input: {
   const { session, task, commentId, body, previousBody } = input;
   const actorId = session.user.id;
   try {
-    const members = await listMemberIdentities(task.workspaceId);
+    const isNew = previousBody === undefined;
+    const [members, watchers] = await Promise.all([
+      listMemberIdentities(task.workspaceId),
+      isNew ? listWatcherIds(task.workspaceId, task.id) : Promise.resolve([]),
+    ]);
     const recipients = resolveCommentRecipients({
       actorId,
       mentioned: mentionedUserIds(body, members),
       previouslyMentioned:
         previousBody === undefined ? undefined : mentionedUserIds(previousBody, members),
-      watchers: previousBody === undefined ? [task.assigneeId, task.createdById] : [],
+      watchers,
     });
     log.debug(
       {
@@ -194,7 +200,9 @@ export async function createComment(
   const attachmentIds = [...new Set(input.attachmentIds ?? [])];
   const access = await requireWorkspaceAccess(session, workspaceId);
   const task = await loadTask(workspaceId, taskId);
+  await assertTaskActive(workspaceId, taskId);
   if (body === '' && attachmentIds.length === 0) throw emptyComment();
+  const members = await listMemberIdentities(workspaceId);
 
   const id = await prisma.$transaction(async (tx) => {
     const comment = await commentRepository.create(
@@ -223,6 +231,11 @@ export async function createComment(
         throw new ValidationError('Файлы не найдены — загрузите их заново');
       }
     }
+    // Автор и упомянутые начинают следить за задачей.
+    await ensureWatchers(tx, workspaceId, taskId, [
+      access.userId,
+      ...mentionedUserIds(body, members),
+    ]);
     return comment.id;
   });
   log.info(
@@ -251,6 +264,7 @@ export async function updateComment(
 ): Promise<void> {
   const { body, ...key } = input;
   const access = await requireWorkspaceAccess(session, key.workspaceId);
+  await assertTaskActive(key.workspaceId, key.taskId);
   const comment = await loadComment(key);
   try {
     assertCanEditComment(comment, access);
@@ -283,6 +297,7 @@ export async function updateComment(
 /** Удаление — автор или владелец пространства. */
 export async function deleteComment(session: AuthSession, key: CommentKey): Promise<void> {
   const access = await requireWorkspaceAccess(session, key.workspaceId);
+  await assertTaskActive(key.workspaceId, key.taskId);
   const comment = await loadComment(key);
   try {
     assertCanDeleteComment(comment, access);

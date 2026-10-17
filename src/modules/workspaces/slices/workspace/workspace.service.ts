@@ -24,10 +24,18 @@ import { workspaceRepository } from './workspace.repository';
 
 const log = createLogger('workspaces.workspace');
 
-export async function listMyWorkspaces(session: AuthSession): Promise<WorkspaceListItemDto[]> {
+/**
+ * Пространства пользователя: по умолчанию активные (переключатель, главная, токены),
+ * `archived` — архивные, где он владелец (раздел «Архивные пространства»).
+ */
+export async function listMyWorkspaces(
+  session: AuthSession,
+  options: { archived?: boolean } = {},
+): Promise<WorkspaceListItemDto[]> {
   const userId = session.user.id;
-  log.debug({ userId }, '[workspace.listMyWorkspaces]');
-  const rows = await workspaceRepository.listForUser(userId);
+  const archived = options.archived ?? false;
+  log.debug({ userId, archived }, '[workspace.listMyWorkspaces]');
+  const rows = await workspaceRepository.listForUser(userId, archived);
   return rows.flatMap(({ role, workspace }) => {
     const parsed = parseWorkspaceRole(role);
     if (!parsed) {
@@ -45,6 +53,7 @@ export async function listMyWorkspaces(session: AuthSession): Promise<WorkspaceL
         icon: resolveEntityIcon(workspace.icon, workspace.id),
         role: parsed,
         membersCount: workspace._count.members,
+        archivedAt: workspace.archivedAt,
       },
     ];
   });
@@ -200,19 +209,74 @@ export async function renameWorkspace(
   return { id: updated.id, slug: updated.slug, name: updated.name };
 }
 
-export async function deleteWorkspace(
-  session: AuthSession,
-  input: { workspaceId: string; confirmName: string },
-): Promise<void> {
-  await requireWorkspaceAccess(session, input.workspaceId, 'owner');
-  const workspace = await workspaceRepository.findById(input.workspaceId);
-  if (!workspace) throw new NotFoundError('Пространство не найдено');
-
-  if (input.confirmName.trim() !== workspace.name) {
+function assertNameConfirmed(name: string, confirmName: string): void {
+  if (confirmName.trim() !== name) {
     throw new ValidationError('Название не совпадает', {
       fieldErrors: { confirmName: ['Введите название пространства точно'] },
     });
   }
+}
+
+/**
+ * Отправляет пространство в архив (владелец, подтверждение названием): оно пропадает
+ * у участников, из MCP и интеграций; владелец может восстановить или удалить его.
+ */
+export async function archiveWorkspace(
+  session: AuthSession,
+  input: { workspaceId: string; confirmName: string },
+): Promise<WorkspaceSummaryDto> {
+  const { workspaceId } = input;
+  const userId = session.user.id;
+  await requireWorkspaceAccess(session, workspaceId, 'owner');
+  const workspace = await workspaceRepository.findById(workspaceId);
+  if (!workspace) throw new NotFoundError('Пространство не найдено');
+  log.debug({ userId, workspaceId }, '[workspace.archive] start');
+  try {
+    assertNameConfirmed(workspace.name, input.confirmName);
+  } catch (error) {
+    log.warn({ workspaceId }, '[workspace.archive] confirmation mismatch');
+    throw error;
+  }
+
+  await workspaceRepository.setArchived(workspaceId, new Date());
+  log.info({ workspaceId, slug: workspace.slug, userId }, '[workspace] archived');
+  return { id: workspace.id, slug: workspace.slug, name: workspace.name };
+}
+
+/** Возвращает пространство из архива (только владелец). */
+export async function restoreWorkspace(
+  session: AuthSession,
+  input: { workspaceId: string },
+): Promise<WorkspaceSummaryDto> {
+  const { workspaceId } = input;
+  const userId = session.user.id;
+  await requireWorkspaceAccess(session, workspaceId, 'owner', { allowArchived: true });
+  const workspace = await workspaceRepository.findById(workspaceId);
+  if (!workspace) throw new NotFoundError('Пространство не найдено');
+  log.debug({ userId, workspaceId }, '[workspace.restore] start');
+
+  const count = await workspaceRepository.setArchived(workspaceId, null);
+  if (count === 0) {
+    log.debug({ workspaceId }, '[workspace.restore] already active');
+  } else {
+    log.info({ workspaceId, slug: workspace.slug, userId }, '[workspace] restored');
+  }
+  return { id: workspace.id, slug: workspace.slug, name: workspace.name };
+}
+
+/** Удаляет навсегда пространство из архива (владелец, подтверждение названием). */
+export async function deleteWorkspace(
+  session: AuthSession,
+  input: { workspaceId: string; confirmName: string },
+): Promise<void> {
+  await requireWorkspaceAccess(session, input.workspaceId, 'owner', { allowArchived: true });
+  const workspace = await workspaceRepository.findById(input.workspaceId);
+  if (!workspace) throw new NotFoundError('Пространство не найдено');
+  if (!workspace.archivedAt) {
+    log.warn({ workspaceId: workspace.id }, '[workspace.delete] workspace is not archived');
+    throw new ValidationError('Удалить навсегда можно только пространство из архива');
+  }
+  assertNameConfirmed(workspace.name, input.confirmName);
 
   await callOrganizationApi((api, headers) =>
     api.deleteOrganization({ body: { organizationId: input.workspaceId }, headers }),

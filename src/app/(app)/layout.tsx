@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { UserMenu } from '@/components/auth/user-menu';
 import { PageContainer } from '@/components/layout/page-container';
 import { NotificationBell } from '@/components/notifications/notification-bell';
+import { SearchTrigger } from '@/components/search/search-trigger';
 import { WorkspaceSwitcher } from '@/components/workspaces/workspace-switcher';
 
 export default function AppLayout({ children }: LayoutProps<'/'>) {
@@ -33,6 +34,10 @@ export default function AppLayout({ children }: LayoutProps<'/'>) {
           </Suspense>
           {/* Сессия читается внутри границы: шапка и {children} не ждут её на верхнем уровне. */}
           <div className="ml-auto flex h-14 items-center gap-1.5 pl-3">
+            {/* useSearchParams внутри палитры — тоже под границей Suspense. */}
+            <Suspense fallback={<div className="h-8 rounded-lg bg-muted max-md:size-8 md:w-52" />}>
+              <SearchTrigger />
+            </Suspense>
             <Suspense fallback={<div className="size-8 animate-pulse rounded-lg bg-muted" />}>
               <NotificationBell />
             </Suspense>

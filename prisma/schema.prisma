@@ -43,11 +43,15 @@ model User {
 
   workspaceMemberships WorkspaceMember[]
   sentInvitations      WorkspaceInvitation[]
-  createdProjects      Project[]
+  createdProjects      Project[]             @relation("ProjectCreator")
+  archivedProjects     Project[]             @relation("ProjectArchiver")
+  archivedTasks        Task[]                @relation("TaskArchiver")
   assignedTasks        Task[]                @relation("TaskAssignee")
   createdTasks         Task[]                @relation("TaskCreator")
   taskComments         TaskComment[]         @relation("TaskCommentAuthor")
   taskAttachments      TaskAttachment[]      @relation("TaskAttachmentUploader")
+  taskHistoryEntries   TaskHistoryEntry[]    @relation("TaskHistoryActor")
+  watchedTasks         TaskWatcher[]
 
   profile                 UserProfile?
   notifications           Notification[]           @relation("NotificationRecipient")
@@ -168,25 +172,29 @@ model ActionRateLimit {
 // src/shared/auth/auth.ts (schema плагина) — менять только вместе.
 
 model Workspace {
-  id        String   @id
-  name      String
-  slug      String   @unique
+  id         String    @id
+  name       String
+  slug       String    @unique
   /// Ключ задач (`TSK` → TSK-42): ссылки на задачи в ветках, PR и коммитах GitHub. Уникален глобально,
   /// в верхнем регистре. null — ключ не задан (задачи показываются как #42, привязка GitHub не работает).
   /// Проставляет сервис пространств сразу после создания (поле в плагине с input: false).
-  taskKey   String?  @unique
-  logo      String?
+  taskKey    String?   @unique
+  logo       String?
   /// Ключ предустановленной иконки (shared/entity-icon); null — не выбрана, показывается по id.
   /// Проставляет сервис пространств после создания (поле не входит в схему плагина).
-  icon      String?
-  metadata  String?
-  createdAt DateTime @default(now())
+  icon       String?
+  metadata   String?
+  /// Пространство в архиве (заморожено): доступ только владельцу к настройкам, токены MCP,
+  /// вебхуки GitHub и напоминания его пропускают. Поле плагина organization с input: false.
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
 
   members       WorkspaceMember[]
   invitations   WorkspaceInvitation[]
   projects      Project[]
   tasks         Task[]
   taskCounter   WorkspaceTaskCounter?
+  taskLabels    TaskLabel[]
   notifications Notification[]
 
   documentFolders DocumentFolder[]
@@ -251,18 +259,22 @@ enum StatusCategory {
 }
 
 model Project {
-  id          String   @id @default(uuid(7)) @db.Uuid
-  workspaceId String
-  name        String
-  description String?
+  id           String    @id @default(uuid(7)) @db.Uuid
+  workspaceId  String
+  name         String
+  description  String?
   /// Ключ предустановленной иконки (shared/entity-icon); null — не выбрана, показывается по id.
-  icon        String?
-  createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  icon         String?
+  createdById  String?
+  /// Проект в архиве: скрыт из списков и фильтров, доска только для чтения. null — активный.
+  archivedAt   DateTime?
+  archivedById String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   workspace        Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdBy        User?                    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy        User?                    @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  archivedBy       User?                    @relation("ProjectArchiver", fields: [archivedById], references: [id], onDelete: SetNull)
   statuses         ProjectStatus[]
   placements       TaskPlacement[]
   /// Автосмена статуса по PR (таблица модуля integrations/github).
@@ -333,19 +345,32 @@ model Task {
   parentId          String?      @db.Uuid
   /// Токен MCP, через который задачу создал агент (пометка «через агента»).
   createdViaTokenId String?      @db.Uuid
+  /// Задача в архиве (вместе с поддеревом, общий archivedAt операции): скрыта с досок и из
+  /// списков, только чтение. null — активная.
+  archivedAt        DateTime?
+  archivedById      String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
-  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdViaToken    ApiToken?          @relation("TaskCreatedVia", fields: [createdViaTokenId], references: [id], onDelete: SetNull)
-  assignee           User?              @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  createdBy          User?              @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  workspace          Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  archivedBy         User?                 @relation("TaskArchiver", fields: [archivedById], references: [id], onDelete: SetNull)
+  createdViaToken    ApiToken?             @relation("TaskCreatedVia", fields: [createdViaTokenId], references: [id], onDelete: SetNull)
+  assignee           User?                 @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy          User?                 @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
   /// Составной ключ (parentId, workspaceId): подзадача не может оказаться в чужом пространстве.
-  parent             Task?              @relation("TaskSubtasks", fields: [parentId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  subtasks           Task[]             @relation("TaskSubtasks")
+  parent             Task?                 @relation("TaskSubtasks", fields: [parentId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  subtasks           Task[]                @relation("TaskSubtasks")
   placements         TaskPlacement[]
   comments           TaskComment[]
   attachments        TaskAttachment[]
+  /// Метки задачи (срез label модуля tasks).
+  labels             TaskLabelAssignment[]
+  /// История изменений (срез history модуля tasks).
+  history            TaskHistoryEntry[]
+  /// Наблюдатели (срез watcher модуля tasks): получают уведомления о комментариях и статусе.
+  watchers           TaskWatcher[]
+  /// Отправленные напоминания о сроке (срез reminder модуля tasks).
+  dueReminders       TaskDueReminder[]
   /// Связи с документами (таблица модуля documents).
   documentLinks      TaskDocumentLink[]
   /// PR, ветки и коммиты GitHub (таблицы модуля integrations/github).
@@ -359,6 +384,9 @@ model Task {
   @@index([workspaceId, assigneeId])
   @@index([workspaceId, dueDate])
   @@index([workspaceId, parentId])
+  @@index([workspaceId, archivedAt])
+  /// Поиск по части названия (ILIKE '%q%': палитра Cmd+K, список); расширение pg_trgm — в миграции.
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Task_title_trgm_idx")
 }
 
 model TaskPlacement {
@@ -419,6 +447,126 @@ model TaskComment {
   @@unique([id, taskId])
   @@index([taskId, createdAt])
   @@index([workspaceId])
+}
+
+// ── Метки задач ────────────────────────────────────────────────────────────────
+// Метки пространства (как теги документов). Связь — составными FK: метка не попадёт на задачу
+// чужого пространства.
+
+model TaskLabel {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  workspaceId String
+  name        String
+  /// lower(name) — уникальность в пространстве без учёта регистра.
+  nameKey     String
+  /// Ключ цвета из палитры статусов (STATUS_COLORS).
+  color       String
+  createdAt   DateTime @default(now())
+
+  workspace   Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignments TaskLabelAssignment[]
+
+  @@unique([workspaceId, nameKey])
+  @@unique([id, workspaceId])
+}
+
+model TaskLabelAssignment {
+  taskId      String @db.Uuid
+  labelId     String @db.Uuid
+  workspaceId String
+
+  task  Task      @relation(fields: [taskId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  label TaskLabel @relation(fields: [labelId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@index([workspaceId, labelId])
+}
+
+// ── Наблюдатели задачи ────────────────────────────────────────────────────────────
+// Автор, ответственный, комментаторы и упомянутые подписываются автоматически; агенты — нет.
+// При выходе участника из пространства его подписки удаляет триггер (миграция add_task_watchers).
+model TaskWatcher {
+  taskId      String   @db.Uuid
+  userId      String
+  workspaceId String
+  createdAt   DateTime @default(now())
+
+  task Task @relation(fields: [taskId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([workspaceId, userId])
+}
+
+// ── Напоминания о сроке ───────────────────────────────────────────────────────
+// Отметка «напоминание отправлено» (срез reminder модуля tasks). Уникальность по значению срока:
+// повторный запуск в тот же день ничего не шлёт, а перенос срока даёт новое напоминание.
+
+enum TaskReminderKind {
+  due_soon
+  overdue
+}
+
+model TaskDueReminder {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  workspaceId String
+  taskId      String           @db.Uuid
+  kind        TaskReminderKind
+  /// Срок задачи, о котором напомнили.
+  dueDate     DateTime         @db.Date
+  sentAt      DateTime         @default(now())
+
+  task Task @relation(fields: [taskId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@unique([taskId, kind, dueDate])
+  @@index([workspaceId])
+}
+
+// ── История изменений задачи ──────────────────────────────────────────────────
+// Запись пишется в той же транзакции, что и изменение. В data — снимок имён (статусы, проекты,
+// участники), чтобы история переживала переименования и удаления; схемы data — models/task-history.
+
+/// Вид изменения. Новые значения — только в конец.
+enum TaskHistoryKind {
+  created
+  title
+  description
+  priority
+  due_date
+  assignee
+  status
+  project_added
+  project_removed
+  parent
+  labels
+  archived
+  restored
+}
+
+model TaskHistoryEntry {
+  id          String          @id @default(uuid(7)) @db.Uuid
+  workspaceId String
+  taskId      String          @db.Uuid
+  kind        TaskHistoryKind
+  /// Автор; null — система или удалённый пользователь.
+  actorId     String?
+  /// Токен MCP, через который изменение сделал агент (пометка «через агента»).
+  viaTokenId  String?         @db.Uuid
+  /// Источник системного изменения: null — пользователь, "github" — автоматизация GitHub.
+  source      String?
+  data        Json
+  createdAt   DateTime        @default(now())
+  /// Подряд идущие правки одного поля сливаются в одну запись — время последней правки.
+  updatedAt   DateTime        @updatedAt
+
+  task     Task      @relation(fields: [taskId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  actor    User?     @relation("TaskHistoryActor", fields: [actorId], references: [id], onDelete: SetNull)
+  viaToken ApiToken? @relation("TaskHistoryVia", fields: [viaTokenId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, createdAt])
+  @@index([workspaceId])
+  @@index([actorId])
+  @@index([viaTokenId])
 }
 
 // ── Вложения ───────────────────────────────────────────────────────────────────
@@ -503,6 +651,11 @@ enum NotificationType {
   pr_linked
   pr_merged
   pr_review
+  /// Смена статуса задачи — наблюдателям (модуль tasks).
+  task_status_changed
+  /// Напоминания о сроке: завтра — ответственному, прошёл — ответственному и наблюдателям.
+  task_due_soon
+  task_overdue
 }
 
 model Notification {
@@ -634,6 +787,8 @@ model Document {
   @@index([workspaceId, kind, status])
   @@index([createdById, status, createdAt])
   @@index([updatedById])
+  /// Поиск по части названия (LIKE '%q%' по titleKey); расширение pg_trgm — в миграции.
+  @@index([titleKey(ops: raw("gin_trgm_ops"))], type: Gin, map: "Document_titleKey_trgm_idx")
 }
 
 model DocumentTag {
@@ -980,9 +1135,10 @@ model ApiToken {
   issuedBy  User?     @relation("ApiTokenIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  createdTasks     Task[]        @relation("TaskCreatedVia")
-  createdComments  TaskComment[] @relation("TaskCommentCreatedVia")
-  createdDocuments Document[]    @relation("DocumentCreatedVia")
+  createdTasks     Task[]             @relation("TaskCreatedVia")
+  createdComments  TaskComment[]      @relation("TaskCommentCreatedVia")
+  historyEntries   TaskHistoryEntry[] @relation("TaskHistoryVia")
+  createdDocuments Document[]         @relation("DocumentCreatedVia")
   activities       McpActivity[]
 
   @@index([userId, createdAt])

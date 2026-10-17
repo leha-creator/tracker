@@ -9,8 +9,19 @@ import { createLogger } from '@/shared/logger';
 import { formValues, type FormState } from '@/shared/types';
 
 import type { ProjectDto } from './project.dto';
-import { createProjectSchema, deleteProjectSchema, updateProjectSchema } from './project.schema';
-import { createProject, deleteProject, updateProject } from './project.service';
+import {
+  archiveProjectSchema,
+  createProjectSchema,
+  deleteProjectSchema,
+  updateProjectSchema,
+} from './project.schema';
+import {
+  archiveProject,
+  createProject,
+  deleteProject,
+  restoreProject,
+  updateProject,
+} from './project.service';
 
 const log = createLogger('projects.actions');
 
@@ -78,4 +89,39 @@ export async function deleteProjectAction(
   revalidateWorkspace();
   log.debug({ to }, '[projects.actions.delete] redirect');
   redirect(to);
+}
+
+/** В архив или из архива: страница проекта остаётся, меняется только режим «только чтение». */
+async function setArchivedAction(
+  formData: FormData,
+  archive: boolean,
+): Promise<FormState<ProjectDto>> {
+  try {
+    const input = archiveProjectSchema.parse(Object.fromEntries(formData));
+    const session = await requireUser();
+    const project = archive
+      ? await archiveProject(session, input)
+      : await restoreProject(session, input);
+    revalidateWorkspace();
+    return { ok: true, data: project };
+  } catch (error) {
+    return {
+      ...toActionError(error, { action: archive ? 'archiveProject' : 'restoreProject' }),
+      values: {},
+    };
+  }
+}
+
+export async function archiveProjectAction(
+  _prev: FormState<ProjectDto>,
+  formData: FormData,
+): Promise<FormState<ProjectDto>> {
+  return setArchivedAction(formData, true);
+}
+
+export async function restoreProjectAction(
+  _prev: FormState<ProjectDto>,
+  formData: FormData,
+): Promise<FormState<ProjectDto>> {
+  return setArchivedAction(formData, false);
 }

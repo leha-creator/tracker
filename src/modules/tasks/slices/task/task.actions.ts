@@ -10,7 +10,7 @@ import { formValues, type FormState } from '@/shared/types';
 
 import { parseReturnPath, withTaskPanel } from './task-redirect';
 import { createTaskSchema, deleteTaskSchema, updateTaskSchema } from './task.schema';
-import { createTask, deleteTask, updateTask } from './task.service';
+import { archiveTask, createTask, deleteTask, restoreTask, updateTask } from './task.service';
 
 const log = createLogger('tasks.actions');
 
@@ -117,4 +117,30 @@ export async function deleteTaskAction(_prev: FormState, formData: FormData): Pr
   revalidateWorkspace();
   log.debug({ to }, '[tasks.actions.delete] redirect');
   redirect(to);
+}
+
+/** В архив — вместе с подзадачами; задача остаётся открытой (с баннером архива). */
+export async function archiveTaskAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  try {
+    const input = deleteTaskSchema.parse(Object.fromEntries(formData));
+    const session = await requireUser();
+    await archiveTask(session, input);
+  } catch (error) {
+    return { ...toActionError(error, { action: 'archiveTask' }), values: {} };
+  }
+  revalidateWorkspace();
+  return { ok: true, data: null };
+}
+
+/** Из архива — вместе с подзадачами, ушедшими в архив той же операцией. */
+export async function restoreTaskAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  try {
+    const input = deleteTaskSchema.parse(Object.fromEntries(formData));
+    const session = await requireUser();
+    await restoreTask(session, input);
+  } catch (error) {
+    return { ...toActionError(error, { action: 'restoreTask' }), values: {} };
+  }
+  revalidateWorkspace();
+  return { ok: true, data: null };
 }

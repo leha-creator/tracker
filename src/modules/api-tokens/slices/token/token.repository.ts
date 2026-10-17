@@ -117,7 +117,9 @@ export const apiTokenRepository = {
             },
           },
         },
-        workspace: { select: { id: true, slug: true, name: true, taskKey: true } },
+        workspace: {
+          select: { id: true, slug: true, name: true, taskKey: true, archivedAt: true },
+        },
       },
     });
   },

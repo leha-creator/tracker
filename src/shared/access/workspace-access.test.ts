@@ -7,11 +7,14 @@ type Membership = {
   role: string;
   canManageProjects: boolean;
   canManageDocuments: boolean;
+  /** Не задано — активное пространство. */
+  workspace?: { archivedAt: Date | null };
 } | null;
 type WorkspaceRow = {
   id: string;
   slug: string;
   name: string;
+  archivedAt: Date | null;
   members: { id: string; role: string; canManageProjects: boolean; canManageDocuments: boolean }[];
 } | null;
 
@@ -21,7 +24,12 @@ const getSession = vi.fn<() => Promise<AuthSession | null>>();
 
 vi.mock('@/shared/db', () => ({
   prisma: {
-    workspaceMember: { findUnique: () => findMember() },
+    workspaceMember: {
+      findUnique: async () => {
+        const membership = await findMember();
+        return membership && { workspace: { archivedAt: null }, ...membership };
+      },
+    },
     workspace: { findUnique: () => findWorkspace() },
   },
 }));
@@ -115,7 +123,13 @@ describe('requireWorkspaceAccess', () => {
 });
 
 describe('requireWorkspaceAccessBySlug', () => {
-  const workspace = { id: 'ws-1', slug: 'team', name: 'Team', icon: 'camera' };
+  const workspace = { id: 'ws-1', slug: 'team', name: 'Team', icon: 'camera', archivedAt: null };
+  const ownerMember = {
+    id: 'm-1',
+    role: 'owner',
+    canManageProjects: false,
+    canManageDocuments: false,
+  };
 
   it('redirects to login without session', async () => {
     getSession.mockResolvedValue(null);
@@ -160,6 +174,25 @@ describe('requireWorkspaceAccessBySlug', () => {
       role: 'member',
       permissions: { manageProjects: false, manageDocuments: false },
     });
+  });
+
+  it('returns 404 for an archived workspace without allowArchived', async () => {
+    getSession.mockResolvedValue(sessionOf());
+    findWorkspace.mockResolvedValue({
+      ...workspace,
+      archivedAt: new Date('2026-10-16'),
+      members: [ownerMember],
+    });
+    await expect(requireWorkspaceAccessBySlug('team', 'owner')).rejects.toThrow('NEXT_NOT_FOUND');
+  });
+
+  it('lets the owner into an archived workspace with allowArchived', async () => {
+    getSession.mockResolvedValue(sessionOf());
+    const archivedAt = new Date('2026-10-16');
+    findWorkspace.mockResolvedValue({ ...workspace, archivedAt, members: [ownerMember] });
+    const context = await requireWorkspaceAccessBySlug('team', 'owner', { allowArchived: true });
+    expect(context.workspace.archivedAt).toEqual(archivedAt);
+    expect(context.access.archived).toBe(true);
   });
 });
 
@@ -236,5 +269,52 @@ describe('requireWorkspacePermission', () => {
       role: 'owner',
       permissions: { manageProjects: true, manageDocuments: true },
     });
+  });
+});
+
+describe('archived workspace in services', () => {
+  const archived = { workspace: { archivedAt: new Date('2026-10-16') } };
+
+  it('denies a member even with allowArchived', async () => {
+    findMember.mockResolvedValue({
+      id: 'm-1',
+      role: 'member',
+      canManageProjects: true,
+      canManageDocuments: true,
+      ...archived,
+    });
+    await expect(
+      requireWorkspaceAccess(sessionOf(), 'ws-1', 'member', { allowArchived: true }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('denies the owner without allowArchived and in permission checks', async () => {
+    findMember.mockResolvedValue({
+      id: 'm-1',
+      role: 'owner',
+      canManageProjects: false,
+      canManageDocuments: false,
+      ...archived,
+    });
+    await expect(requireWorkspaceAccess(sessionOf(), 'ws-1', 'owner')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(
+      requireWorkspacePermission(sessionOf(), 'ws-1', 'manageProjects'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('allows the owner with allowArchived and marks access as archived', async () => {
+    findMember.mockResolvedValue({
+      id: 'm-1',
+      role: 'owner',
+      canManageProjects: false,
+      canManageDocuments: false,
+      ...archived,
+    });
+    const access = await requireWorkspaceAccess(sessionOf(), 'ws-1', 'owner', {
+      allowArchived: true,
+    });
+    expect(access).toMatchObject({ role: 'owner', archived: true });
   });
 });

@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { ProjectAutomationForm } from '@/components/github/project-automation-form';
 import { SettingsSection, SettingsSections } from '@/components/layout/settings-section';
 import { DeleteProjectDialog } from '@/components/projects/delete-project-dialog';
+import { ProjectArchiveButton } from '@/components/projects/project-archive-button';
 import { ProjectSettingsForm } from '@/components/projects/project-settings-form';
 import { SettingsDraftProvider } from '@/components/projects/settings-draft';
 import { StatusList } from '@/components/projects/status-list';
@@ -25,7 +26,7 @@ export default function ProjectSettingsPage({ params }: Props) {
   );
 }
 
-/** Три секции: основное, статусы, удаление. */
+/** Три секции: основное, статусы, архив. */
 function SettingsSkeleton() {
   return (
     <div aria-hidden className="grid divide-y divide-foreground/[0.07]">
@@ -51,6 +52,14 @@ async function SettingsContent({ params }: Pick<Props, 'params'>) {
   const { session, workspace, project, access } = await loadProjectPage(workspaceSlug, projectId);
   // Без права управления проектами — 404; сервер всё равно проверяет право в каждом action.
   if (!access.permissions.manageProjects) notFound();
+  // Архивный проект только для чтения: из настроек остаются восстановление и удаление.
+  if (project.archivedAt) {
+    return (
+      <SettingsSections>
+        <ArchiveSection workspaceId={workspace.id} project={project} />
+      </SettingsSections>
+    );
+  }
   const githubEnabled = await isGithubEnabled();
   const [statuses, automation] = await Promise.all([
     listStatuses(session, workspace.id, project.id),
@@ -83,21 +92,46 @@ async function SettingsContent({ params }: Pick<Props, 'params'>) {
             />
           </SettingsSection>
         )}
-        <SettingsSection title="Удаление проекта">
-          {/* Пояснение над кнопкой, а не под заголовком: колонки секции одной высоты. */}
-          <div className="grid justify-items-start gap-3">
-            <p className="text-sm text-muted-foreground">
-              Нельзя отменить: проект удалится вместе со статусами, задачи останутся в пространстве.
-            </p>
+        <ArchiveSection workspaceId={workspace.id} project={project} />
+      </SettingsSections>
+    </SettingsDraftProvider>
+  );
+}
+
+/** Архив проекта: в архив — обратимо; удалить навсегда можно только архивный проект. */
+function ArchiveSection({
+  workspaceId,
+  project,
+}: {
+  workspaceId: string;
+  project: { id: string; name: string; tasksCount: number; archivedAt: Date | null };
+}) {
+  const archived = project.archivedAt !== null;
+  return (
+    <SettingsSection id="project-archive" title="Архив">
+      {/* Пояснение над кнопками, а не под заголовком: колонки секции одной высоты. */}
+      <div className="grid justify-items-start gap-3">
+        <p className="text-sm text-muted-foreground">
+          {archived
+            ? 'Проект в архиве: доска и статусы только для чтения, задачи остались в пространстве. Удаление проекта нельзя отменить.'
+            : 'Проект пропадёт из списка проектов, доска станет только для чтения. Восстановить его можно в любой момент; удалить навсегда — только из архива.'}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <ProjectArchiveButton
+            workspaceId={workspaceId}
+            projectId={project.id}
+            archived={archived}
+          />
+          {archived && (
             <DeleteProjectDialog
-              workspaceId={workspace.id}
+              workspaceId={workspaceId}
               projectId={project.id}
               name={project.name}
               tasksCount={project.tasksCount}
             />
-          </div>
-        </SettingsSection>
-      </SettingsSections>
-    </SettingsDraftProvider>
+          )}
+        </div>
+      </div>
+    </SettingsSection>
   );
 }

@@ -125,3 +125,36 @@ export function resolveMember(
   }
   throw new ValidationError(`Участник «${ref}» не найден. Участники: ${options}`);
 }
+
+/** Метка пространства для фильтров и правки задачи. */
+export interface CatalogLabel {
+  id: string;
+  name: string;
+}
+
+/**
+ * Имена меток от агента: без пустых, повторы (без учёта регистра, пробелов и «ё/е») убраны,
+ * остаётся первое написание.
+ */
+export function uniqueLabelNames(names: readonly string[]): string[] {
+  const byKey = new Map<string, string>();
+  for (const raw of names) {
+    const name = raw.trim().replace(/\s+/g, ' ');
+    const key = normalizeName(name);
+    if (key && !byKey.has(key)) byKey.set(key, name);
+  }
+  return [...byKey.values()];
+}
+
+/** Метки для фильтра по id или имени; неизвестная — ошибка со списком меток. */
+export function resolveLabels(
+  labels: readonly CatalogLabel[],
+  refs: readonly string[],
+): CatalogLabel[] {
+  const picked = new Map<string, CatalogLabel>();
+  for (const ref of uniqueLabelNames(refs)) {
+    const label = pickByIdOrName(labels, ref, { one: 'Метка', options: 'Метки' });
+    picked.set(label.id, label);
+  }
+  return [...picked.values()];
+}

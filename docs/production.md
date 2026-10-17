@@ -23,7 +23,9 @@ push в main ──► CI: check, migrations, docker ──► publish (GHCR) �
 | `/opt/tasker/.env` | Секреты и настройки стека (`600`, владелец `deploy`) | Один раз `bootstrap-server.sh`, дальше вручную |
 | `/opt/tasker/release.env` | `TASKER_TAG=sha-xxxxxxx` — текущий релиз | CI при каждом деплое |
 | `/opt/tasker/backup.sh`, `/opt/tasker/backups/` | Скрипт и резервные копии | CI (скрипт), таймеры (копии) |
+| `/opt/tasker/reminders.sh` | Запуск напоминаний о сроке | CI при каждом деплое |
 | `/etc/systemd/system/tasker-backup*` | Таймеры резервных копий | `bootstrap-server.sh` |
+| `/etc/systemd/system/tasker-reminders.*` | Таймер напоминаний о сроке | `bootstrap-server.sh` |
 | `/etc/systemd/system/docker-mss-clamp.service` | MSS clamping для контейнеров (см. «Почта») | `bootstrap-server.sh` |
 
 Файлы, которые копирует CI, руками не правятся: следующий деплой их перезапишет.
@@ -55,7 +57,7 @@ push в main ──► CI: check, migrations, docker ──► publish (GHCR) �
 | Джоб | Когда | Что делает |
 |------|-------|------------|
 | `publish` | push в `main` после `check`, `migrations`, `docker` | Собирает `runner` и `migrate` из кеша `docker` и пушит в GHCR с тегами `sha-<7>` и `main` |
-| `deploy` | после `publish` или Run workflow с `tag` | SSH под `deploy` → копирует `compose.yml`, `backup.sh`, `release.env`, `tracker.caddy` → `backup.sh db` → `docker login` (временный `GITHUB_TOKEN`) → `pull` → `up -d --wait app` → `docker logout` → `caddy validate` + `reload` → smoke `https://tracker.plwedding.ru/api/health` |
+| `deploy` | после `publish` или Run workflow с `tag` | SSH под `deploy` → копирует `compose.yml`, `backup.sh`, `reminders.sh`, `release.env`, `tracker.caddy` → `backup.sh db` → `docker login` (временный `GITHUB_TOKEN`) → `pull` → `up -d --wait app` → `docker logout` → `caddy validate` + `reload` → smoke `https://tracker.plwedding.ru/api/health` |
 
 Деплои идут по очереди (`concurrency: deploy-production`), новый пуш в `main` не прерывает идущий деплой. Если миграция упала, `app` не пересоздаётся и продолжает работать предыдущая версия: в логе джоба будет ошибка `migrate`, а копия БД до миграции лежит в `/opt/tasker/backups/db/`.
 
@@ -126,6 +128,38 @@ docker run --rm -v tasker_minio-data:/data -v /opt/tasker/backups/files:/backup 
 $C up -d minio
 ```
 
+## Напоминания о сроке
+
+`tasker-reminders.timer` раз в день в 09:00 по Москве (пояс указан в `OnCalendar`, от пояса сервера не зависит; `Persistent=true` — пропущенный запуск выполнится после загрузки) запускает `/opt/tasker/reminders.sh` под `deploy`. Скрипт вызывает `POST /api/cron/reminders` изнутри контейнера `tasker-app-1`. `CRON_SECRET` берётся из окружения контейнера и в командную строку не попадает (её видно в `ps`).
+
+| Напоминание | Кому | Когда |
+|-------------|------|-------|
+| «Завтра срок задачи» | Ответственному | Срок — завтра по `REMINDERS_TIMEZONE` |
+| «Срок задачи прошёл» | Ответственному и наблюдателям | Срок раньше сегодняшнего; один раз на каждое значение срока |
+
+Пропускаются задачи в архиве и в архивных пространствах, без ответственного и выполненные (во всех проектах статус «Готово»). Каналы (в приложении, письмом) пользователь настраивает в профиле. Повторный запуск в тот же день ничего не шлёт: отправленные напоминания отмечены в `TaskDueReminder`.
+
+Вручную и проверка:
+
+```bash
+sh /opt/tasker/reminders.sh            # 200 {"result":{"dueSoon":…,"overdue":…,"skipped":…,"failedBatches":0}}
+journalctl -u tasker-reminders         # журнал запусков
+systemctl list-timers 'tasker-*'       # расписание
+```
+
+`404` — в `/opt/tasker/.env` нет `CRON_SECRET`. `failedBatches > 0` — часть задач не обработана из-за ошибки БД (подробности в логах приложения, `[reminders] batch failed`); следующий запуск их догонит.
+
+**Сервер, настроенный до появления напоминаний.** `bootstrap-server.sh` генерирует `CRON_SECRET` только для нового `.env`, а CI не ставит таймеры. Один раз под root:
+
+```bash
+echo "CRON_SECRET=$(openssl rand -hex 32)" >> /opt/tasker/.env
+sudo -u deploy sh -c 'cd /opt/tasker && docker compose --env-file .env --env-file release.env up -d --wait app'
+# с копией каталога deploy/ на сервере — или просто повторный запуск bootstrap-server.sh:
+install -m 644 /tmp/tasker-deploy/tasker/systemd/tasker-reminders.* /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now tasker-reminders.timer
+```
+
 ## Почта
 
 Письма нужны для подтверждения email при регистрации, сброса пароля, приглашений и уведомлений. **Без настроенного SMTP новые пользователи не смогут подтвердить email и войти**, а сброс пароля не работает. Временно (только если почты на сервере нет) можно задать `AUTH_REQUIRE_EMAIL_VERIFICATION=false` в `/opt/tasker/.env`. Приглашение без SMTP всё равно создаётся: письмо не уходит (в логах `[invitation] email failed`), а владелец получает ссылку и передаёт её вручную.
@@ -164,7 +198,7 @@ MAIL_FROM="Tasker <no-reply@plwedding.ru>"
      sh /tmp/tasker-deploy/bootstrap-server.sh"
    ```
 
-   Скрипт создаёт `/opt/edge` и `/opt/tasker`, сеть `edge`, добавляет ключ деплоя, генерирует секреты в `/opt/tasker/.env` и ставит таймеры бэкапов. Edge-прокси он не запускает.
+   Скрипт создаёт `/opt/edge` и `/opt/tasker`, сеть `edge`, добавляет ключ деплоя, генерирует секреты в `/opt/tasker/.env` (включая `CRON_SECRET`) и ставит таймеры бэкапов и напоминаний. Edge-прокси он не запускает.
 3. `cd /opt/edge && docker compose up -d` (под `deploy`).
 4. Обновить `DEPLOY_HOST` и `DEPLOY_KNOWN_HOSTS` в GitHub и запустить workflow.
 

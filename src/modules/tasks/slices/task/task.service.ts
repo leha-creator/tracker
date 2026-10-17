@@ -12,19 +12,26 @@ import { createLogger } from '@/shared/logger';
 import {
   assertAssigneeIsMember,
   assertCanAddSubtask,
-  assertCanDeleteTask,
+  assertCanDeletePermanently,
+  assertNotArchived,
+  canDeletePermanently,
   canDeleteTask,
+  diffTaskFields,
   formatTaskKey,
   normalizeTaskTitle,
   positionAfter,
   toIsoDate,
+  type TaskFieldsSnapshot,
   type TaskPriority,
 } from '../../models';
 import { attachmentRepository } from '../attachment/attachment.repository';
 import { deleteStoredObjects } from '../attachment/attachment.storage';
+import { historyAuthorOf, recordHistory, userSnapshot } from '../history/history.service';
+import { ensureWatchers } from '../watcher/watcher.service';
 import { placementRepository } from '../placement/placement.repository';
 import { subtaskRepository } from '../subtask/subtask.repository';
 import { getSubtaskProgress, getTaskAncestors } from '../subtask/subtask.service';
+import { assertTaskActive } from './task-archive.guard';
 import type { TaskDto, TaskRefDto } from './task.dto';
 import { toTaskSummary, toCreatedVia, toUserDto } from './task.mapper';
 import { taskRepository, type TaskRow, type TaskWriteData } from './task.repository';
@@ -38,6 +45,17 @@ function parseDueDate(value: string): Date {
 
 function today(): string {
   return toIsoDate(new Date());
+}
+
+/** Поля задачи до изменения — для записи истории. */
+function toFieldsSnapshot(row: TaskRow): TaskFieldsSnapshot {
+  return {
+    title: row.title,
+    description: row.description,
+    priority: row.priority,
+    dueDate: row.dueDate ? toIsoDate(row.dueDate) : null,
+    assignee: row.assignee ? { id: row.assignee.id, name: row.assignee.name } : null,
+  };
 }
 
 type TaskTreeFields = 'ancestors' | 'descendantCount' | 'subtaskProgress';
@@ -57,6 +75,9 @@ function toTaskDto(
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     canDelete: canDeleteTask(row, actor),
+    archivedAt: row.archivedAt,
+    archivedBy: row.archivedBy ? { userId: row.archivedBy.id, name: row.archivedBy.name } : null,
+    canDeletePermanently: canDeletePermanently(row, actor),
     ...toTaskSummary(row, today()),
   };
 }
@@ -144,6 +165,8 @@ async function checkNewSubtaskParent(
     log.warn({ workspaceId, parentId }, '[task.createTask] parent not found');
     throw new NotFoundError('Родительская задача не найдена');
   }
+  // В архивную задачу подзадачу не добавить.
+  await assertTaskActive(workspaceId, parentId, tx);
   const childrenCount = await subtaskRepository.countChildren(workspaceId, parentId, tx);
   try {
     assertCanAddSubtask(parentPath.length, childrenCount);
@@ -202,6 +225,14 @@ export async function createTask(
       createdViaTokenId: session.via?.tokenId ?? null,
       parentId: parentId ?? null,
     });
+    await recordHistory(tx, {
+      workspaceId,
+      taskId: created.id,
+      author: historyAuthorOf(session),
+      changes: [{ kind: 'created', data: {} }],
+    });
+    // Автор и ответственный следят за задачей.
+    await ensureWatchers(tx, workspaceId, created.id, [userId, data.assigneeId]);
     if (placement) {
       const status = await placementRepository.findStatus(tx, workspaceId, placement.statusId);
       if (!status) {
@@ -303,6 +334,12 @@ export async function updateTask(session: AuthSession, input: UpdateTaskInput): 
   log.debug({ userId: session.user.id, workspaceId, taskId }, '[task.updateTask] start');
 
   const current = await loadTask(workspaceId, taskId);
+  try {
+    assertNotArchived(current);
+  } catch (error) {
+    log.warn({ workspaceId, taskId }, '[task.updateTask] archived');
+    throw error;
+  }
   if (input.assigneeId && input.assigneeId !== current.assignee?.id) {
     await checkAssignee(workspaceId, input.assigneeId);
   }
@@ -322,8 +359,26 @@ export async function updateTask(session: AuthSession, input: UpdateTaskInput): 
     return;
   }
 
-  const count = await taskRepository.update(workspaceId, taskId, data);
-  if (count === 0) throw new NotFoundError('Задача не найдена');
+  await prisma.$transaction(async (tx) => {
+    const count = await taskRepository.update(workspaceId, taskId, data, tx);
+    if (count === 0) throw new NotFoundError('Задача не найдена');
+    const assigneeChanged =
+      input.assigneeId !== undefined && input.assigneeId !== (current.assignee?.id ?? null);
+    await recordHistory(tx, {
+      workspaceId,
+      taskId,
+      author: historyAuthorOf(session),
+      changes: diffTaskFields(toFieldsSnapshot(current), {
+        title: data.title,
+        description: data.description,
+        priority: data.priority,
+        dueDate: data.dueDate === undefined ? undefined : data.dueDate && toIsoDate(data.dueDate),
+        assignee: assigneeChanged ? await userSnapshot(tx, input.assigneeId ?? null) : undefined,
+      }),
+    });
+    // Новый ответственный начинает следить за задачей.
+    if (assigneeChanged) await ensureWatchers(tx, workspaceId, taskId, [input.assigneeId]);
+  });
   log.info({ workspaceId, taskId, userId: session.user.id, fields }, '[task] updated');
 
   if (input.assigneeId && input.assigneeId !== current.assignee?.id) {
@@ -336,7 +391,84 @@ export async function updateTask(session: AuthSession, input: UpdateTaskInput): 
   }
 }
 
-/** Удаляет задачу (размещения — каскадом). Возвращает slug пространства для редиректа. */
+/**
+ * Отправляет задачу в архив вместе со всем поддеревом (общий archivedAt операции). Может любой
+ * участник. Возвращает число архивированных подзадач.
+ */
+export async function archiveTask(
+  session: AuthSession,
+  input: { workspaceId: string; taskId: string },
+): Promise<{ descendants: number }> {
+  const { workspaceId, taskId } = input;
+  const access = await requireWorkspaceAccess(session, workspaceId);
+  const task = await loadTask(workspaceId, taskId);
+  if (task.archivedAt) throw new ValidationError('Задача уже в архиве');
+
+  const descendants = await prisma.$transaction(async (tx) => {
+    // Та же блокировка дерева, что при смене родителя: поддерево не меняется посреди операции.
+    await subtaskRepository.lockTree(tx, workspaceId);
+    const ids = await subtaskRepository.subtreeIds(workspaceId, taskId, tx);
+    const count = await taskRepository.archiveMany(tx, workspaceId, ids, {
+      archivedAt: new Date(),
+      archivedById: access.userId,
+    });
+    if (count === 0) throw new ValidationError('Задача уже в архиве');
+    const archivedDescendants = count - 1;
+    await recordHistory(tx, {
+      workspaceId,
+      taskId,
+      author: historyAuthorOf(session),
+      changes: [{ kind: 'archived', data: { descendants: archivedDescendants } }],
+    });
+    return archivedDescendants;
+  });
+  log.info({ workspaceId, taskId, descendants, userId: access.userId }, '[task] archived');
+  return { descendants };
+}
+
+/**
+ * Возвращает задачу из архива вместе с подзадачами, архивированными той же операцией. Подзадачу
+ * архивного родителя отдельно не восстановить — сначала родителя.
+ */
+export async function restoreTask(
+  session: AuthSession,
+  input: { workspaceId: string; taskId: string },
+): Promise<{ descendants: number }> {
+  const { workspaceId, taskId } = input;
+  const access = await requireWorkspaceAccess(session, workspaceId);
+  const state = isEntityId(taskId)
+    ? await taskRepository.findArchiveState(workspaceId, taskId)
+    : null;
+  if (!state) throw new NotFoundError('Задача не найдена');
+  const archivedAt = state.archivedAt;
+  if (!archivedAt) throw new ValidationError('Задача не в архиве');
+  if (state.parent?.archivedAt) {
+    log.warn({ workspaceId, taskId }, '[task.restoreTask] parent is archived');
+    throw new ValidationError('Родительская задача в архиве — восстановите сначала её');
+  }
+
+  const descendants = await prisma.$transaction(async (tx) => {
+    await subtaskRepository.lockTree(tx, workspaceId);
+    const ids = await subtaskRepository.subtreeIds(workspaceId, taskId, tx);
+    const count = await taskRepository.restoreMany(tx, workspaceId, ids, archivedAt);
+    if (count === 0) throw new ValidationError('Задача не в архиве');
+    const restoredDescendants = count - 1;
+    await recordHistory(tx, {
+      workspaceId,
+      taskId,
+      author: historyAuthorOf(session),
+      changes: [{ kind: 'restored', data: { descendants: restoredDescendants } }],
+    });
+    return restoredDescendants;
+  });
+  log.info({ workspaceId, taskId, descendants, userId: access.userId }, '[task] restored');
+  return { descendants };
+}
+
+/**
+ * Удаляет архивную задачу навсегда (размещения и поддерево — каскадом). Возвращает slug
+ * пространства для редиректа.
+ */
 export async function deleteTask(
   session: AuthSession,
   input: { workspaceId: string; taskId: string },
@@ -347,7 +479,7 @@ export async function deleteTask(
 
   const task = await loadTask(workspaceId, taskId);
   try {
-    assertCanDeleteTask(task, access);
+    assertCanDeletePermanently(task, access);
   } catch (error) {
     log.warn(
       { workspaceId, taskId, userId: access.userId, role: access.role },

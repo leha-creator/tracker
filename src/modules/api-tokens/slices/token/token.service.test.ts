@@ -115,7 +115,13 @@ function authRow(overrides: Record<string, unknown> = {}) {
         responsible?: { name: string } | null;
       } | null,
     },
-    workspace: { id: 'ws-1', slug: 'ws', name: 'Пространство', taskKey: 'TSK' },
+    workspace: {
+      id: 'ws-1',
+      slug: 'ws',
+      name: 'Пространство',
+      taskKey: 'TSK',
+      archivedAt: null as Date | null,
+    },
     ...overrides,
   };
 }
@@ -269,6 +275,11 @@ describe('authenticateApiToken', () => {
       'пользователь заблокирован',
       header,
       authRow({ user: { ...authRow().user, banned: true, banExpires: null } }),
+    ],
+    [
+      'пространство в архиве',
+      header,
+      authRow({ workspace: { ...authRow().workspace, archivedAt: new Date() } }),
     ],
   ])('%s → UNAUTHORIZED', async (_name, value, row) => {
     findByHash.mockResolvedValue(row ?? null);

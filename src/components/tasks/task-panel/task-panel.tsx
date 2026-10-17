@@ -9,6 +9,7 @@ import {
   parseTaskPanelParam,
   parseTaskParentParam,
   TASK_COMMENTS_PARAM,
+  TASK_HISTORY_PARAM,
   TASK_PANEL_PARAM,
   TASK_PARENT_PARAM,
   taskPageHref,
@@ -106,6 +107,7 @@ async function TaskPanelContent({
   }
 
   const comments = raw[TASK_COMMENTS_PARAM];
+  const history = raw[TASK_HISTORY_PARAM];
   return (
     <TaskDetailsView
       session={session}
@@ -116,6 +118,8 @@ async function TaskPanelContent({
       returnTo={closeHref}
       allComments={(Array.isArray(comments) ? comments[0] : comments) === 'all'}
       showAllCommentsHref={withSearchParam(basePath, raw, TASK_COMMENTS_PARAM, 'all')}
+      allHistory={(Array.isArray(history) ? history[0] : history) === 'all'}
+      showAllHistoryHref={withSearchParam(basePath, raw, TASK_HISTORY_PARAM, 'all')}
       pageHref={taskPageHref(workspace.slug, state.number)}
       taskHref={(number) => taskPanelHref(basePath, raw, number)}
       newSubtaskHref={(parent) => taskPanelHref(basePath, raw, 'new', { parent })}

@@ -4,6 +4,8 @@ import { taskNumberSchema } from '@/modules/tasks/client';
 export const TASK_PANEL_PARAM = 'task';
 /** Режим ленты комментариев (`?comments=all`) — относится к открытой задаче. */
 export const TASK_COMMENTS_PARAM = 'comments';
+/** Вся история изменений (`?history=all`) — относится к открытой задаче. */
+export const TASK_HISTORY_PARAM = 'history';
 /** Родитель новой задачи (`?task=new&parent=12`) — форма создаёт подзадачу. */
 export const TASK_PARENT_PARAM = 'parent';
 
@@ -40,7 +42,7 @@ function withSearch(pathname: string, params: URLSearchParams): string {
 
 /**
  * Адрес текущей страницы с открытой (`number` / `'new'`) или закрытой (`null`) панелью.
- * Остальные параметры (фильтры, сортировка списка) сохраняются; режим комментариев и родитель
+ * Остальные параметры (фильтры, сортировка списка) сохраняются; режимы комментариев и истории, родитель
  * новой задачи сбрасываются. `parent` — номер родителя для формы новой подзадачи.
  */
 export function taskPanelHref(
@@ -51,6 +53,7 @@ export function taskPanelHref(
 ): string {
   const params = toSearchParams(search);
   params.delete(TASK_COMMENTS_PARAM);
+  params.delete(TASK_HISTORY_PARAM);
   params.delete(TASK_PARENT_PARAM);
   if (task === null) params.delete(TASK_PANEL_PARAM);
   else params.set(TASK_PANEL_PARAM, String(task));

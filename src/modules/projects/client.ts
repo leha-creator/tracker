@@ -3,8 +3,10 @@
  * Без server-only кода (сервисов, репозиториев) — их экспортирует только index.ts.
  */
 export {
+  archiveProjectAction,
   createProjectAction,
   deleteProjectAction,
+  restoreProjectAction,
   updateProjectAction,
 } from './slices/project/project.actions';
 export type { ProjectDto, ProjectListItemDto } from './slices/project/project.dto';
@@ -22,6 +24,8 @@ export {
 export type { ProjectStatusDto } from './slices/status/status.dto';
 export { addStatusSchema, updateStatusSchema } from './slices/status/status.schema';
 export {
+  ARCHIVED_PROJECT_MESSAGE,
+  assertProjectNotArchived,
   isEntityId,
   PROJECT_DESCRIPTION_MAX_LENGTH,
   PROJECT_NAME_MAX_LENGTH,
