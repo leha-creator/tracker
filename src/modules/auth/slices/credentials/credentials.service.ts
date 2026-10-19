@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { headers } from 'next/headers';
+import { connection } from 'next/server';
 
 import { safeRedirectPath } from '@/shared/access';
 import { auditActorFromSession, auditRequestContext, recordAuditEvent } from '@/shared/audit';
@@ -67,8 +68,12 @@ export async function signUp(input: SignUpInput): Promise<SignUpOutcome> {
   }
 }
 
-/** Политика регистрации из настроек ресурса — для страниц /register и /login. */
-export function getSignupPolicy(): Promise<SignupPolicy> {
+/**
+ * Политика регистрации из настроек ресурса — для страниц /register и /login. Настройки меняются
+ * в админке: читаем на запросе, а не при prerender (connection()).
+ */
+export async function getSignupPolicy(): Promise<SignupPolicy> {
+  await connection();
   return loadSignupPolicy();
 }
 

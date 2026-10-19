@@ -1,4 +1,4 @@
-import { ForbiddenError, ValidationError } from '@/shared/errors';
+import { ForbiddenError, ValidationError } from '@/shared/errors/app-error';
 
 import type { ManagedUser } from './admin-user';
 
