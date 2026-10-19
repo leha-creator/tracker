@@ -93,3 +93,15 @@ export async function requireAdminOrNotFound(returnTo?: string): Promise<AuthSes
   }
   return session;
 }
+
+/**
+ * Запрещает действие под входом администратора от имени пользователя: смену пароля, 2FA,
+ * завершение сессий, выпуск токенов, привязку GitHub — то, что меняет доступ к учётной записи
+ * или продлевает его за пределы часа имперсонации.
+ */
+export function requireNotImpersonating(session: AuthSession, scope = 'access'): void {
+  const impersonatedBy = session.session?.impersonatedBy;
+  if (!impersonatedBy) return;
+  log.warn({ userId: session.user.id, impersonatedBy }, `[${scope}] rejected under impersonation`);
+  throw new ForbiddenError('Недоступно при входе от имени пользователя');
+}

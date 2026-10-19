@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkspaceAccess, WorkspaceRole } from '@/shared/access';
 import type * as AccessModule from '@/shared/access';
+import { recordAuditEvent } from '@/shared/audit';
 import type { AuthSession } from '@/shared/auth';
 import { ForbiddenError } from '@/shared/errors';
 
@@ -9,10 +10,14 @@ const requireWorkspaceAccess =
   vi.fn<
     (session: AuthSession, workspaceId: string, minRole?: WorkspaceRole) => Promise<WorkspaceAccess>
   >();
-const findInWorkspace =
-  vi.fn<
-    () => Promise<{ id: string; userId: string; role: string; user: { isAgent: boolean } } | null>
-  >();
+const findInWorkspace = vi.fn<
+  () => Promise<{
+    id: string;
+    userId: string;
+    role: string;
+    user: { isAgent: boolean; name: string };
+  } | null>
+>();
 const countOwners = vi.fn<() => Promise<number>>();
 const setPermission =
   vi.fn<(ws: string, memberId: string, permission: string, value: boolean) => Promise<number>>();
@@ -119,7 +124,7 @@ describe('changeMemberRole', () => {
       id: 'm-self',
       userId: 'user-owner',
       role: 'owner',
-      user: { isAgent: false },
+      user: { isAgent: false, name: 'Борис' },
     });
     countOwners.mockResolvedValue(1);
     await expect(
@@ -134,7 +139,7 @@ describe('changeMemberRole', () => {
       id: 'm-2',
       userId: 'user-2',
       role: 'member',
-      user: { isAgent: false },
+      user: { isAgent: false, name: 'Борис' },
     });
     countOwners.mockResolvedValue(1);
     await changeMemberRole(session, { workspaceId: 'ws-1', memberId: 'm-2', role: 'owner' });
@@ -151,12 +156,20 @@ describe('removeMember', () => {
       id: 'm-2',
       userId: 'user-2',
       role: 'member',
-      user: { isAgent: false },
+      user: { isAgent: false, name: 'Борис' },
     });
     countOwners.mockResolvedValue(1);
     await removeMemberService(session, { workspaceId: 'ws-1', memberId: 'm-2' });
     expect(removeMember).toHaveBeenCalledWith(
       expect.objectContaining({ body: { organizationId: 'ws-1', memberIdOrEmail: 'm-2' } }),
+    );
+    expect(vi.mocked(recordAuditEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'workspace.member_removed',
+        workspaceId: 'ws-1',
+        targetUserId: 'user-2',
+        data: { memberName: 'Борис', left: false },
+      }),
     );
   });
 
@@ -166,7 +179,7 @@ describe('removeMember', () => {
       id: 'm-self',
       userId: 'user-owner',
       role: 'owner',
-      user: { isAgent: false },
+      user: { isAgent: false, name: 'Борис' },
     });
     countOwners.mockResolvedValue(2);
     await expect(
@@ -176,7 +189,12 @@ describe('removeMember', () => {
 });
 
 describe('agent members', () => {
-  const agent = { id: 'm-a', userId: 'agent-1', role: 'member', user: { isAgent: true } };
+  const agent = {
+    id: 'm-a',
+    userId: 'agent-1',
+    role: 'member',
+    user: { isAgent: true, name: 'Агент' },
+  };
 
   it('are not removed from the members list', async () => {
     accessAs('owner');
@@ -254,7 +272,7 @@ describe('setMemberPermission', () => {
       id: 'm-2',
       userId: 'user-2',
       role: 'owner',
-      user: { isAgent: false },
+      user: { isAgent: false, name: 'Борис' },
     });
     await expect(setMemberPermission(session, input)).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
@@ -268,7 +286,7 @@ describe('setMemberPermission', () => {
       id: 'm-2',
       userId: 'user-2',
       role: 'member',
-      user: { isAgent: false },
+      user: { isAgent: false, name: 'Борис' },
     });
     setPermission.mockResolvedValue(1);
     await setMemberPermission(session, input);
@@ -281,7 +299,7 @@ describe('setMemberPermission', () => {
       id: 'm-2',
       userId: 'user-2',
       role: 'member',
-      user: { isAgent: false },
+      user: { isAgent: false, name: 'Борис' },
     });
     setPermission.mockResolvedValue(1);
     await setMemberPermission(session, { ...input, permission: 'manageDocuments', value: false });

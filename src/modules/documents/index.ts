@@ -10,6 +10,8 @@ export {
   completeDocumentUpload,
   getDocumentFile,
   getDocumentText,
+  getStorageUsageByWorkspaces,
+  getTotalDocumentStorageUsage,
   getWorkspaceStorageUsage,
   requestDocumentUpload,
 } from './slices/file/file.service';

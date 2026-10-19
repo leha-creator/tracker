@@ -4,6 +4,7 @@ import { notify } from '@/modules/notifications';
 import { isEntityId } from '@/modules/projects';
 import { isWorkspaceMember } from '@/modules/workspaces';
 import { requireWorkspaceAccess, type WorkspaceRole } from '@/shared/access';
+import { auditActorFromSession, recordAuditEvent } from '@/shared/audit';
 import type { AuthSession } from '@/shared/auth';
 import { prisma, type TransactionClient } from '@/shared/db';
 import { NotFoundError, ValidationError } from '@/shared/errors';
@@ -38,6 +39,28 @@ import { toTaskSummary, toCreatedVia, toUserDto } from './task.mapper';
 import { taskRepository, type TaskRow, type TaskWriteData } from './task.repository';
 
 const log = createLogger('tasks.task');
+
+/**
+ * Событие задачи в журнале пространства. Правки полей не пишутся: они — в истории задачи.
+ * Сервисы общие для интерфейса и MCP, поэтому действия агентов попадают сюда с viaTokenId.
+ */
+function recordTaskEvent(
+  session: AuthSession,
+  kind: 'task.created' | 'task.archived' | 'task.restored' | 'task.deleted',
+  workspaceId: string,
+  task: { number: number; title: string; workspace: { taskKey: string | null } },
+): Promise<void> {
+  return recordAuditEvent({
+    kind,
+    actor: auditActorFromSession(session),
+    workspaceId,
+    data: {
+      taskKey: formatTaskKey(task.number, task.workspace.taskKey),
+      taskNumber: task.number,
+      title: task.title,
+    },
+  });
+}
 
 /** Срок `YYYY-MM-DD` → Date в полночь UTC (колонка DATE без времени). */
 function parseDueDate(value: string): Date {
@@ -277,6 +300,7 @@ export async function createTask(
     },
     '[task] created',
   );
+  await recordTaskEvent(session, 'task.created', workspaceId, task);
   await emitTaskEvent(session, {
     workspaceId,
     kind: 'task.created',
@@ -440,6 +464,7 @@ export async function archiveTask(
     return archivedDescendants;
   });
   log.info({ workspaceId, taskId, descendants, userId: access.userId }, '[task] archived');
+  await recordTaskEvent(session, 'task.archived', workspaceId, task);
   await emitTaskEvent(session, {
     workspaceId,
     kind: 'task.archived',
@@ -488,6 +513,7 @@ export async function restoreTask(
     return restoredDescendants;
   });
   log.info({ workspaceId, taskId, descendants, userId: access.userId }, '[task] restored');
+  await recordTaskEvent(session, 'task.restored', workspaceId, state);
   await emitTaskEvent(session, {
     workspaceId,
     kind: 'task.updated',
@@ -547,6 +573,7 @@ export async function deleteTask(
     },
     '[task] deleted',
   );
+  await recordTaskEvent(session, 'task.deleted', workspaceId, task);
   await emitTaskEvent(session, {
     workspaceId,
     kind: 'task.archived',

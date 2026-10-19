@@ -26,10 +26,15 @@ interface ConsumeRow {
 
 let unknownIpWarned = false;
 
+/** Удаляет истёкшие счётчики. Возвращает число удалённых — для /api/cron/cleanup. */
+export async function purgeExpiredRateLimits(now: Date = new Date()): Promise<number> {
+  const { count } = await prisma.actionRateLimit.deleteMany({ where: { expiresAt: { lt: now } } });
+  return count;
+}
+
 function cleanupExpired(): void {
-  prisma.actionRateLimit
-    .deleteMany({ where: { expiresAt: { lt: new Date() } } })
-    .then(({ count }) => log.debug({ count }, '[rateLimit.cleanup] expired counters removed'))
+  purgeExpiredRateLimits()
+    .then((count) => log.debug({ count }, '[rateLimit.cleanup] expired counters removed'))
     .catch((error: unknown) => log.error({ err: error }, '[rateLimit.cleanup] failed'));
 }
 

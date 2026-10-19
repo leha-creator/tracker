@@ -29,3 +29,5 @@ export type { MyTwoFactorState, TwoFactorSetup } from './slices/two-factor/two-f
 export { revokeOtherSessionsAction, revokeSessionAction } from './slices/session/session.actions';
 export type { MySessionDto } from './slices/session/session.dto';
 export { formatBackupCodesFile, formatTotpSecret, parseTotpUri } from './models';
+export { describeUserAgent } from './models/user-agent';
+export type { UserAgentInfo } from './models/user-agent';

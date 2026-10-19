@@ -3,7 +3,8 @@ import 'server-only';
 import { isAPIError } from 'better-auth/api';
 import { headers } from 'next/headers';
 
-import { requireUser } from '@/shared/access';
+import { requireNotImpersonating, requireUser } from '@/shared/access';
+import { auditActorFromSession, auditRequestContext, recordAuditEvent } from '@/shared/audit';
 import { getAuth, sendPasswordChangedMail } from '@/shared/auth';
 import { createLogger, maskEmail } from '@/shared/logger';
 import { enforceRateLimit, getClientIp } from '@/shared/rate-limit';
@@ -77,6 +78,7 @@ export async function resetPassword(input: ResetPasswordInput): Promise<void> {
 /** Смена пароля вошедшим пользователем: другие сессии завершаются, на почту — уведомление. */
 export async function changePassword(input: ChangePasswordInput): Promise<void> {
   const session = await requireUser();
+  requireNotImpersonating(session, 'password.change');
   const userId = session.user.id;
   log.debug({ userId }, '[password.change] start');
   const requestHeaders = await headers();
@@ -98,4 +100,10 @@ export async function changePassword(input: ChangePasswordInput): Promise<void> 
   }
   log.info({ userId }, '[password.change] completed');
   sendPasswordChangedMail({ email: session.user.email, name: session.user.name });
+  await recordAuditEvent({
+    kind: 'auth.password_changed',
+    actor: auditActorFromSession(session),
+    data: {},
+    request: auditRequestContext(requestHeaders),
+  });
 }

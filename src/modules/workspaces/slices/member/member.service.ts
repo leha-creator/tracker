@@ -6,6 +6,7 @@ import {
   type WorkspacePermission,
   type WorkspaceRole,
 } from '@/shared/access';
+import { auditActorFromSession, recordAuditEvent } from '@/shared/audit';
 import type { AuthSession } from '@/shared/auth';
 import { NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
@@ -16,6 +17,7 @@ import type {
   MemberDto,
   MemberIdentityDto,
   SoleOwnedWorkspaceDto,
+  UserMembershipDto,
   WorkspaceMemberDto,
 } from './member.dto';
 import { memberRepository } from './member.repository';
@@ -30,7 +32,7 @@ async function loadMembership(
   workspaceId: string,
   memberId: string,
   scope: string,
-): Promise<Membership> {
+): Promise<{ target: Membership; name: string }> {
   const row = await memberRepository.findInWorkspace(workspaceId, memberId);
   const role = row ? parseWorkspaceRole(row.role) : null;
   if (!row || !role) throw new NotFoundError('Участник не найден');
@@ -38,7 +40,7 @@ async function loadMembership(
     log.warn({ workspaceId, memberId, scope }, '[member] agent change rejected');
     throw new ValidationError('Агентом управляют в настройках пространства, в разделе «Агенты»');
   }
-  return new Membership(row.id, row.userId, role);
+  return { target: new Membership(row.id, row.userId, role), name: row.user.name };
 }
 
 export async function listMembers(session: AuthSession, workspaceId: string): Promise<MemberDto[]> {
@@ -160,6 +162,39 @@ export async function countWorkspacesByUsers(userIds: string[]): Promise<Map<str
 }
 
 /**
+ * Пространства пользователя с ролями. Без проверки сессии: только для модуля admin, уже
+ * вызвавшего requireAdmin().
+ */
+export async function listUserMemberships(userId: string): Promise<UserMembershipDto[]> {
+  const rows = await memberRepository.listByUser(userId);
+  log.debug({ userId, count: rows.length }, '[member.listUserMemberships]');
+  return rows.flatMap((row) => {
+    const role = parseWorkspaceRole(row.role);
+    if (!role) {
+      log.warn(
+        { userId, workspaceId: row.workspace.id, role: row.role },
+        '[member.listUserMemberships] unknown role',
+      );
+      return [];
+    }
+    return [
+      {
+        workspace: {
+          id: row.workspace.id,
+          slug: row.workspace.slug,
+          name: row.workspace.name,
+          archived: row.workspace.archivedAt !== null,
+        },
+        role,
+        canManageProjects: row.canManageProjects,
+        canManageDocuments: row.canManageDocuments,
+        joinedAt: row.createdAt,
+      },
+    ];
+  });
+}
+
+/**
  * Пространства, где пользователь — единственный владелец. Без проверки сессии: только для
  * серверных модулей, которые уже проверили права (например, удаление пользователя в админке).
  */
@@ -177,7 +212,7 @@ export async function changeMemberRole(
   await requireWorkspaceAccess(session, workspaceId, 'owner');
   log.debug({ userId: session.user.id, workspaceId, memberId, role }, '[member.changeRole] start');
 
-  const target = await loadMembership(workspaceId, memberId, 'changeRole');
+  const { target, name } = await loadMembership(workspaceId, memberId, 'changeRole');
   const ownersCount = await memberRepository.countOwners(workspaceId);
   try {
     target.assertCanChangeRole(role, ownersCount);
@@ -196,6 +231,13 @@ export async function changeMemberRole(
     { workspaceId, memberId, from: target.role, to: role, byUserId: session.user.id },
     '[member] role changed',
   );
+  await recordAuditEvent({
+    kind: 'workspace.member_role_changed',
+    actor: auditActorFromSession(session),
+    targetUserId: target.userId,
+    workspaceId,
+    data: { memberName: name, role },
+  });
 }
 
 export async function removeMember(
@@ -206,7 +248,7 @@ export async function removeMember(
   await requireWorkspaceAccess(session, workspaceId, 'owner');
   log.debug({ userId: session.user.id, workspaceId, memberId }, '[member.remove] start');
 
-  const target = await loadMembership(workspaceId, memberId, 'remove');
+  const { target, name } = await loadMembership(workspaceId, memberId, 'remove');
   const ownersCount = await memberRepository.countOwners(workspaceId);
   try {
     target.assertCanBeRemovedBy(session.user.id, ownersCount);
@@ -219,6 +261,13 @@ export async function removeMember(
     api.removeMember({ body: { organizationId: workspaceId, memberIdOrEmail: memberId }, headers }),
   );
   log.info({ workspaceId, memberId, byUserId: session.user.id }, '[member] removed');
+  await recordAuditEvent({
+    kind: 'workspace.member_removed',
+    actor: auditActorFromSession(session),
+    targetUserId: target.userId,
+    workspaceId,
+    data: { memberName: name, left: false },
+  });
 }
 
 export async function leaveWorkspace(
@@ -242,6 +291,13 @@ export async function leaveWorkspace(
     api.leaveOrganization({ body: { organizationId: workspaceId }, headers }),
   );
   log.info({ workspaceId, userId: session.user.id }, '[member] left');
+  await recordAuditEvent({
+    kind: 'workspace.member_removed',
+    actor: auditActorFromSession(session),
+    targetUserId: session.user.id,
+    workspaceId,
+    data: { memberName: session.user.name, left: true },
+  });
 }
 
 /** Выдаёт или отзывает право участника (только владелец, только участнику с ролью member). */
@@ -256,7 +312,7 @@ export async function setMemberPermission(
     '[member.setPermission] start',
   );
 
-  const target = await loadMembership(workspaceId, memberId, 'setPermission');
+  const { target, name } = await loadMembership(workspaceId, memberId, 'setPermission');
   try {
     target.assertPermissionsConfigurable();
   } catch (error) {
@@ -270,4 +326,11 @@ export async function setMemberPermission(
     { workspaceId, memberId, permission, value, byUserId: session.user.id },
     '[member] permission changed',
   );
+  await recordAuditEvent({
+    kind: 'workspace.member_permissions_changed',
+    actor: auditActorFromSession(session),
+    targetUserId: target.userId,
+    workspaceId,
+    data: { memberName: name, permission, value },
+  });
 }

@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -39,7 +41,12 @@ export function AdminUsersTable({ items }: { items: AdminUserDto[] }) {
             <TableRow key={user.id}>
               <TableCell className="max-w-72">
                 <div className="flex items-center gap-2">
-                  <span className="truncate font-medium">{user.name}</span>
+                  <Link
+                    href={`/admin/users/${user.id}`}
+                    className="truncate font-medium hover:underline"
+                  >
+                    {user.name}
+                  </Link>
                   {user.isCurrentUser && <Badge variant="outline">Вы</Badge>}
                 </div>
                 <div className="truncate text-sm text-muted-foreground">{user.email}</div>
@@ -74,6 +81,7 @@ export function AdminUsersTable({ items }: { items: AdminUserDto[] }) {
                       role: user.role,
                       banned: user.ban.kind === 'banned',
                       twoFactorEnabled: user.twoFactorEnabled,
+                      emailVerified: user.emailVerified,
                     }}
                   />
                 )}

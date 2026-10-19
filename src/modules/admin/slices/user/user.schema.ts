@@ -39,6 +39,20 @@ export const deleteUserSchema = z.object({
     .max(320),
 });
 
+/** id сессии и токена — строки Better Auth / uuid: только допустимые символы. */
+const entityIdField = z
+  .string({ error: 'Не указан объект' })
+  .regex(/^[A-Za-z0-9_-]{1,64}$/, { error: 'Некорректный идентификатор' });
+
+export const revokeUserSessionSchema = z.object({ userId: userIdField, sessionId: entityIdField });
+
+export const revokeUserTokenSchema = z.object({
+  userId: userIdField,
+  tokenId: z.uuid({ error: 'Некорректный токен' }),
+});
+
 export type BanUserInput = z.infer<typeof banUserSchema>;
 export type SetUserRoleInput = z.infer<typeof setUserRoleSchema>;
 export type DeleteUserInput = z.infer<typeof deleteUserSchema>;
+export type RevokeUserSessionInput = z.infer<typeof revokeUserSessionSchema>;
+export type RevokeUserTokenInput = z.infer<typeof revokeUserTokenSchema>;

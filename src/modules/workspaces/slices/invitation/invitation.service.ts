@@ -2,6 +2,7 @@ import 'server-only';
 
 import { notifyByEmail } from '@/modules/notifications';
 import { parseWorkspaceRole, requireWorkspaceAccess, type WorkspaceRole } from '@/shared/access';
+import { auditActorFromSession, recordAuditEvent } from '@/shared/audit';
 import { isAgentEmail, type AuthSession } from '@/shared/auth';
 import { getEnv } from '@/shared/env';
 import { InternalError, NotFoundError, ValidationError } from '@/shared/errors';
@@ -104,6 +105,13 @@ export async function inviteMember(
   }
 
   log.info({ workspaceId, invitationId: invitation.id, role, emailSent }, '[invitation] created');
+  // Адрес — маской: лента участника видна всему пространству.
+  await recordAuditEvent({
+    kind: 'workspace.invitation_sent',
+    actor: auditActorFromSession(session),
+    workspaceId,
+    data: { email: maskEmail(email), role },
+  });
 
   // Уже зарегистрированный адресат увидит приглашение и в колокольчике (не бросает).
   await notifyByEmail(email, {
@@ -155,6 +163,12 @@ export async function cancelInvitation(
     api.cancelInvitation({ body: { invitationId }, headers }),
   );
   log.info({ workspaceId, invitationId, byUserId: session.user.id }, '[invitation] cancelled');
+  await recordAuditEvent({
+    kind: 'workspace.invitation_canceled',
+    actor: auditActorFromSession(session),
+    workspaceId,
+    data: { email: maskEmail(row.email) },
+  });
 }
 
 /** Приглашение для страницы адресата. Не найдено → NOT_FOUND; остальные состояния — в `state`. */
@@ -196,7 +210,7 @@ async function loadActionable(session: AuthSession, invitationId: string) {
     log.warn({ userId: session.user.id, invitationId }, '[invitation] not actionable for user');
     throw error;
   }
-  return { invitation, workspaceSlug: row.workspace.slug };
+  return { invitation, workspaceSlug: row.workspace.slug, workspaceName: row.workspace.name };
 }
 
 /** Принимает приглашение. Возвращает slug пространства для редиректа. */
@@ -204,7 +218,10 @@ export async function acceptInvitation(
   session: AuthSession,
   input: { invitationId: string },
 ): Promise<{ workspaceSlug: string }> {
-  const { invitation, workspaceSlug } = await loadActionable(session, input.invitationId);
+  const { invitation, workspaceSlug, workspaceName } = await loadActionable(
+    session,
+    input.invitationId,
+  );
 
   await callOrganizationApi((api, headers) =>
     api.acceptInvitation({ body: { invitationId: invitation.id }, headers }),
@@ -213,6 +230,12 @@ export async function acceptInvitation(
     { workspaceId: invitation.workspaceId, invitationId: invitation.id, userId: session.user.id },
     '[invitation] accepted',
   );
+  await recordAuditEvent({
+    kind: 'workspace.member_joined',
+    actor: auditActorFromSession(session),
+    workspaceId: invitation.workspaceId,
+    data: { workspaceName, role: invitation.role },
+  });
   return { workspaceSlug };
 }
 

@@ -74,21 +74,23 @@ export const userRepository = {
       where: { id },
       select: {
         id: true,
+        name: true,
         email: true,
         role: true,
         banned: true,
         banExpires: true,
         isAgent: true,
         twoFactorEnabled: true,
+        emailVerified: true,
       },
     });
   },
 
-  /** Сброс 2FA: секрет и резервные коды удаляются, флаг снимается — атомарно. */
-  async resetTwoFactor(id: string): Promise<void> {
-    await prisma.$transaction([
-      prisma.twoFactor.deleteMany({ where: { userId: id } }),
-      prisma.user.update({ where: { id }, data: { twoFactorEnabled: false } }),
-    ]);
+  /** Пользователь для карточки в админке. */
+  findDetail(id: string) {
+    return prisma.user.findUnique({
+      where: { id },
+      select: { ...userSelect, isAgent: true, updatedAt: true },
+    });
   },
 };

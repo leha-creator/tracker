@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 import { revokeAllUserApiTokens } from '@/modules/api-tokens';
 import { requireWorkspaceAccess } from '@/shared/access';
+import { auditActorFromSession, recordAuditEvent } from '@/shared/audit';
 import { agentEmail, type AuthSession } from '@/shared/auth';
 import { NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
@@ -95,6 +96,13 @@ export async function createAgent(
     },
   });
   log.info({ agentId, workspaceId, by: session.user.id }, '[agent] created');
+  await recordAuditEvent({
+    kind: 'agent.created',
+    actor: auditActorFromSession(session),
+    targetUserId: agentId,
+    workspaceId,
+    data: { agentName: input.name },
+  });
   return toDto(await loadAgent(workspaceId, agentId));
 }
 
@@ -139,6 +147,13 @@ export async function disableAgent(session: AuthSession, input: AgentRefInput): 
   await agentRepository.disable(workspaceId, agentId, new Date());
   const revokedTokens = await revokeAllUserApiTokens(agentId);
   log.info({ agentId, workspaceId, by: session.user.id, revokedTokens }, '[agent] disabled');
+  await recordAuditEvent({
+    kind: 'agent.disabled',
+    actor: auditActorFromSession(session),
+    targetUserId: agentId,
+    workspaceId,
+    data: { agentName: agent.user.name },
+  });
 }
 
 /** Включает агента обратно: членство без дополнительных прав, токены нужно выпустить заново. */
@@ -161,6 +176,13 @@ export async function enableAgent(session: AuthSession, input: AgentRefInput): P
 
   await agentRepository.enable(workspaceId, agentId, randomUUID());
   log.info({ agentId, workspaceId, by: session.user.id }, '[agent] enabled');
+  await recordAuditEvent({
+    kind: 'agent.enabled',
+    actor: auditActorFromSession(session),
+    targetUserId: agentId,
+    workspaceId,
+    data: { agentName: agent.user.name },
+  });
 }
 
 /** Агенты пространства — для любого участника (имя, ответственный, отключён ли). */

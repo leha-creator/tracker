@@ -35,6 +35,7 @@ interface ApiTokensTableProps {
   showWorkspace?: boolean;
   /** Адрес журнала действий токена; без него ссылки нет. */
   activityHref?: (tokenId: string) => string;
+  emptyText?: string;
 }
 
 /** Токены: сам токен не хранится, виден только префикс. */
@@ -43,11 +44,12 @@ export function ApiTokensTable({
   target,
   showWorkspace = true,
   activityHref,
+  emptyText = 'Токенов пока нет. Создайте токен, чтобы подключить Claude Code к задачам.',
 }: ApiTokensTableProps) {
   if (items.length === 0) {
     return (
       <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-        Токенов пока нет. Создайте токен, чтобы подключить Claude Code к задачам.
+        {emptyText}
       </p>
     );
   }

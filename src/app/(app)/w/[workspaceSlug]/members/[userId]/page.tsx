@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense, type ReactNode } from 'react';
 
+import { AuditEventList } from '@/components/audit/audit-event-list';
 import { DueDate } from '@/components/tasks/due-date';
 import { PriorityBadge } from '@/components/tasks/priority-badge';
 import { Badge } from '@/components/ui/badge';
@@ -10,10 +11,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { UserAvatar } from '@/components/users/user-avatar';
 import { WORKSPACE_ROLE_LABELS } from '@/components/workspaces/role-label';
+import { listMemberWorkspaceActivity, parseAuditCursor } from '@/modules/audit';
 import { getProfileCards } from '@/modules/profiles';
 import { getMemberTaskSummary, MEMBER_DONE_RECENT_DAYS } from '@/modules/tasks';
 import { getMember } from '@/modules/workspaces';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
+import type { AuthSession } from '@/shared/auth';
 import { NotFoundError } from '@/shared/errors';
 
 export const metadata: Metadata = { title: 'Профиль участника — Tasker' };
@@ -23,10 +26,10 @@ type Props = PageProps<'/w/[workspaceSlug]/members/[userId]'>;
 const DATE = new Intl.DateTimeFormat('ru', { dateStyle: 'long' });
 const DATE_TIME = new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyle: 'short' });
 
-export default function MemberProfilePage({ params }: Props) {
+export default function MemberProfilePage({ params, searchParams }: Props) {
   return (
     <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-muted" />}>
-      <MemberProfile params={params} />
+      <MemberProfile params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
@@ -39,7 +42,7 @@ function orNotFound<T>(promise: Promise<T>): Promise<T> {
   });
 }
 
-async function MemberProfile({ params }: Pick<Props, 'params'>) {
+async function MemberProfile({ params, searchParams }: Props) {
   const { workspaceSlug, userId } = await params;
   const { session, workspace } = await requireWorkspaceAccessBySlug(workspaceSlug);
   const member = await orNotFound(getMember(session, workspace.id, userId));
@@ -192,7 +195,50 @@ async function MemberProfile({ params }: Pick<Props, 'params'>) {
           </CardContent>
         </Card>
       </div>
+
+      <section aria-labelledby="member-activity-heading" className="grid gap-3">
+        <h2 id="member-activity-heading" className="text-base font-semibold">
+          Последние действия
+        </h2>
+        <Suspense fallback={<div className="h-40 animate-pulse rounded-xl bg-muted" />}>
+          <MemberActivity
+            session={session}
+            workspace={workspace}
+            userId={userId}
+            searchParams={searchParams}
+          />
+        </Suspense>
+      </section>
     </div>
+  );
+}
+
+/** Действия участника в этом пространстве: задачи, документы, проекты, участники. */
+async function MemberActivity({
+  session,
+  workspace,
+  userId,
+  searchParams,
+}: {
+  session: AuthSession;
+  workspace: { id: string; slug: string };
+  userId: string;
+  searchParams: Props['searchParams'];
+}) {
+  const { activity } = await searchParams;
+  const page = await listMemberWorkspaceActivity(
+    session,
+    workspace.id,
+    userId,
+    parseAuditCursor(activity),
+  );
+  const base = `/w/${workspace.slug}/members/${userId}`;
+  return (
+    <AuditEventList
+      page={page}
+      nextHref={(cursor) => `${base}?activity=${encodeURIComponent(cursor)}`}
+      emptyText="Действий в этом пространстве пока нет."
+    />
   );
 }
 

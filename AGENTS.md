@@ -4,7 +4,7 @@
 
 ## Обзор проекта
 
-Tasker — простой таск-трекер с рабочими пространствами, ролями (admin / владелец пространства / участник), канбан-доской и списком задач; задача может находиться в нескольких проектах со своим статусом в каждом и иметь подзадачи любой вложенности (по желанию — на доске). Регистрация с подтверждением email, сброс пароля, необязательная 2FA (TOTP) и список активных сессий; лимиты попыток входа в БД. Есть профили пользователей (фото, должность, описание), @упоминания в комментариях и уведомления (в приложении и письмом). Необязательная интеграция с GitHub: GitHub App, вход через GitHub, привязка PR, веток и коммитов к задачам по ключу `TSK-42`, автосмена статуса. Агенты (Claude Code) работают с задачами и документами через MCP-сервер `/api/mcp` — как агенты пространства (отдельные участники со своими токенами, правами и ответственным) или по личному токену; у токена есть области, изменения пишутся в журнал. У каждого пространства — раздел «Документы»: папки, теги, Markdown-заметки и файлы с просмотром, привязка к задачам. Подробности — в [`.ai-factory/DESCRIPTION.md`](.ai-factory/DESCRIPTION.md).
+Tasker — простой таск-трекер с рабочими пространствами, ролями (admin / владелец пространства / участник), канбан-доской и списком задач; задача может находиться в нескольких проектах со своим статусом в каждом и иметь подзадачи любой вложенности (по желанию — на доске). Регистрация с подтверждением email, сброс пароля, необязательная 2FA (TOTP) и список активных сессий; лимиты попыток входа в БД. Есть профили пользователей (фото, должность, описание), @упоминания в комментариях и уведомления (в приложении и письмом). Журнал действий (безопасность, пространства, содержимое, администрирование) виден по категориям: самому пользователю, участникам пространства, администратору. Админка ресурса: обзор, пользователи и их карточки, вход «от имени» пользователя, все пространства, общий журнал, настройки (режим регистрации, домены email, квота по умолчанию). Необязательная интеграция с GitHub: GitHub App, вход через GitHub, привязка PR, веток и коммитов к задачам по ключу `TSK-42`, автосмена статуса. Агенты (Claude Code) работают с задачами и документами через MCP-сервер `/api/mcp` — как агенты пространства (отдельные участники со своими токенами, правами и ответственным) или по личному токену; у токена есть области, изменения пишутся в журнал. У каждого пространства — раздел «Документы»: папки, теги, Markdown-заметки и файлы с просмотром, привязка к задачам. Подробности — в [`.ai-factory/DESCRIPTION.md`](.ai-factory/DESCRIPTION.md).
 
 ## Технологический стек
 
@@ -30,7 +30,7 @@ tasker/
 ├── .claude/                  # Скиллы и субагенты
 ├── .github/workflows/ci.yml  # CI/CD: pnpm check + build, миграции на чистом Postgres, образ и smoke-тест; на main — GHCR и деплой
 ├── prisma/
-│   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …), пространств (Workspace, WorkspaceMember, WorkspaceInvitation), проектов (Project, ProjectStatus), задач (Task, TaskPlacement, WorkspaceTaskCounter, TaskComment, TaskAttachment), профилей (UserProfile), уведомлений (Notification, NotificationPreference), документов (DocumentFolder, Document, DocumentTag, DocumentTagAssignment, TaskDocumentLink), GitHub (GithubInstallation, GithubRepository, GithubPullRequest, TaskPullRequest, TaskGithubBranch, TaskGithubCommit, GithubWebhookDelivery, GithubProjectAutomation, GithubAppConfig), токенов (ApiToken: области, issuedById), безопасности входа (TwoFactor, User.twoFactorEnabled, RateLimit — лимит Better Auth, ActionRateLimit — лимит Server Actions), агентов (WorkspaceAgent, User.isAgent), журнала MCP (McpActivity), пометки «через агента» (createdViaTokenId у Task, TaskComment, Document); Workspace.taskKey — ключ задач (TSK-42); Task.parentId — подзадачи (составной FK, каскад); расширения задач — TaskHistoryEntry (история), TaskLabel и TaskLabelAssignment (метки), TaskWatcher (наблюдатели), TaskDueReminder (отправленные напоминания), SavedTaskView (сохранённые фильтры списка), archivedAt у Task, Project и Workspace (архив); GIN-индексы pg_trgm для поиска
+│   ├── schema.prisma         # Схема БД: модели Better Auth (User, Session, …), пространств (Workspace, WorkspaceMember, WorkspaceInvitation), проектов (Project, ProjectStatus), задач (Task, TaskPlacement, WorkspaceTaskCounter, TaskComment, TaskAttachment), профилей (UserProfile), уведомлений (Notification, NotificationPreference), документов (DocumentFolder, Document, DocumentTag, DocumentTagAssignment, TaskDocumentLink), GitHub (GithubInstallation, GithubRepository, GithubPullRequest, TaskPullRequest, TaskGithubBranch, TaskGithubCommit, GithubWebhookDelivery, GithubProjectAutomation, GithubAppConfig), токенов (ApiToken: области, issuedById), безопасности входа (TwoFactor, User.twoFactorEnabled, RateLimit — лимит Better Auth, ActionRateLimit — лимит Server Actions), агентов (WorkspaceAgent, User.isAgent), журнала MCP (McpActivity), пометки «через агента» (createdViaTokenId у Task, TaskComment, Document); журнал действий (AuditEvent: категория, автор, имперсонатор, токен, субъект, снимок data, IP — у событий безопасности); настройки ресурса (ResourceSettings — одна строка), Workspace.storageQuotaMb (своя квота); Workspace.taskKey — ключ задач (TSK-42); Task.parentId — подзадачи (составной FK, каскад); расширения задач — TaskHistoryEntry (история), TaskLabel и TaskLabelAssignment (метки), TaskWatcher (наблюдатели), TaskDueReminder (отправленные напоминания), SavedTaskView (сохранённые фильтры списка), archivedAt у Task, Project и Workspace (архив); GIN-индексы pg_trgm для поиска
 │   └── migrations/
 ├── prisma.config.ts          # Подключение Prisma CLI (DATABASE_URL, миграции)
 ├── src/
@@ -38,7 +38,7 @@ tasker/
 │   ├── app/                  # Представление (Next.js): страницы, layout, route handlers
 │   │   ├── (auth)/           # /login (+ two-factor — второй шаг 2FA), /register, /forgot-password, /reset-password, /verify-email
 │   │   ├── not-found.tsx     # 404 для неизвестных адресов (+ w/[workspaceSlug]/not-found.tsx внутри пространства)
-│   │   ├── (app)/            # Защищённая зона: sticky-шапка (переключатель и разделы пространства, колокольчик уведомлений, меню пользователя, skip-link), реалтайм и горячие клавиши, /, /my-tasks (мои задачи по всем пространствам), /admin (→ /admin/users, + integrations — GitHub App),
+│   │   ├── (app)/            # Защищённая зона: sticky-шапка (переключатель и разделы пространства, колокольчик уведомлений, меню пользователя, skip-link), реалтайм и горячие клавиши, /, /my-tasks (мои задачи по всем пространствам), /admin (обзор; users, users/[userId] — карточка, workspaces, workspaces/[workspaceId], activity — журнал, settings — настройки ресурса, integrations — GitHub App),
 │   │   │                     # / (+ ?create=workspace — панель «Новое пространство»), /w/[workspaceSlug] (+ ?create=project — панель «Новый проект»; settings, settings/members, settings/github, settings/agents, settings/agents/[agentId], settings/labels — метки), /invite/[invitationId],
 │   │   │                     # /w/[workspaceSlug]/projects/[projectId]/{board,list,settings} (/workspaces/new и projects/new — редиректы на панели),
 │   │   │                     # /w/[workspaceSlug]/overview (обзор: счётчики, нагрузка, просрочка), /w/[workspaceSlug]/tasks (+ new, [taskNumber]), /w/[workspaceSlug]/members/[userId] (публичный профиль),
@@ -58,9 +58,10 @@ tasker/
 │   │       ├── integrations/github/setup/ # GET — Setup URL GitHub App: проверка state и доступа, подключение установки
 │   │       ├── integrations/github/manifest/ # GET — возврат после создания GitHub App из админки: обмен code на ключи
 │   │       ├── cron/reminders/ # POST — напоминания о сроке (Bearer CRON_SECRET; без секрета — 404), вызывает планировщик
+│   │       ├── cron/cleanup/ # POST — очистка журнала старше AUDIT_RETENTION_DAYS и истёкших лимитов (тот же секрет; cron-auth.ts — общая проверка)
 │   │       └── health/       # GET /api/health — состояние БД и хранилища
 │   ├── modules/              # Доменные модули
-│   │   ├── auth/             # Вход, регистрация, выход; срезы password (сброс и смена), verification (повторное письмо), two-factor (шаг входа и управление), session (активные сессии); models — returnTo, TOTP, User-Agent (client.ts — для клиентских компонентов)
+│   │   ├── auth/             # Вход, регистрация, выход; срезы password (сброс и смена), verification (повторное письмо), two-factor (шаг входа и управление), session (активные сессии), account (системные операции над чужой учётной записью для admin и метрики учётных записей — порт под будущий IdP); models — returnTo, TOTP, User-Agent (client.ts — для клиентских компонентов)
 │   │   ├── workspaces/       # Пространства, участники (+ права «Управление проектами» и «Управление документами»), приглашения (index.ts — сервер, client.ts — клиент)
 │   │   ├── projects/         # Проекты и статусы-колонки: модели (StatusSet), срезы project/status
 │   │   ├── tasks/            # Задачи: модели (TaskPlacement, позиции, запрос списка TaskListQuery, права на комментарии, правила вложений, дерево подзадач task-tree), @упоминания (comment-mentions), архив (archivedAt, assertTaskActive), срезы task/placement/subtask/comment/attachment/history/label/watcher/search/reminder/views (+ «Мои задачи», экспорт CSV)/saved-view (сохранённые фильтры)/dashboard (обзор)/realtime (публикация событий); зависит от projects, workspaces и notifications
@@ -72,13 +73,15 @@ tasker/
 │   │   ├── agents/           # Агенты пространства: служебный User (isAgent) + WorkspaceAgent, членство в обход плагина, ответственный, права, отключение/включение; зависит от api-tokens
 │   │   ├── api-tokens/       # Токены доступа (личные и агентов): области (scopes), выпуск, отзыв, authenticateApiToken → AuthSession (роль user, via); срез activity — журнал действий MCP; зависит только от shared
 │   │   ├── agent-mcp/        # MCP-сервер: инструменты задач (чтение, создание, статус, родитель, комментарии, вложения через presigned POST и curl) и документов (поиск, чтение, заметки с версией, загрузка, папки, теги, связи), области токена (TOOL_SCOPES), журнал, правила GitHub, промпты start_task/finish_task; зависит от api-tokens, tasks, projects, workspaces, documents, integrations/github
-│   │   └── admin/            # Администрирование ресурса: модели (правила над пользователями, запрос списка), срез user (чтение — репозиторий, изменения — плагин admin через callAdminApi); зависит от workspaces и profiles
+│   │   ├── audit/            # Журнал действий: чтение (лента участника, журнал безопасности, журнал админки с фильтрами), тексты событий, очистка по сроку; запись — в shared/audit
+│   │   └── admin/            # Администрирование ресурса: модели (правила, запросы списков, имперсонация, ряд по дням), срезы user (карточка, сессии, токены, письма; изменения — плагин admin через callAdminApi и порт auth), impersonation, workspace, settings, overview; зависит от workspaces, profiles, api-tokens, audit, auth, documents, tasks, integrations/github
 │   ├── components/
 │   │   ├── layout/           # Каркас: PageContainer (ширина страниц), WorkspaceSections и TabLink (навигация),
 │   │   │                     # nav-items.ts (чистые функции активного раздела), ThemeProvider (next-themes), NotFoundMessage, SettingsSection (секция настроек без карточки: заголовок слева, поля справа, разделитель), SidePanel (модальная панель справа) и create-panel-href (адреса панелей создания)
 │   │   ├── auth/             # Формы входа/регистрации, «Забыли пароль?», новый пароль, повторное письмо, шаг 2FA, меню пользователя (аватар, тема, выход)
 │   │   ├── forms/            # FormField, FormError, ConfirmActionDialog (подтверждение; управляемый режим open/onOpenChange), settings-draft (общее сохранение страницы настроек плавающей панелью снизу: проект, пространство)
-│   │   ├── admin/            # Навигация админки; github-app-setup — мастер GitHub App; users/ — таблица пользователей, фильтры (URL), меню действий, диалоги блокировки и удаления
+│   │   ├── admin/            # Навигация админки; github-app-setup — мастер GitHub App; users/ — таблица пользователей, фильтры (URL), меню действий, диалоги блокировки и удаления, detail/ — карточка; workspaces/, activity/ (фильтры журнала), settings/ (формы групп), overview/ (плитки, столбцы регистраций, состояние)
+│   │   ├── audit/            # AuditEventList — лента событий журнала (профиль участника, безопасность, админка)
 │   │   ├── workspaces/       # Список, переключатель, участники, приглашения
 │   │   ├── projects/         # Список проектов, навигация проекта, настройки проекта и статусов
 │   │   ├── tasks/            # Канбан-доска (dnd-kit), карточка, быстрое создание, поля задачи (режим чтения), размещения;
@@ -118,16 +121,19 @@ tasker/
 │   │   ├── storage/          # S3-клиенты (сервер и подпись ссылок), presigned POST/GET, HeadObject, удаление пачками, checkStorage()
 │   │   ├── mail/             # sendMail() (nodemailer), sendMailInBackground() (after()), escapeHtml()
 │   │   ├── realtime/         # pg LISTEN/NOTIFY: схема события, publish, hub (одно подключение на процесс), SSE-поток с лимитами
-│   │   ├── rate-limit/       # enforceRateLimit(action, { ip, email?, userId? }) — лимиты Server Actions (ActionRateLimit), getClientIp(), правила RATE_LIMITS
+│   │   ├── rate-limit/       # enforceRateLimit(action, { ip, email?, userId? }) — лимиты Server Actions (ActionRateLimit), getClientIp(), правила RATE_LIMITS, purgeExpiredRateLimits
+│   │   ├── audit/            # Каталог событий журнала (категория, видимость, владелец identity/app), recordAuditEvent() — никогда не бросает
+│   │   ├── resource-settings/ # Настройки ресурса: группы «Регистрация» (политика, evaluateSignup для хука Better Auth) и «Хранилище» (квота по умолчанию), кеш процесса
 │   │   └── health/           # checkHealth() — агрегирует проверки
 │   └── test/                 # Вспомогательное для Vitest
 ├── deploy/                   # Сервер (https://tracker.plwedding.ru), см. docs/production.md
 │   ├── bootstrap-server.sh   # Разовая подготовка сервера: /opt/edge, /opt/tasker, сеть edge, ключ деплоя, .env, таймеры бэкапов
 │   ├── host/                 # Настройки хоста: docker-mss-clamp.service (MSS clamping, MTU сервера 1450)
 │   ├── edge/                 # Общий edge-прокси (Caddy на 80/443 для всех проектов сервера), применяется вручную
-│   └── tasker/               # Прод-стек: compose.yml, tracker.caddy (сайт), .env.example, backup.sh, reminders.sh (запуск напоминаний через docker exec), systemd/ (в т.ч. tasker-reminders.timer)
+│   └── tasker/               # Прод-стек: compose.yml, tracker.caddy (сайт), .env.example, backup.sh, reminders.sh (запуск напоминаний через docker exec), cleanup.sh (очистка журнала), systemd/ (в т.ч. tasker-reminders.timer, tasker-cleanup.timer)
 ├── scripts/smoke-health.sh   # Ожидание 200 и {"status":"ok"} от /api/health (CI и ручная проверка)
 ├── scripts/run-reminders.mjs # Локальный запуск напоминаний (pnpm reminders:run → POST /api/cron/reminders)
+├── scripts/run-cleanup.mjs # Локальный запуск очистки (pnpm cleanup:run → POST /api/cron/cleanup)
 ├── compose.yml               # Postgres (порт 5433) + MinIO (9000/9001) + создание бакета + Mailpit (1025/8025)
 ├── compose.app.yml           # Оверлей: сервисы migrate (prisma migrate deploy) и app (образ runner)
 ├── Dockerfile                # Multi-stage: base → deps → builder → runner; отдельный лёгкий target migrate (Prisma CLI)
@@ -161,7 +167,11 @@ tasker/
 | `src/shared/realtime/index.ts` | Реалтайм: `publishRealtimeEvent`, `subscribeToWorkspace` (hub), `createWorkspaceEventStream`, `acquireSseConnection` (`client.ts` — схема и типы событий для клиента) |
 | `src/app/api/realtime/w/[workspaceSlug]/route.ts` | SSE-эндпоинт событий пространства |
 | `src/app/api/cron/reminders/route.ts` | Эндпоинт напоминаний о сроке для планировщика |
-| `src/modules/admin/index.ts` | Пользователи ресурса: `listAdminUsers`, `parseAdminUserListParams`; actions блокировки, роли, сессий и удаления (`client.ts` — для клиентских компонентов) |
+| `src/app/api/cron/cleanup/route.ts` | Эндпоинт очистки журнала и лимитов для планировщика |
+| `src/shared/audit/index.ts` | `recordAuditEvent` (никогда не бросает), `auditActorFromSession`, `auditRequestContext`; каталог событий (`AUDIT_EVENTS`: категория, схема снимка; `AUDIT_EVENT_OWNERS`: `identity` / `app`) — `client.ts` |
+| `src/modules/audit/index.ts` | Чтение журнала: `listMemberWorkspaceActivity`, `listMySecurityEvents`, `listAdminAuditEvents`, `parseAdminAuditParams`, `parseAuditCursor`, системная `purgeExpiredAuditEvents` (только для `/api/cron/cleanup`); `client.ts` — подписи типов, `describeAuditEvent` |
+| `src/shared/resource-settings/index.ts` | Настройки ресурса, две группы: «Регистрация» (`getSignupPolicy`, `saveSignupPolicy`, `evaluateSignup`) и «Хранилище» (`getStorageSettings`, `saveStorageSettings`); кеш процесса 30 с; `client.ts` — `checkSignup`, режимы и сообщения |
+| `src/modules/admin/index.ts` | Администрирование: `listAdminUsers`, `getAdminUserDetail`, `listAdminWorkspaces`, `getAdminWorkspaceDetail`, `getAdminResourceSettings`, `getResourceOverview`, `getMyImpersonation`, `parseAdminUserListParams`, `parseAdminWorkspaceListParams`; actions пользователей, имперсонации, пространств, настроек и тестового письма (`client.ts` — для клиентских компонентов) |
 | `src/modules/integrations/github/index.ts` | GitHub: `isGithubEnabled`, `handleGithubWebhook`, `verifyGithubWebhookSignature`, `completeInstallation`, `getGithubSettings`, `listTaskPullRequests`, `listTaskBranchesAndCommits`, `getPullRequestBadges`, `getProjectAutomation`, `getMyGithubAccount`, `getGithubAppSetup`, `completeGithubAppManifest`, `getWorkspaceGithubSummary` (сводка для любого участника), `findTaskReferences` (`client.ts` — actions установки, привязки, автоматизации, типы DTO, `suggestBranchName`) |
 | `src/modules/agents/index.ts` | Агенты пространства: `listAgents`, `getAgent` (`client.ts` — actions создания, правки, отключения и включения) |
 | `src/modules/api-tokens/index.ts` | Токены: `authenticateApiToken`, `listMyApiTokens`, `listAgentTokens`, `revokeAllUserApiTokens` (для agents), `hasScope`, журнал — `recordActivity`, `listAgentActivity`, `listTokenActivity`, `parseActivityCursor` (`client.ts` — actions выпуска и отзыва личных и агентских токенов, области, `buildClaudeMcpCommand`, `buildMcpJson`) |
@@ -169,7 +179,7 @@ tasker/
 | `src/shared/auth/agent-session-guard.ts` | Хук Better Auth: агенту пространства сессия не выдаётся |
 | `src/app/api/mcp/route.ts` | MCP-эндпоинт для агентов |
 | `src/app/api/webhooks/github/route.ts` | Вебхуки GitHub App |
-| `src/modules/auth/index.ts` | Вход, регистрация, выход; сброс и смена пароля, подтверждение email, 2FA (`getMyTwoFactorState`, `hasPendingTwoFactorSignIn`), сессии (`listMySessions`); `client.ts` — actions и типы для клиентских компонентов |
+| `src/modules/auth/index.ts` | Вход, регистрация, выход; сброс и смена пароля, подтверждение email, 2FA (`getMyTwoFactorState`, `hasPendingTwoFactorSignIn`), сессии (`listMySessions`), политика регистрации для страниц (`getSignupPolicy`); системные функции для admin — `listUserSessionsBySystem`, `revokeUserSessionBySystem`, `markEmailVerifiedBySystem`, `resetTwoFactorBySystem`, `getAccountMetrics`; `client.ts` — actions и типы для клиентских компонентов |
 | `src/shared/rate-limit/index.ts` | `enforceRateLimit`, `getClientIp`, `RATE_LIMITS` — лимиты попыток для Server Actions |
 | `src/proxy.ts` | Оптимистичный редирект неавторизованных на `/login` |
 | `src/app/api/health/route.ts` | Health check инфраструктуры |
@@ -189,6 +199,7 @@ tasker/
 | `pnpm build` | Production-сборка |
 | `pnpm db:migrate` | Создать и применить миграцию Prisma |
 | `pnpm reminders:run` | Разово разослать напоминания о сроке (нужны `CRON_SECRET` в `.env` и запущенный dev-сервер) |
+| `pnpm cleanup:run` | Разово очистить журнал старше `AUDIT_RETENTION_DAYS` и истёкшие лимиты (нужны `CRON_SECRET` и dev-сервер) |
 | `pnpm app:up` / `pnpm app:down` | Собрать образ и запустить приложение с миграциями в Docker (проект `tasker-app`, порт 3001) / остановить стек |
 
 ## Документация

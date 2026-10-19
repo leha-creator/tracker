@@ -1,10 +1,28 @@
 import 'server-only';
 
-import { prepareAvatarCleanup } from '@/modules/profiles';
-import { countWorkspacesByUsers, listSoleOwnedWorkspaces } from '@/modules/workspaces';
+import { headers } from 'next/headers';
+
+import { listUserApiTokensForAdmin, revokeApiTokenBySystem } from '@/modules/api-tokens';
+import {
+  listUserSessionsBySystem,
+  markEmailVerifiedBySystem,
+  resetTwoFactorBySystem,
+  revokeUserSessionBySystem,
+} from '@/modules/auth';
+import { describeUserAgent } from '@/modules/auth/client';
+import { getGithubIdentity } from '@/modules/integrations/github';
+import { getProfileCards, prepareAvatarCleanup } from '@/modules/profiles';
+import {
+  countWorkspacesByUsers,
+  listSoleOwnedWorkspaces,
+  listUserMemberships,
+} from '@/modules/workspaces';
 import { parseGlobalRole, requireAdmin } from '@/shared/access';
+import { auditActorFromSession, recordAuditEvent, type AuditEventKind } from '@/shared/audit';
+import { verifyEmailCallbackPath, type AuthSession } from '@/shared/auth';
 import { NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger, maskEmail } from '@/shared/logger';
+import { enforceRateLimit, getClientIp } from '@/shared/rate-limit';
 
 import { callAdminApi } from '../../admin-api';
 import {
@@ -19,14 +37,55 @@ import {
   type AdminUserListQuery,
   type ManagedUser,
 } from '../../models';
-import type { AdminUserDto, AdminUserListDto } from './user.dto';
+import type {
+  AdminUserDetailDto,
+  AdminUserDto,
+  AdminUserListDto,
+  AdminUserSessionDto,
+} from './user.dto';
 import { userRepository, type AdminUserRow } from './user.repository';
-import type { BanUserInput, DeleteUserInput, SetUserRoleInput } from './user.schema';
+import type {
+  BanUserInput,
+  DeleteUserInput,
+  RevokeUserSessionInput,
+  RevokeUserTokenInput,
+  SetUserRoleInput,
+} from './user.schema';
 
 const log = createLogger('admin.user');
 
 interface TargetUser extends ManagedUser {
   email: string;
+  name: string;
+  emailVerified: boolean;
+}
+
+/** Страница, на которую ведёт ссылка из письма сброса (как в модуле auth). */
+const RESET_PASSWORD_PATH = '/reset-password';
+
+type SimpleAdminUserEvent = Extract<
+  AuditEventKind,
+  | 'admin.user_unbanned'
+  | 'admin.user_sessions_revoked'
+  | 'admin.user_session_revoked'
+  | 'admin.user_two_factor_reset'
+  | 'admin.user_email_verified'
+  | 'admin.password_reset_sent'
+  | 'admin.verification_sent'
+>;
+
+/** Действие администратора над пользователем — в журнал (видят только администраторы). */
+function recordAdminUserEvent(
+  kind: SimpleAdminUserEvent,
+  session: AuthSession,
+  target: TargetUser,
+): Promise<void> {
+  return recordAuditEvent({
+    kind,
+    actor: auditActorFromSession(session),
+    targetUserId: target.id,
+    data: { userName: target.name },
+  });
 }
 
 function toAdminUserDto(
@@ -61,7 +120,13 @@ async function loadTarget(actorId: string, userId: string, scope: string): Promi
     log.warn({ actorId, userId, scope }, '[admin.user] agent hidden');
     throw new NotFoundError('Пользователь не найден');
   }
-  const target: TargetUser = { id: row.id, email: row.email, role: parseGlobalRole(row.role) };
+  const target: TargetUser = {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    emailVerified: row.emailVerified,
+    role: parseGlobalRole(row.role),
+  };
   try {
     assertCanManageUser(actorId, target);
   } catch (error) {
@@ -129,6 +194,13 @@ export async function banUser(input: BanUserInput): Promise<void> {
   );
   // Причину не логируем: свободный текст администратора.
   log.info({ actorId, userId: target.id, duration: input.duration }, '[admin.user.ban] banned');
+  // В журнале причина есть: его видят только администраторы.
+  await recordAuditEvent({
+    kind: 'admin.user_banned',
+    actor: auditActorFromSession(session),
+    targetUserId: target.id,
+    data: { userName: target.name, duration: input.duration, reason: input.reason || null },
+  });
 }
 
 export async function unbanUser(input: { userId: string }): Promise<void> {
@@ -138,6 +210,7 @@ export async function unbanUser(input: { userId: string }): Promise<void> {
 
   await callAdminApi((api, headers) => api.unbanUser({ headers, body: { userId: target.id } }));
   log.info({ actorId, userId: target.id }, '[admin.user.unban] unbanned');
+  await recordAdminUserEvent('admin.user_unbanned', session, target);
 }
 
 export async function setUserRole(input: SetUserRoleInput): Promise<void> {
@@ -152,6 +225,12 @@ export async function setUserRole(input: SetUserRoleInput): Promise<void> {
     api.setRole({ headers, body: { userId: target.id, role: input.role } }),
   );
   log.info({ actorId, userId: target.id, role: input.role }, '[admin.user.setRole] changed');
+  await recordAuditEvent({
+    kind: 'admin.user_role_changed',
+    actor: auditActorFromSession(session),
+    targetUserId: target.id,
+    data: { userName: target.name, role: input.role },
+  });
 }
 
 export async function revokeUserSessions(input: { userId: string }): Promise<void> {
@@ -163,6 +242,7 @@ export async function revokeUserSessions(input: { userId: string }): Promise<voi
     api.revokeUserSessions({ headers, body: { userId: target.id } }),
   );
   log.info({ actorId, userId: target.id }, '[admin.user.revokeSessions] revoked');
+  await recordAdminUserEvent('admin.user_sessions_revoked', session, target);
 }
 
 /**
@@ -179,11 +259,12 @@ export async function resetUserTwoFactor(input: { userId: string }): Promise<voi
     throw new ValidationError('У пользователя не включена двухфакторная аутентификация');
   }
 
-  await userRepository.resetTwoFactor(target.id);
+  await resetTwoFactorBySystem(target.id);
   await callAdminApi((api, headers) =>
     api.revokeUserSessions({ headers, body: { userId: target.id } }),
   );
   log.info({ actorId, userId: target.id }, '[admin.user.resetTwoFactor] reset');
+  await recordAdminUserEvent('admin.user_two_factor_reset', session, target);
 }
 
 export async function deleteUser(input: DeleteUserInput): Promise<void> {
@@ -215,4 +296,170 @@ export async function deleteUser(input: DeleteUserInput): Promise<void> {
     { actorId, userId: target.id, email: maskEmail(target.email) },
     '[admin.user.delete] deleted',
   );
+  // Пользователя уже нет: без targetUserId (иначе нарушится FK), имя и email маской — в снимке.
+  await recordAuditEvent({
+    kind: 'admin.user_deleted',
+    actor: auditActorFromSession(session),
+    data: { userName: target.name, email: maskEmail(target.email) },
+  });
+}
+
+/**
+ * Карточка пользователя: сведения, пространства, сессии, токены. Агента в админке нет —
+ * NOT_FOUND, как в списке. Себя смотреть можно (действия над собой запрещают сами действия).
+ */
+export async function getAdminUserDetail(userId: string): Promise<AdminUserDetailDto> {
+  const session = await requireAdmin();
+  const actorId = session.user.id;
+  const row = await userRepository.findDetail(userId);
+  if (!row || row.isAgent) {
+    log.warn({ actorId, userId }, '[admin.user.detail] not found');
+    throw new NotFoundError('Пользователь не найден');
+  }
+  const now = new Date();
+  const [cards, github, memberships, sessionRows, tokens, workspaces] = await Promise.all([
+    getProfileCards([row.id]),
+    getGithubIdentity(row.id),
+    listUserMemberships(row.id),
+    listUserSessionsBySystem(row.id, now),
+    listUserApiTokensForAdmin(row.id),
+    countWorkspacesByUsers([row.id]),
+  ]);
+  const card = cards.get(row.id);
+  log.debug(
+    { actorId, userId, sessions: sessionRows.length, tokens: tokens.length },
+    '[admin.user.detail]',
+  );
+  return {
+    user: {
+      ...toAdminUserDto(row, { now, actorId, workspaces }),
+      position: card?.position ?? null,
+      bio: card?.bio ?? null,
+      updatedAt: row.updatedAt,
+      github,
+    },
+    memberships,
+    sessions: sessionRows.map((item): AdminUserSessionDto => ({
+      id: item.id,
+      deviceLabel: describeUserAgent(item.userAgent).label,
+      ipAddress: item.ipAddress,
+      impersonated: item.impersonated,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      expiresAt: item.expiresAt,
+    })),
+    tokens,
+  };
+}
+
+/**
+ * Завершает одну сессию пользователя. Устройство может оставаться в системе до 5 минут:
+ * сессия кешируется в cookie.
+ */
+export async function revokeUserSession(input: RevokeUserSessionInput): Promise<void> {
+  const session = await requireAdmin();
+  const actorId = session.user.id;
+  const target = await loadTarget(actorId, input.userId, 'admin.user.revokeSession');
+  const revoked = await revokeUserSessionBySystem(target.id, input.sessionId);
+  if (!revoked) {
+    log.warn(
+      { actorId, userId: target.id, sessionId: input.sessionId },
+      '[admin.user.revokeSession] not found',
+    );
+    throw new NotFoundError('Сессия не найдена');
+  }
+  log.info(
+    { actorId, userId: target.id, sessionId: input.sessionId },
+    '[admin.user.revokeSession] revoked',
+  );
+  await recordAdminUserEvent('admin.user_session_revoked', session, target);
+}
+
+/** Отзывает токен доступа пользователя. Токен другого пользователя — NOT_FOUND. */
+export async function revokeUserApiToken(input: RevokeUserTokenInput): Promise<void> {
+  const session = await requireAdmin();
+  const actorId = session.user.id;
+  const target = await loadTarget(actorId, input.userId, 'admin.user.revokeToken');
+  const { name, revoked } = await revokeApiTokenBySystem(target.id, input.tokenId);
+  log.info(
+    { actorId, userId: target.id, tokenId: input.tokenId, revoked },
+    '[admin.user.revokeToken] processed',
+  );
+  if (!revoked) return;
+  await recordAuditEvent({
+    kind: 'admin.user_token_revoked',
+    actor: auditActorFromSession(session),
+    targetUserId: target.id,
+    data: { userName: target.name, tokenName: name },
+  });
+}
+
+/** Подтверждение email вручную — когда письмо не доходит, а адрес проверен иначе. */
+export async function verifyUserEmail(input: { userId: string }): Promise<void> {
+  const session = await requireAdmin();
+  const actorId = session.user.id;
+  const target = await loadTarget(actorId, input.userId, 'admin.user.verifyEmail');
+  if (target.emailVerified) {
+    log.warn({ actorId, userId: target.id }, '[admin.user.verifyEmail] already verified');
+    throw new ValidationError('Email уже подтверждён');
+  }
+  await markEmailVerifiedBySystem(target.id);
+  log.info(
+    { actorId, userId: target.id, email: maskEmail(target.email) },
+    '[admin.user.verifyEmail] verified',
+  );
+  await recordAdminUserEvent('admin.user_email_verified', session, target);
+}
+
+/** Лимит писем администратора: защита почтового ящика пользователя и SMTP. */
+async function enforceAdminMailLimit(actorId: string): Promise<void> {
+  await enforceRateLimit('admin-mail', { ip: getClientIp(await headers()), userId: actorId });
+}
+
+/**
+ * Письмо со ссылкой сброса пароля на email пользователя. Заголовки запроса не передаются:
+ * эндпоинт Better Auth не должен видеть сессию администратора.
+ */
+export async function sendPasswordResetEmail(input: { userId: string }): Promise<void> {
+  const session = await requireAdmin();
+  const actorId = session.user.id;
+  const target = await loadTarget(actorId, input.userId, 'admin.user.sendPasswordReset');
+  await enforceAdminMailLimit(actorId);
+  await callAdminApi((api) =>
+    api.requestPasswordReset({
+      body: { email: target.email, redirectTo: RESET_PASSWORD_PATH },
+      headers: new Headers(),
+    }),
+  );
+  log.info(
+    { actorId, userId: target.id, email: maskEmail(target.email) },
+    '[admin.user.sendPasswordReset] sent',
+  );
+  await recordAdminUserEvent('admin.password_reset_sent', session, target);
+}
+
+/**
+ * Повторное письмо подтверждения email. Без заголовков запроса: с сессией администратора
+ * Better Auth отправил бы письмо на его адрес (или отказал бы из-за несовпадения).
+ */
+export async function resendVerificationEmail(input: { userId: string }): Promise<void> {
+  const session = await requireAdmin();
+  const actorId = session.user.id;
+  const target = await loadTarget(actorId, input.userId, 'admin.user.resendVerification');
+  if (target.emailVerified) {
+    log.warn({ actorId, userId: target.id }, '[admin.user.resendVerification] already verified');
+    throw new ValidationError('Email уже подтверждён');
+  }
+  await enforceAdminMailLimit(actorId);
+  await callAdminApi((api) =>
+    api.sendVerificationEmail({
+      body: { email: target.email, callbackURL: verifyEmailCallbackPath('/') },
+      headers: new Headers(),
+    }),
+  );
+  log.info(
+    { actorId, userId: target.id, email: maskEmail(target.email) },
+    '[admin.user.resendVerification] sent',
+  );
+  await recordAdminUserEvent('admin.verification_sent', session, target);
 }

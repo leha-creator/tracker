@@ -2,13 +2,14 @@ import 'server-only';
 
 import { cookies, headers } from 'next/headers';
 
-import { requireUser } from '@/shared/access';
+import { requireNotImpersonating, requireUser } from '@/shared/access';
+import { auditRequestContext, recordAuditEvent } from '@/shared/audit';
 import { getAuth } from '@/shared/auth';
 import { NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 import { enforceRateLimit, getClientIp } from '@/shared/rate-limit';
 
-import { mapAuthError } from '../credentials/credentials.errors';
+import { authErrorCode, mapAuthError } from '../credentials/credentials.errors';
 import type { MyTwoFactorState, TwoFactorSetup } from './two-factor.dto';
 import { twoFactorRepository } from './two-factor.repository';
 import type {
@@ -25,6 +26,36 @@ const TWO_FACTOR_COOKIE_SUFFIX = '.two_factor';
 
 function errorCode(error: unknown): string | undefined {
   return (error as { code?: string }).code;
+}
+
+type TwoFactorEventKind =
+  'auth.two_factor_enabled' | 'auth.two_factor_disabled' | 'auth.backup_codes_regenerated';
+
+/** Событие 2FA текущего пользователя (управление в профиле). */
+function recordTwoFactorEvent(
+  kind: TwoFactorEventKind,
+  userId: string,
+  requestHeaders: Headers,
+): Promise<void> {
+  return recordAuditEvent({
+    kind,
+    actor: { actorId: userId },
+    data: {},
+    request: auditRequestContext(requestHeaders),
+  });
+}
+
+/**
+ * Неверный код на втором шаге входа. Пользователь известен только подписанной cookie плагина,
+ * поэтому событие без субъекта: оно видно в общем журнале администратора с IP.
+ */
+function recordFailedTwoFactor(code: string, requestHeaders: Headers): Promise<void> {
+  return recordAuditEvent({
+    kind: 'auth.sign_in_failed',
+    actor: null,
+    data: { method: 'two_factor', reason: code },
+    request: auditRequestContext(requestHeaders),
+  });
 }
 
 // ── Второй шаг входа ─────────────────────────────────────────────────────────
@@ -49,6 +80,7 @@ export async function verifySignInTotp(input: VerifyTotpInput): Promise<void> {
   } catch (error) {
     const mapped = mapAuthError(error);
     log.warn({ method: 'totp', code: errorCode(mapped) }, '[twoFactor.signIn] failed');
+    await recordFailedTwoFactor(authErrorCode(error), requestHeaders);
     throw mapped;
   }
   log.info({ method: 'totp', trustDevice: input.trustDevice }, '[twoFactor.signIn] verified');
@@ -66,6 +98,7 @@ export async function verifySignInBackupCode(input: VerifyBackupCodeInput): Prom
   } catch (error) {
     const mapped = mapAuthError(error);
     log.warn({ method: 'backup', code: errorCode(mapped) }, '[twoFactor.signIn] failed');
+    await recordFailedTwoFactor(authErrorCode(error), requestHeaders);
     throw mapped;
   }
   log.info({ method: 'backup', trustDevice: input.trustDevice }, '[twoFactor.signIn] verified');
@@ -84,6 +117,7 @@ export async function getMyTwoFactorState(): Promise<MyTwoFactorState> {
 
 async function requirePasswordUser(): Promise<{ userId: string; enabled: boolean }> {
   const session = await requireUser();
+  requireNotImpersonating(session, 'twoFactor');
   const state = await twoFactorRepository.findState(session.user.id);
   if (!state) throw new NotFoundError('Пользователь не найден');
   if (!state.hasPassword) {
@@ -136,6 +170,7 @@ export async function confirmEnableTwoFactor(input: ConfirmEnableInput): Promise
     throw mapped;
   }
   log.info({ userId }, '[twoFactor.enable] confirmed');
+  await recordTwoFactorEvent('auth.two_factor_enabled', userId, requestHeaders);
 }
 
 export async function disableTwoFactor(input: PasswordConfirmInput): Promise<void> {
@@ -154,6 +189,7 @@ export async function disableTwoFactor(input: PasswordConfirmInput): Promise<voi
     throw mapped;
   }
   log.info({ userId }, '[twoFactor.disable]');
+  await recordTwoFactorEvent('auth.two_factor_disabled', userId, requestHeaders);
 }
 
 /** Новые резервные коды; старые перестают действовать. */
@@ -169,6 +205,7 @@ export async function regenerateBackupCodes(input: PasswordConfirmInput): Promis
       headers: requestHeaders,
     });
     log.info({ userId }, '[twoFactor.backupCodes] regenerated');
+    await recordTwoFactorEvent('auth.backup_codes_regenerated', userId, requestHeaders);
     return result.backupCodes;
   } catch (error) {
     const mapped = mapAuthError(error);

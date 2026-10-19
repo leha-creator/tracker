@@ -112,7 +112,13 @@ export const taskRepository = {
   findArchiveState(workspaceId: string, taskId: string, db: TransactionClient = prisma) {
     return db.task.findFirst({
       where: { id: taskId, workspaceId },
-      select: { archivedAt: true, parent: { select: { archivedAt: true } } },
+      select: {
+        archivedAt: true,
+        number: true,
+        title: true,
+        workspace: { select: { taskKey: true } },
+        parent: { select: { archivedAt: true } },
+      },
     });
   },
 

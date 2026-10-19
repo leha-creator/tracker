@@ -5,19 +5,23 @@ import type * as AccessModule from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
 import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from '@/shared/errors';
 
+import { recordAuditEvent } from '@/shared/audit';
+
 import { generateApiToken, hashApiToken } from '../../models';
+
+const OWNED_TOKEN = {
+  id: 'tok-1',
+  name: 'CI',
+  workspaceId: 'ws-1',
+  revokedAt: null as Date | null,
+  workspace: { name: 'Команда' },
+};
 
 const requireWorkspaceAccess =
   vi.fn<(session: AuthSession, ws: string) => Promise<WorkspaceAccess>>();
 const countActive = vi.fn<(userId: string, now: Date) => Promise<number>>();
 const create = vi.fn<(data: Record<string, unknown>) => Promise<ReturnType<typeof tokenRow>>>();
-const findOwned =
-  vi.fn<
-    (
-      userId: string,
-      tokenId: string,
-    ) => Promise<{ id: string; workspaceId: string; revokedAt: Date | null } | null>
-  >();
+const findOwned = vi.fn<(userId: string, tokenId: string) => Promise<typeof OWNED_TOKEN | null>>();
 const revoke = vi.fn<(tokenId: string, now: Date) => Promise<boolean>>();
 const findByHash = vi.fn<(hash: string) => Promise<ReturnType<typeof authRow> | null>>();
 const touch = vi.fn<(tokenId: string, now: Date, before: Date) => Promise<void>>();
@@ -184,15 +188,28 @@ describe('revokeApiToken', () => {
   });
 
   it('повторный отзыв ничего не меняет', async () => {
-    findOwned.mockResolvedValue({ id: 'tok-1', workspaceId: 'ws-1', revokedAt: new Date() });
+    findOwned.mockResolvedValue({ ...OWNED_TOKEN, revokedAt: new Date() });
     await revokeApiToken(session, 'tok-1');
     expect(revoke).not.toHaveBeenCalled();
   });
 
   it('отзывает свой токен', async () => {
-    findOwned.mockResolvedValue({ id: 'tok-1', workspaceId: 'ws-1', revokedAt: null });
+    findOwned.mockResolvedValue({
+      id: 'tok-1',
+      name: 'CI',
+      workspaceId: 'ws-1',
+      revokedAt: null,
+      workspace: { name: 'Команда' },
+    });
     await revokeApiToken(session, 'tok-1');
     expect(revoke).toHaveBeenCalledWith('tok-1', expect.any(Date));
+    expect(vi.mocked(recordAuditEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'token.revoked',
+        workspaceId: 'ws-1',
+        data: { tokenName: 'CI', agent: false, workspaceName: 'Команда' },
+      }),
+    );
   });
 });
 
@@ -347,7 +364,13 @@ describe('agent tokens', () => {
     await expect(
       revokeAgentToken(session, { workspaceId: 'ws-1', agentId: 'agent-1', tokenId: 'tok-x' }),
     ).rejects.toBeInstanceOf(NotFoundError);
-    findOwned.mockResolvedValue({ id: 'tok-1', workspaceId: 'ws-1', revokedAt: null });
+    findOwned.mockResolvedValue({
+      id: 'tok-1',
+      name: 'CI',
+      workspaceId: 'ws-1',
+      revokedAt: null,
+      workspace: { name: 'Команда' },
+    });
     await revokeAgentToken(session, { workspaceId: 'ws-1', agentId: 'agent-1', tokenId: 'tok-1' });
     expect(findOwned).toHaveBeenLastCalledWith('agent-1', 'tok-1');
     expect(revoke).toHaveBeenCalledWith('tok-1', expect.any(Date));

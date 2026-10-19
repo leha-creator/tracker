@@ -14,7 +14,16 @@ function withReturnTo(path: string, returnTo: string): string {
   return returnTo === '/' ? path : `${path}?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
-export function SignInForm({ returnTo, notice }: { returnTo: string; notice?: string }) {
+export function SignInForm({
+  returnTo,
+  notice,
+  signupOpen = true,
+}: {
+  returnTo: string;
+  notice?: string;
+  /** Показывать ссылку «Зарегистрироваться» (регистрация не закрыта в настройках ресурса). */
+  signupOpen?: boolean;
+}) {
   const [state, formAction, pending] = useActionState<AuthFormState, FormData>(signInAction, null);
   const fieldErrors = state?.error.fieldErrors;
 
@@ -53,15 +62,17 @@ export function SignInForm({ returnTo, notice }: { returnTo: string; notice?: st
         <Button type="submit" disabled={pending}>
           {pending ? 'Входим…' : 'Войти'}
         </Button>
-        <p className="text-center text-sm text-muted-foreground">
-          Нет аккаунта?{' '}
-          <Link
-            href={withReturnTo('/register', returnTo)}
-            className="text-foreground underline underline-offset-4"
-          >
-            Зарегистрироваться
-          </Link>
-        </p>
+        {signupOpen && (
+          <p className="text-center text-sm text-muted-foreground">
+            Нет аккаунта?{' '}
+            <Link
+              href={withReturnTo('/register', returnTo)}
+              className="text-foreground underline underline-offset-4"
+            >
+              Зарегистрироваться
+            </Link>
+          </p>
+        )}
       </form>
       {state?.needsVerification && (
         <section aria-label="Письмо для подтверждения email" className="grid gap-2 border-t pt-6">

@@ -91,8 +91,9 @@ const envSchema = z
     GITHUB_WEBHOOK_SECRET: optionalNonEmpty,
 
     /**
-     * Секрет планировщика: `Authorization: Bearer …` у POST /api/cron/reminders. Не задан —
-     * эндпоинт отвечает 404 и напоминания о сроках не рассылаются.
+     * Секрет планировщика: `Authorization: Bearer …` у POST /api/cron/reminders и
+     * /api/cron/cleanup. Не задан — эндпоинты отвечают 404: напоминания не рассылаются, журнал
+     * действий не чистится.
      */
     CRON_SECRET: optionalNonEmpty.pipe(z.string().min(32).optional()),
     /** Часовой пояс напоминаний: какие сутки считаются «сегодня» и «завтра». */
@@ -101,6 +102,8 @@ const envSchema = z
       .min(1)
       .default('Europe/Moscow')
       .refine(isValidTimeZone, 'Неизвестный часовой пояс IANA'),
+    /** Срок хранения журнала действий, дней: старые события удаляет /api/cron/cleanup. */
+    AUDIT_RETENTION_DAYS: z.coerce.number().int().min(30).max(3650).default(180),
   })
   .superRefine((env, ctx) => {
     const missing = GITHUB_KEYS.filter((key) => env[key] === undefined);

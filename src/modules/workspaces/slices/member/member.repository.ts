@@ -83,6 +83,21 @@ export const memberRepository = {
     return new Map(rows.map((row) => [row.userId, row._count._all]));
   },
 
+  /** Членства пользователя во всех пространствах — для карточки в админке. */
+  listByUser(userId: string) {
+    return prisma.workspaceMember.findMany({
+      where: { userId },
+      orderBy: { workspace: { name: 'asc' } },
+      select: {
+        role: true,
+        canManageProjects: true,
+        canManageDocuments: true,
+        createdAt: true,
+        workspace: { select: { id: true, slug: true, name: true, archivedAt: true } },
+      },
+    });
+  },
+
   /** Пространства, где пользователь — владелец и других владельцев нет. */
   listSoleOwnedWorkspaces(userId: string) {
     return prisma.workspace.findMany({
@@ -105,7 +120,12 @@ export const memberRepository = {
   findInWorkspace(workspaceId: string, memberId: string) {
     return prisma.workspaceMember.findFirst({
       where: { id: memberId, workspaceId },
-      select: { id: true, userId: true, role: true, user: { select: { isAgent: true } } },
+      select: {
+        id: true,
+        userId: true,
+        role: true,
+        user: { select: { isAgent: true, name: true } },
+      },
     });
   },
 

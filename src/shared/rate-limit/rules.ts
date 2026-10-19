@@ -40,6 +40,11 @@ export const RATE_LIMITS = {
   // Действия с подтверждением паролем в профиле: смена пароля, включение и выключение 2FA,
   // перевыпуск резервных кодов — перебор пароля вошедшего пользователя.
   'change-password': { user: { windowSeconds: 10 * MINUTE, max: 5 } },
+  // Письма пользователям из админки (сброс пароля, подтверждение email, тестовое письмо):
+  // защита почтового ящика пользователя и репутации SMTP.
+  'admin-mail': { user: { windowSeconds: HOUR, max: 10 } },
+  // Вход администратора от имени пользователя: каждая попытка создаёт сессию.
+  'admin-impersonate': { user: { windowSeconds: HOUR, max: 30 } },
   // Выгрузка CSV читает до 10 000 задач за запрос — тяжёлая операция для БД.
   'tasks.export': { user: { windowSeconds: MINUTE, max: 10 } },
 } as const satisfies Record<string, RateLimitRules>;

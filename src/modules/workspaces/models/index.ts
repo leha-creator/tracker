@@ -6,6 +6,8 @@ export {
 } from './invitation';
 export type { InvitationState, InvitationStatus } from './invitation';
 export { Membership } from './membership';
+export { assertCanTransferOwnership } from './ownership';
+export type { OwnershipCandidate } from './ownership';
 export {
   normalizeTaskKey,
   suggestTaskKey,

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { requireWorkspaceAccess, requireWorkspacePermission } from '@/shared/access';
+import { auditActorFromSession, recordAuditEvent } from '@/shared/audit';
 import type { AuthSession } from '@/shared/auth';
 import { isUniqueViolation, prisma } from '@/shared/db';
 import { ConflictError, NotFoundError } from '@/shared/errors';
@@ -149,6 +150,12 @@ export async function createProject(
       { workspaceId, projectId: row.id, userId, statusesCount: statuses.length, icon: row.icon },
       '[project] created',
     );
+    await recordAuditEvent({
+      kind: 'project.created',
+      actor: auditActorFromSession(session),
+      workspaceId,
+      data: { projectId: row.id, projectName: row.name },
+    });
     return toProjectDto(row);
   } catch (error) {
     if (error instanceof ConflictError || isUniqueViolation(error)) {
@@ -237,7 +244,7 @@ async function setProjectArchived(
   await requireWorkspacePermission(session, workspaceId, 'manageProjects');
   log.debug({ userId, workspaceId, projectId, archive }, '[project.setArchived] start');
 
-  await loadProject(workspaceId, projectId);
+  const project = await loadProject(workspaceId, projectId);
   const count = await projectRepository.setArchived(
     workspaceId,
     projectId,
@@ -252,6 +259,12 @@ async function setProjectArchived(
       { workspaceId, projectId, userId },
       archive ? '[project] archived' : '[project] restored',
     );
+    await recordAuditEvent({
+      kind: archive ? 'project.archived' : 'project.restored',
+      actor: auditActorFromSession(session),
+      workspaceId,
+      data: { projectId, projectName: project.name },
+    });
   }
   return toProjectDto(await loadProject(workspaceId, projectId));
 }
@@ -286,5 +299,11 @@ export async function deleteProject(
     { workspaceId, projectId, userId: session.user.id, tasksCount: project._count.placements },
     '[project] deleted',
   );
+  await recordAuditEvent({
+    kind: 'project.deleted',
+    actor: auditActorFromSession(session),
+    workspaceId,
+    data: { projectId, projectName: project.name },
+  });
   return { workspaceSlug: project.workspace.slug };
 }

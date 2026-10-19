@@ -37,6 +37,7 @@ const repo = {
   findById: vi.fn<(id: string) => Promise<FileRow | null>>(),
   findInWorkspace: vi.fn<(ws: string, id: string) => Promise<FileRow | null>>(),
   lockQuota: vi.fn(),
+  findQuotaMb: vi.fn<() => Promise<number | null>>(() => Promise.resolve(null)),
   usage: vi.fn<() => Promise<{ usedBytes: number; filesCount: number }>>(),
   createPending: vi.fn<(tx: unknown, data: Record<string, unknown>) => Promise<{ id: string }>>(),
   markReady: vi.fn<() => Promise<number>>(),
@@ -64,6 +65,9 @@ vi.mock('@/shared/db', () => ({
 }));
 vi.mock('@/shared/env', () => ({
   getEnv: () => ({ NODE_ENV: 'test', LOG_LEVEL: 'silent', DOCUMENTS_WORKSPACE_QUOTA_MB: 10 }),
+}));
+vi.mock('@/shared/resource-settings', () => ({
+  getStorageSettings: () => Promise.resolve({ defaultWorkspaceQuotaMb: null }),
 }));
 vi.mock('@/shared/storage', () => storage);
 vi.mock('../folder/folder.service', () => ({
@@ -344,6 +348,14 @@ describe('getWorkspaceStorageUsage', () => {
       usedBytes: 5 * MB,
       filesCount: 2,
       quotaBytes: 10 * MB,
+    });
+  });
+
+  it('prefers the workspace quota set by the admin', async () => {
+    repo.usage.mockResolvedValue({ usedBytes: 0, filesCount: 0 });
+    repo.findQuotaMb.mockResolvedValueOnce(50);
+    await expect(getWorkspaceStorageUsage(session, WS)).resolves.toMatchObject({
+      quotaBytes: 50 * MB,
     });
   });
 });

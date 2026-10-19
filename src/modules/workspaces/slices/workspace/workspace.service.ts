@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { parseWorkspaceRole, requireWorkspaceAccess } from '@/shared/access';
+import { auditActorFromSession, recordAuditEvent } from '@/shared/audit';
 import type { AuthSession } from '@/shared/auth';
 import { isUniqueViolation } from '@/shared/db';
 import { resolveEntityIcon, type EntityIcon } from '@/shared/entity-icon';
@@ -131,6 +132,12 @@ export async function createWorkspace(
   if (!created) throw new InternalError('Плагин не вернул созданное пространство');
 
   log.info({ workspaceId: created.id, slug: created.slug, userId }, '[workspace] created');
+  await recordAuditEvent({
+    kind: 'workspace.created',
+    actor: auditActorFromSession(session),
+    workspaceId: created.id,
+    data: { workspaceName: created.name },
+  });
   await assignTaskKey(created.id, taskKey);
   if (input.icon) await assignIcon(created.id, input.icon);
   return { id: created.id, slug: created.slug, name: created.name };
@@ -191,6 +198,7 @@ export async function renameWorkspace(
     { userId: session.user.id, workspaceId: input.workspaceId },
     '[workspace.rename] start',
   );
+  const before = await workspaceRepository.findById(input.workspaceId);
 
   const updated = await callOrganizationApi((api, headers) =>
     api.updateOrganization({
@@ -206,6 +214,15 @@ export async function renameWorkspace(
     { workspaceId: updated.id, userId: session.user.id, icon: input.icon },
     '[workspace] renamed',
   );
+  // Форма сохраняет и иконку: событие — только при смене названия.
+  if (before && before.name !== updated.name) {
+    await recordAuditEvent({
+      kind: 'workspace.renamed',
+      actor: auditActorFromSession(session),
+      workspaceId: updated.id,
+      data: { workspaceName: updated.name, previousName: before.name },
+    });
+  }
   return { id: updated.id, slug: updated.slug, name: updated.name };
 }
 
@@ -240,6 +257,12 @@ export async function archiveWorkspace(
 
   await workspaceRepository.setArchived(workspaceId, new Date());
   log.info({ workspaceId, slug: workspace.slug, userId }, '[workspace] archived');
+  await recordAuditEvent({
+    kind: 'workspace.archived',
+    actor: auditActorFromSession(session),
+    workspaceId,
+    data: { workspaceName: workspace.name },
+  });
   return { id: workspace.id, slug: workspace.slug, name: workspace.name };
 }
 
@@ -260,6 +283,12 @@ export async function restoreWorkspace(
     log.debug({ workspaceId }, '[workspace.restore] already active');
   } else {
     log.info({ workspaceId, slug: workspace.slug, userId }, '[workspace] restored');
+    await recordAuditEvent({
+      kind: 'workspace.restored',
+      actor: auditActorFromSession(session),
+      workspaceId,
+      data: { workspaceName: workspace.name },
+    });
   }
   return { id: workspace.id, slug: workspace.slug, name: workspace.name };
 }
@@ -285,4 +314,10 @@ export async function deleteWorkspace(
     { workspaceId: workspace.id, slug: workspace.slug, userId: session.user.id },
     '[workspace] deleted',
   );
+  // Строки пространства уже нет: событие без workspaceId (иначе нарушится FK), название — в снимке.
+  await recordAuditEvent({
+    kind: 'workspace.deleted',
+    actor: auditActorFromSession(session),
+    data: { workspaceName: workspace.name },
+  });
 }

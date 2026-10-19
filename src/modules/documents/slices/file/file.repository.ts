@@ -36,6 +36,55 @@ export const fileRepository = {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`documents-quota:${workspaceId}`}))`;
   },
 
+  /**
+   * Своя квота пространства, МБ (null — по умолчанию). Чтение поля Workspace модуля workspaces:
+   * квоту задаёт администратор, применяет её этот модуль.
+   */
+  async findQuotaMb(workspaceId: string, tx: TransactionClient = prisma): Promise<number | null> {
+    const row = await tx.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { storageQuotaMb: true },
+    });
+    return row?.storageQuotaMb ?? null;
+  },
+
+  /** Свои квоты нескольких пространств — для админки. */
+  async quotasByWorkspaces(workspaceIds: readonly string[]): Promise<Map<string, number | null>> {
+    const rows = await prisma.workspace.findMany({
+      where: { id: { in: [...workspaceIds] } },
+      select: { id: true, storageQuotaMb: true },
+    });
+    return new Map(rows.map((row) => [row.id, row.storageQuotaMb]));
+  },
+
+  /** Файлы документов всего ресурса — для обзора админки. */
+  async totalUsage(): Promise<{ usedBytes: number; filesCount: number }> {
+    const result = await prisma.document.aggregate({
+      where: { kind: 'file' },
+      _sum: { size: true },
+      _count: { _all: true },
+    });
+    return { usedBytes: result._sum.size ?? 0, filesCount: result._count._all };
+  },
+
+  /** Занято в хранилище нескольких пространств одним запросом — для админки. */
+  async usageByWorkspaces(
+    workspaceIds: readonly string[],
+  ): Promise<Map<string, { usedBytes: number; filesCount: number }>> {
+    const rows = await prisma.document.groupBy({
+      by: ['workspaceId'],
+      where: { workspaceId: { in: [...workspaceIds] }, kind: 'file' },
+      _sum: { size: true },
+      _count: { _all: true },
+    });
+    return new Map(
+      rows.map((row) => [
+        row.workspaceId,
+        { usedBytes: row._sum.size ?? 0, filesCount: row._count._all },
+      ]),
+    );
+  },
+
   /** Занято в хранилище пространства: подтверждённые файлы и незавершённые загрузки. */
   async usage(
     workspaceId: string,

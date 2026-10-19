@@ -20,8 +20,13 @@ vi.mock('next/navigation', () => ({
   notFound: () => notFound(),
 }));
 
-const { requireAdmin, requireAdminOrNotFound, requireUser, requireUserOrRedirect } =
-  await import('./guards');
+const {
+  requireAdmin,
+  requireAdminOrNotFound,
+  requireNotImpersonating,
+  requireUser,
+  requireUserOrRedirect,
+} = await import('./guards');
 
 function sessionOf(overrides: Partial<AuthSession['user']> = {}): AuthSession {
   return {
@@ -127,5 +132,19 @@ describe('requireAdminOrNotFound', () => {
     getFreshSession.mockResolvedValue(sessionOf({ role: 'admin' }));
     await expect(requireAdminOrNotFound()).resolves.toMatchObject({ user: { role: 'admin' } });
     expect(getSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('requireNotImpersonating', () => {
+  it('passes an ordinary session', () => {
+    expect(() => requireNotImpersonating(sessionOf())).not.toThrow();
+  });
+
+  it('forbids actions under impersonation', () => {
+    const session = sessionOf();
+    session.session.impersonatedBy = 'admin-1';
+    expect(() => requireNotImpersonating(session)).toThrow(
+      expect.objectContaining({ code: 'FORBIDDEN' }),
+    );
   });
 });

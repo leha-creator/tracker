@@ -15,8 +15,17 @@ const SESSION = {
   session: { id: 's1', expiresAt: new Date() },
 } as AuthSession;
 
+const recordAuditEvent = vi.fn<(input: Record<string, unknown>) => Promise<void>>();
+vi.mock('@/shared/audit', () => ({
+  recordAuditEvent: (input: Record<string, unknown>) => recordAuditEvent(input),
+  auditActorFromSession: (session: { user: { id: string } }) => ({ actorId: session.user.id }),
+  auditRequestContext: () => ({ ip: '203.0.113.5', userAgent: null }),
+}));
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve(new Headers()) }));
-vi.mock('@/shared/access', () => ({ requireUser: () => Promise.resolve(SESSION) }));
+vi.mock('@/shared/access', () => ({
+  requireUser: () => Promise.resolve(SESSION),
+  requireNotImpersonating: () => undefined,
+}));
 vi.mock('@/shared/auth', () => ({
   getAuth: () => ({
     api: {
@@ -107,6 +116,9 @@ describe('changePassword', () => {
       }),
     );
     expect(sendPasswordChangedMail).toHaveBeenCalledWith({ email: 'a@example.com', name: 'Анна' });
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'auth.password_changed', actor: { actorId: 'u1' } }),
+    );
   });
 
   it('attaches a wrong current password to its field', async () => {

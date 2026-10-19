@@ -338,3 +338,14 @@ export async function getAttachmentDownload(
   );
   return { url };
 }
+
+/**
+ * Вложения задач всего ресурса. Без проверки сессии: только для модуля admin, уже вызвавшего
+ * requireAdmin().
+ */
+export async function getTotalAttachmentStorageUsage(): Promise<{
+  usedBytes: number;
+  filesCount: number;
+}> {
+  return attachmentRepository.totalUsage();
+}

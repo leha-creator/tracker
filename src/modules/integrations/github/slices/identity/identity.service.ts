@@ -2,6 +2,8 @@ import 'server-only';
 
 import { headers } from 'next/headers';
 
+import { requireNotImpersonating } from '@/shared/access';
+import { auditActorFromSession, auditRequestContext, recordAuditEvent } from '@/shared/audit';
 import { getAuth, type AuthSession } from '@/shared/auth';
 import { AppError, ForbiddenError, InternalError, NotFoundError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
@@ -80,6 +82,7 @@ export async function getMyGithubAccount(session: AuthSession): Promise<MyGithub
 
 /** Адрес привязки GitHub к текущему пользователю (state — в cookie, через nextCookies). */
 export async function startGithubLink(session: AuthSession): Promise<string> {
+  requireNotImpersonating(session, 'github.identity.link');
   await requireEnabled();
   log.debug({ userId: session.user.id }, '[github.identity] link start');
   const result = await getAuth().api.linkSocialAccount({
@@ -96,6 +99,7 @@ export async function startGithubLink(session: AuthSession): Promise<string> {
 
 /** Отвязывает GitHub. Последний способ входа отвязать нельзя (ошибка плагина). */
 export async function unlinkGithub(session: AuthSession): Promise<void> {
+  requireNotImpersonating(session, 'github.identity.unlink');
   const userId = session.user.id;
   const row = await identityRepository.findByUser(userId);
   if (!row) throw new NotFoundError('GitHub не привязан');
@@ -108,4 +112,10 @@ export async function unlinkGithub(session: AuthSession): Promise<void> {
     });
   }
   log.info({ userId }, '[github.identity] unlinked');
+  await recordAuditEvent({
+    kind: 'auth.github_unlinked',
+    actor: auditActorFromSession(session),
+    data: {},
+    request: auditRequestContext(await headers()),
+  });
 }

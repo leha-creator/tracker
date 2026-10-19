@@ -14,6 +14,7 @@ export {
   normalizeNoteContent,
   NOTE_CONTENT_MAX_LENGTH,
   noteExportFileName,
+  resolveWorkspaceQuotaMb,
   TASK_DOCUMENT_LINKS_LIMIT,
 } from './document';
 export {

@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { UserMenu } from '@/components/auth/user-menu';
 import { AppHotkeys } from '@/components/hotkeys/app-hotkeys';
 import { ShortcutsDialog } from '@/components/hotkeys/shortcuts-dialog';
+import { ImpersonationBanner } from '@/components/layout/impersonation-banner';
 import { PageContainer } from '@/components/layout/page-container';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { SearchTrigger } from '@/components/search/search-trigger';
@@ -18,6 +19,10 @@ export default function AppLayout({ children }: LayoutProps<'/'>) {
       >
         Перейти к содержимому
       </a>
+      {/* Сессия читается внутри границы: остальная страница не ждёт проверки имперсонации. */}
+      <Suspense fallback={null}>
+        <ImpersonationBanner />
+      </Suspense>
       <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur-md">
         <PageContainer size="wide" className="flex flex-wrap items-center gap-x-1.5">
           <Link

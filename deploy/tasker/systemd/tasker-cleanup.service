@@ -1,0 +1,11 @@
+# Очистка журнала действий и счётчиков лимитов Tasker (см. /opt/tasker/cleanup.sh).
+[Unit]
+Description=Tasker audit log and rate limit cleanup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+ExecStart=/bin/sh /opt/tasker/cleanup.sh

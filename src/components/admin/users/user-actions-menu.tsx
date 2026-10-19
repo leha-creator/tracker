@@ -14,17 +14,31 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  resendVerificationEmailAction,
   resetUserTwoFactorAction,
   revokeUserSessionsAction,
+  sendPasswordResetAction,
   setUserRoleAction,
+  startImpersonationAction,
   unbanUserAction,
+  verifyUserEmailAction,
 } from '@/modules/admin/client';
 import type { GlobalRole } from '@/shared/access/global-role';
 
 import { BanUserDialog } from './ban-user-dialog';
 import { DeleteUserDialog } from './delete-user-dialog';
 
-type DialogKind = 'ban' | 'unban' | 'role' | 'sessions' | 'twoFactor' | 'delete';
+type DialogKind =
+  | 'ban'
+  | 'unban'
+  | 'role'
+  | 'sessions'
+  | 'twoFactor'
+  | 'delete'
+  | 'passwordReset'
+  | 'verifyEmail'
+  | 'verificationMail'
+  | 'impersonate';
 
 interface UserActionsMenuProps {
   user: {
@@ -34,7 +48,12 @@ interface UserActionsMenuProps {
     role: GlobalRole;
     banned: boolean;
     twoFactorEnabled: boolean;
+    emailVerified: boolean;
   };
+  /** Куда уйти после удаления: со страницы карточки — к списку (сама карточка исчезнет). */
+  afterDeleteHref?: string;
+  /** Вид кнопки: значок в таблице или кнопка «Действия» в карточке. */
+  variant?: 'icon' | 'button';
 }
 
 /**
@@ -42,7 +61,7 @@ interface UserActionsMenuProps {
  * закрытие меню размонтировало бы открытый диалог. Сервер проверяет права и правила сам —
  * скрытые пункты лишь подсказывают.
  */
-export function UserActionsMenu({ user }: UserActionsMenuProps) {
+export function UserActionsMenu({ user, afterDeleteHref, variant = 'icon' }: UserActionsMenuProps) {
   const [dialog, setDialog] = useState<DialogKind | null>(null);
   // Новый ключ на каждое открытие — диалог не показывает ошибку прошлой попытки.
   const [dialogKey, setDialogKey] = useState(0);
@@ -63,11 +82,26 @@ export function UserActionsMenu({ user }: UserActionsMenuProps) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label={`Действия: ${user.name}`}>
-            <MoreHorizontalIcon />
-          </Button>
+          {variant === 'icon' ? (
+            <Button variant="ghost" size="icon" aria-label={`Действия: ${user.name}`}>
+              <MoreHorizontalIcon />
+            </Button>
+          ) : (
+            <Button variant="outline">
+              Действия
+              <MoreHorizontalIcon />
+            </Button>
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-56">
+          {!isAdmin && !user.banned && (
+            <>
+              <DropdownMenuItem onSelect={() => open('impersonate')}>
+                Войти от имени…
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem onSelect={() => open('role')}>
             {isAdmin ? 'Снять роль администратора' : 'Сделать администратором'}
           </DropdownMenuItem>
@@ -78,6 +112,20 @@ export function UserActionsMenu({ user }: UserActionsMenuProps) {
             <DropdownMenuItem onSelect={() => open('twoFactor')}>
               Сбросить двухфакторную аутентификацию
             </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => open('passwordReset')}>
+            Отправить ссылку сброса пароля
+          </DropdownMenuItem>
+          {!user.emailVerified && (
+            <>
+              <DropdownMenuItem onSelect={() => open('verificationMail')}>
+                Отправить письмо подтверждения
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => open('verifyEmail')}>
+                Подтвердить email вручную
+              </DropdownMenuItem>
+            </>
           )}
           <DropdownMenuSeparator />
           {isAdmin ? (
@@ -100,7 +148,62 @@ export function UserActionsMenu({ user }: UserActionsMenuProps) {
       </DropdownMenu>
 
       {dialog === 'ban' && <BanUserDialog key={dialogKey} user={user} {...dialogProps} />}
-      {dialog === 'delete' && <DeleteUserDialog key={dialogKey} user={user} {...dialogProps} />}
+      {dialog === 'delete' && (
+        <DeleteUserDialog
+          key={dialogKey}
+          user={user}
+          afterDeleteHref={afterDeleteHref}
+          {...dialogProps}
+        />
+      )}
+      {dialog === 'impersonate' && (
+        <ConfirmActionDialog
+          key={dialogKey}
+          {...dialogProps}
+          action={startImpersonationAction}
+          fields={{ userId: user.id }}
+          title={`Войти от имени «${user.name}»?`}
+          description="На час вы увидите Tasker глазами пользователя и сможете действовать в его пространствах. Действия попадут в журнал с пометкой «через администратора». Смена пароля, 2FA, сессий и токенов будет недоступна. Админка в этом режиме закрыта — вернитесь кнопкой в полосе сверху."
+          confirmLabel="Войти от имени"
+          confirmVariant="default"
+        />
+      )}
+      {dialog === 'passwordReset' && (
+        <ConfirmActionDialog
+          key={dialogKey}
+          {...dialogProps}
+          action={sendPasswordResetAction}
+          fields={{ userId: user.id }}
+          title={`Отправить «${user.name}» ссылку сброса пароля?`}
+          description={`Письмо уйдёт на ${user.email}. Текущий пароль действует, пока пользователь не задаст новый.`}
+          confirmLabel="Отправить"
+          confirmVariant="default"
+        />
+      )}
+      {dialog === 'verificationMail' && (
+        <ConfirmActionDialog
+          key={dialogKey}
+          {...dialogProps}
+          action={resendVerificationEmailAction}
+          fields={{ userId: user.id }}
+          title="Отправить письмо подтверждения ещё раз?"
+          description={`Письмо со ссылкой уйдёт на ${user.email}.`}
+          confirmLabel="Отправить"
+          confirmVariant="default"
+        />
+      )}
+      {dialog === 'verifyEmail' && (
+        <ConfirmActionDialog
+          key={dialogKey}
+          {...dialogProps}
+          action={verifyUserEmailAction}
+          fields={{ userId: user.id }}
+          title={`Подтвердить ${user.email} вручную?`}
+          description="Подтверждайте, только если убедились, что адрес принадлежит пользователю: например, письмо не доходит из-за фильтров почты."
+          confirmLabel="Подтвердить"
+          confirmVariant="default"
+        />
+      )}
       {dialog === 'unban' && (
         <ConfirmActionDialog
           key={dialogKey}

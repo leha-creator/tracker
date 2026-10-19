@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceAccess, WorkspaceRole } from '@/shared/access';
 import type * as AccessModule from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
+import { recordAuditEvent } from '@/shared/audit';
 import { NotFoundError } from '@/shared/errors';
 
 const requireWorkspaceAccess =
@@ -335,6 +336,21 @@ describe('createTask', () => {
     });
   });
 
+  it('records the creation in the audit log with the MCP token', async () => {
+    const viaSession: AuthSession = {
+      ...session,
+      via: { tokenId: 'tok-1', tokenName: 'CI', scopes: ['read', 'tasks'], agent: null },
+    };
+    await createTask(viaSession, { workspaceId: 'ws-1', title: 'Задача' });
+    expect(vi.mocked(recordAuditEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'task.created',
+        workspaceId: 'ws-1',
+        actor: expect.objectContaining({ actorId: 'user-1', viaTokenId: 'tok-1' }) as unknown,
+      }),
+    );
+  });
+
   it('does not publish a realtime event when the transaction fails', async () => {
     nextNumber.mockRejectedValueOnce(new Error('db down'));
     await expect(createTask(session, { workspaceId: 'ws-1', title: 'Задача' })).rejects.toThrow(
@@ -660,7 +676,13 @@ describe('archiveTask / restoreTask', () => {
 
   it('restores tasks archived by the same operation', async () => {
     const archivedAt = new Date('2026-10-16T10:00:00.000Z');
-    findArchiveState.mockResolvedValue({ archivedAt, parent: null });
+    findArchiveState.mockResolvedValue({
+      archivedAt,
+      number: 7,
+      title: 'Задача',
+      workspace: { taskKey: 'TSK' },
+      parent: null,
+    });
     subtreeIds.mockResolvedValue([TASK_ID, CHILD]);
     restoreMany.mockResolvedValue(2);
     await expect(restoreTask(session, input)).resolves.toEqual({ descendants: 1 });
@@ -673,6 +695,13 @@ describe('archiveTask / restoreTask', () => {
     expect(recordHistory.mock.calls[0]?.[1]).toMatchObject({
       changes: [{ kind: 'restored', data: { descendants: 1 } }],
     });
+    expect(vi.mocked(recordAuditEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'task.restored',
+        workspaceId: 'ws-1',
+        data: { taskKey: 'TSK-7', taskNumber: 7, title: 'Задача' },
+      }),
+    );
   });
 
   it('does not restore a subtask while its parent is archived', async () => {

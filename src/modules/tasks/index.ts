@@ -7,6 +7,7 @@ export * from './client';
 export {
   completeUpload as completeAttachmentUpload,
   getAttachmentDownload,
+  getTotalAttachmentStorageUsage,
   listTaskAttachments,
   requestUpload as requestAttachmentUpload,
 } from './slices/attachment/attachment.service';

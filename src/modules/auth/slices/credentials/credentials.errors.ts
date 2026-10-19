@@ -1,5 +1,7 @@
 import { isAPIError } from 'better-auth/api';
 
+import { SIGNUP_REJECTION_MESSAGES } from '@/shared/resource-settings/client';
+
 import {
   ConflictError,
   ForbiddenError,
@@ -22,6 +24,13 @@ function retryAfterSeconds(headers: HeadersInit | undefined): number {
   const value = headers ? new Headers(headers).get('x-retry-after') : null;
   const seconds = value ? Number(value) : NaN;
   return Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_RETRY_AFTER_SECONDS;
+}
+
+/** Код ошибки Better Auth (`INVALID_EMAIL_OR_PASSWORD`) для журнала; иначе — `UNKNOWN`. */
+export function authErrorCode(error: unknown): string {
+  if (!isAPIError(error)) return 'UNKNOWN';
+  if (error.statusCode === 429) return 'RATE_LIMITED';
+  return typeof error.body?.code === 'string' ? error.body.code : 'UNKNOWN';
 }
 
 /**
@@ -48,6 +57,12 @@ export function mapAuthError(error: unknown, options: MapAuthErrorOptions = {}):
         'Email не подтверждён. Мы отправили письмо со ссылкой для подтверждения — проверьте почту.',
         { cause: error, details: { reason: EMAIL_NOT_VERIFIED_REASON } },
       );
+    case 'SIGNUP_CLOSED':
+      return new ForbiddenError(SIGNUP_REJECTION_MESSAGES.closed, { cause: error });
+    case 'SIGNUP_INVITE_ONLY':
+      return new ForbiddenError(SIGNUP_REJECTION_MESSAGES.invite_only, { cause: error });
+    case 'SIGNUP_DOMAIN':
+      return new ForbiddenError(SIGNUP_REJECTION_MESSAGES.domain, { cause: error });
     case 'BANNED_USER':
       return new ForbiddenError('Учётная запись заблокирована', { cause: error });
     case 'PASSWORD_TOO_SHORT':

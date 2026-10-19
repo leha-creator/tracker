@@ -24,6 +24,7 @@ export type {
   MemberDto,
   MemberIdentityDto,
   SoleOwnedWorkspaceDto,
+  UserMembershipDto,
   WorkspaceMemberDto,
 } from './slices/member/member.dto';
 export {
@@ -39,6 +40,15 @@ export type {
   WorkspaceSummaryDto,
   WorkspaceTaskKeyDto,
 } from './slices/workspace/workspace.dto';
+export type {
+  AdminWorkspaceDto,
+  AdminWorkspaceMemberDto,
+  AdminWorkspaceRowDto,
+  AllWorkspacesDto,
+  AllWorkspacesQuery,
+  OwnershipTransferResultDto,
+  WorkspaceOwnerDto,
+} from './slices/system/system.dto';
 export {
   createWorkspaceSchema,
   WORKSPACE_NAME_MAX_LENGTH,

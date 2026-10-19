@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { requireWorkspaceAccess, requireWorkspacePermission } from '@/shared/access';
+import { auditActorFromSession, recordAuditEvent } from '@/shared/audit';
 import type { AuthSession } from '@/shared/auth';
 import type { TransactionClient } from '@/shared/db';
 import { ConflictError, NotFoundError, ValidationError } from '@/shared/errors';
@@ -95,6 +96,12 @@ export async function createNote(
     },
     '[document] note created',
   );
+  await recordAuditEvent({
+    kind: 'document.created',
+    actor: auditActorFromSession(session),
+    workspaceId,
+    data: { documentId: row.id, title: row.title, kind: 'note' },
+  });
   return toDocumentDto(row);
 }
 
@@ -228,5 +235,11 @@ export async function deleteDocument(
     { workspaceId, documentId, userId, kind: row.kind, objectsFailed },
     '[document] deleted',
   );
+  await recordAuditEvent({
+    kind: 'document.deleted',
+    actor: auditActorFromSession(session),
+    workspaceId,
+    data: { documentId, title: row.title, kind: row.kind },
+  });
   return { folderId: row.folderId };
 }

@@ -10,7 +10,9 @@ export {
   authenticateApiToken,
   listAgentTokens,
   listMyApiTokens,
+  listUserApiTokensForAdmin,
   revokeAllUserApiTokens,
+  revokeApiTokenBySystem,
 } from './slices/token/token.service';
 export type { ApiTokenContext } from './slices/token/token.service';
 export {

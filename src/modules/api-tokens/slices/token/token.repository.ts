@@ -57,7 +57,13 @@ export const apiTokenRepository = {
   findOwned(userId: string, tokenId: string) {
     return prisma.apiToken.findFirst({
       where: { id: tokenId, userId },
-      select: { id: true, workspaceId: true, revokedAt: true },
+      select: {
+        id: true,
+        name: true,
+        workspaceId: true,
+        revokedAt: true,
+        workspace: { select: { name: true } },
+      },
     });
   },
 

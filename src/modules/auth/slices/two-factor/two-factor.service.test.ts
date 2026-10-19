@@ -15,11 +15,18 @@ const enforceRateLimit = vi.fn<(...args: unknown[]) => Promise<void>>();
 const findState = vi.fn<(userId: string) => Promise<unknown>>();
 const cookieList = vi.fn<() => { name: string }[]>();
 
+const recordAuditEvent = vi.fn<(input: Record<string, unknown>) => Promise<void>>();
+vi.mock('@/shared/audit', () => ({
+  recordAuditEvent: (input: Record<string, unknown>) => recordAuditEvent(input),
+  auditActorFromSession: (session: { user: { id: string } }) => ({ actorId: session.user.id }),
+  auditRequestContext: () => ({ ip: '203.0.113.5', userAgent: null }),
+}));
 vi.mock('next/headers', () => ({
   headers: () => Promise.resolve(new Headers()),
   cookies: () => Promise.resolve({ getAll: () => cookieList() }),
 }));
 vi.mock('@/shared/access', () => ({
+  requireNotImpersonating: () => undefined,
   requireUser: () => Promise.resolve({ user: { id: 'u1' }, session: { id: 's1' } } as AuthSession),
 }));
 vi.mock('@/shared/auth', () => ({ getAuth: () => ({ api }) }));
@@ -38,6 +45,7 @@ beforeEach(() => {
   enforceRateLimit.mockReset().mockResolvedValue();
   findState.mockReset().mockResolvedValue({ twoFactorEnabled: false, hasPassword: true });
   cookieList.mockReset().mockReturnValue([]);
+  recordAuditEvent.mockReset().mockResolvedValue();
 });
 
 describe('sign-in step', () => {
@@ -64,6 +72,13 @@ describe('sign-in step', () => {
     await expect(
       service.verifySignInTotp({ code: '000000', trustDevice: false }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', fieldErrors: { code: ['Неверный код'] } });
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'auth.sign_in_failed',
+        actor: null,
+        data: { method: 'two_factor', reason: 'INVALID_CODE' },
+      }),
+    );
   });
 
   it('detects a pending two-factor sign-in by cookie name', async () => {

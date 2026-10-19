@@ -164,4 +164,14 @@ export const attachmentRepository = {
   keysForComment(workspaceId: string, taskId: string, commentId: string): Promise<string[]> {
     return keysWhere({ workspaceId, taskId, commentId });
   },
+
+  /** Подтверждённые вложения всего ресурса — для обзора админки. */
+  async totalUsage(): Promise<{ usedBytes: number; filesCount: number }> {
+    const result = await prisma.taskAttachment.aggregate({
+      where: { status: 'ready' },
+      _sum: { size: true },
+      _count: { _all: true },
+    });
+    return { usedBytes: result._sum.size ?? 0, filesCount: result._count._all };
+  },
 };

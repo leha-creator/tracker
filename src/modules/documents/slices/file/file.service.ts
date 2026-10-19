@@ -3,11 +3,13 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 
 import { requireWorkspaceAccess, requireWorkspacePermission } from '@/shared/access';
+import { auditActorFromSession, recordAuditEvent } from '@/shared/audit';
 import type { AuthSession } from '@/shared/auth';
 import { prisma } from '@/shared/db';
 import { getEnv } from '@/shared/env';
 import { ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
+import { getStorageSettings } from '@/shared/resource-settings';
 import {
   createDownloadUrl,
   createUploadPost,
@@ -37,6 +39,7 @@ import {
   normalizeDocumentTitle,
   noteExportFileName,
   resolveDocumentFileType,
+  resolveWorkspaceQuotaMb,
   sanitizeFileName,
   titleFromFileName,
 } from '../../models';
@@ -58,8 +61,28 @@ const STALE_PURGE_BATCH = 50;
 
 type FileRow = NonNullable<Awaited<ReturnType<typeof fileRepository.findById>>>;
 
-export function workspaceQuotaBytes(): number {
-  return getEnv().DOCUMENTS_WORKSPACE_QUOTA_MB * 1024 * 1024;
+const MB = 1024 * 1024;
+
+/** Квота пространства в байтах по приоритету: своя → по умолчанию ресурса → окружение. */
+function quotaBytesOf(workspaceQuotaMb: number | null, defaultQuotaMb: number | null): number {
+  return (
+    resolveWorkspaceQuotaMb({
+      workspaceQuotaMb,
+      defaultQuotaMb,
+      envQuotaMb: getEnv().DOCUMENTS_WORKSPACE_QUOTA_MB,
+    }) * MB
+  );
+}
+
+async function workspaceQuotaBytes(
+  workspaceId: string,
+  tx?: Parameters<typeof fileRepository.findQuotaMb>[1],
+): Promise<number> {
+  const [workspaceQuotaMb, settings] = await Promise.all([
+    fileRepository.findQuotaMb(workspaceId, tx),
+    getStorageSettings(),
+  ]);
+  return quotaBytesOf(workspaceQuotaMb, settings.defaultWorkspaceQuotaMb);
 }
 
 /** Ошибка модели при проверке загрузки: логируем причину отказа и пробрасываем. */
@@ -136,9 +159,9 @@ export async function requestDocumentUpload(
   );
 
   const storageKey = documentStorageKey(workspaceId, randomUUID());
-  const quotaBytes = workspaceQuotaBytes();
   const { id } = await prisma.$transaction(async (tx) => {
     await fileRepository.lockQuota(tx, workspaceId);
+    const quotaBytes = await workspaceQuotaBytes(workspaceId, tx);
     const { usedBytes } = await fileRepository.usage(workspaceId, tx);
     try {
       assertStorageQuota({ usedBytes, incomingBytes: size, quotaBytes });
@@ -229,6 +252,12 @@ export async function completeDocumentUpload(
     },
     '[document.file] upload completed',
   );
+  await recordAuditEvent({
+    kind: 'document.created',
+    actor: auditActorFromSession(session),
+    workspaceId: key.workspaceId,
+    data: { documentId: row.id, title: row.title, kind: 'file' },
+  });
   return { documentId: row.id };
 }
 
@@ -325,8 +354,46 @@ export async function getWorkspaceStorageUsage(
   workspaceId: string,
 ): Promise<StorageUsageDto> {
   await requireWorkspaceAccess(session, workspaceId);
-  const usage = await fileRepository.usage(workspaceId);
-  const quotaBytes = workspaceQuotaBytes();
+  const [usage, quotaBytes] = await Promise.all([
+    fileRepository.usage(workspaceId),
+    workspaceQuotaBytes(workspaceId),
+  ]);
   log.debug({ workspaceId, ...usage, quotaBytes }, '[document.file] storage usage');
   return { ...usage, quotaBytes };
+}
+
+/**
+ * Файлы документов всего ресурса. Без проверки сессии: только для модуля admin, уже вызвавшего
+ * requireAdmin().
+ */
+export async function getTotalDocumentStorageUsage(): Promise<{
+  usedBytes: number;
+  filesCount: number;
+}> {
+  return fileRepository.totalUsage();
+}
+
+/**
+ * Хранилище нескольких пространств: занято и действующая квота. Без проверки сессии: только для
+ * модуля admin, уже вызвавшего requireAdmin(). Пространство без файлов — нули.
+ */
+export async function getStorageUsageByWorkspaces(
+  workspaceIds: readonly string[],
+): Promise<Map<string, StorageUsageDto>> {
+  if (workspaceIds.length === 0) return new Map();
+  const [usage, quotas, settings] = await Promise.all([
+    fileRepository.usageByWorkspaces(workspaceIds),
+    fileRepository.quotasByWorkspaces(workspaceIds),
+    getStorageSettings(),
+  ]);
+  log.debug({ count: workspaceIds.length }, '[document.file] storage usage by workspaces');
+  return new Map(
+    workspaceIds.map((id) => [
+      id,
+      {
+        ...(usage.get(id) ?? { usedBytes: 0, filesCount: 0 }),
+        quotaBytes: quotaBytesOf(quotas.get(id) ?? null, settings.defaultWorkspaceQuotaMb),
+      },
+    ]),
+  );
 }

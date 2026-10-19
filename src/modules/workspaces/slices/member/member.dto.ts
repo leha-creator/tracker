@@ -47,6 +47,15 @@ export interface MemberIdentityDto {
   isAgent: boolean;
 }
 
+/** Членство пользователя в пространстве — для карточки пользователя в админке. */
+export interface UserMembershipDto {
+  workspace: { id: string; slug: string; name: string; archived: boolean };
+  role: WorkspaceRole;
+  canManageProjects: boolean;
+  canManageDocuments: boolean;
+  joinedAt: Date;
+}
+
 /** Пространство, где пользователь — единственный владелец. */
 export interface SoleOwnedWorkspaceDto {
   id: string;

@@ -12,6 +12,7 @@ import {
   normalizeNoteContent,
   NOTE_CONTENT_MAX_LENGTH,
   noteExportFileName,
+  resolveWorkspaceQuotaMb,
   TASK_DOCUMENT_LINKS_LIMIT,
 } from './document';
 import {
@@ -116,5 +117,25 @@ describe('tags', () => {
     expect(parseTagColor('blue')).toBe('blue');
     expect(parseTagColor('pink')).toBe('gray');
     expect(parseTagColor(null)).toBe('gray');
+  });
+});
+
+describe('resolveWorkspaceQuotaMb', () => {
+  it('uses the workspace quota first, then the resource default, then env', () => {
+    expect(
+      resolveWorkspaceQuotaMb({ workspaceQuotaMb: 5, defaultQuotaMb: 50, envQuotaMb: 500 }),
+    ).toBe(5);
+    expect(
+      resolveWorkspaceQuotaMb({ workspaceQuotaMb: null, defaultQuotaMb: 50, envQuotaMb: 500 }),
+    ).toBe(50);
+    expect(
+      resolveWorkspaceQuotaMb({ workspaceQuotaMb: null, defaultQuotaMb: null, envQuotaMb: 500 }),
+    ).toBe(500);
+  });
+
+  it('keeps an explicit zero quota (uploads closed)', () => {
+    expect(
+      resolveWorkspaceQuotaMb({ workspaceQuotaMb: 0, defaultQuotaMb: 50, envQuotaMb: 500 }),
+    ).toBe(0);
   });
 });

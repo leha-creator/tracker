@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { requireWorkspaceAccess } from '@/shared/access';
+import { requireNotImpersonating, requireWorkspaceAccess } from '@/shared/access';
+import { auditActorFromSession, recordAuditEvent } from '@/shared/audit';
 import type { AuthSession, AuthVia } from '@/shared/auth';
 import { NotFoundError, UnauthorizedError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
@@ -22,6 +23,25 @@ import { apiTokenRepository, type ApiTokenRow } from './token.repository';
 import type { CreateAgentTokenInput, CreateApiTokenInput } from './token.schema';
 
 const log = createLogger('api-tokens');
+
+/** Выпуск и отзыв токена — событие безопасности того, кто действовал (для агента — владельца). */
+async function recordTokenEvent(
+  kind: 'token.issued' | 'token.revoked',
+  session: AuthSession,
+  token: { name: string; workspaceId: string; workspaceName: string; agentId?: string },
+): Promise<void> {
+  await recordAuditEvent({
+    kind,
+    actor: auditActorFromSession(session),
+    targetUserId: token.agentId ?? null,
+    workspaceId: token.workspaceId,
+    data: {
+      tokenName: token.name,
+      agent: token.agentId !== undefined,
+      workspaceName: token.workspaceName,
+    },
+  });
+}
 
 /** Одно сообщение на все причины отказа: не подсказываем, что именно не так с токеном. */
 const INVALID_TOKEN_MESSAGE = 'Недействительный токен доступа';
@@ -103,6 +123,7 @@ export async function createApiToken(
   session: AuthSession,
   input: CreateApiTokenInput,
 ): Promise<CreatedApiTokenDto> {
+  requireNotImpersonating(session, 'api-token.create');
   const userId = session.user.id;
   const { workspaceId } = input;
   await requireWorkspaceAccess(session, workspaceId);
@@ -114,6 +135,11 @@ export async function createApiToken(
     { tokenId: created.token.id, userId, workspaceId, prefix: created.token.prefix, scopes },
     '[api-token] created',
   );
+  await recordTokenEvent('token.issued', session, {
+    name: created.token.name,
+    workspaceId,
+    workspaceName: created.token.workspace.name,
+  });
   return created;
 }
 
@@ -139,6 +165,13 @@ export async function revokeApiToken(session: AuthSession, tokenId: string): Pro
   }
   const revoked = await apiTokenRepository.revoke(tokenId, new Date());
   log.info({ tokenId, userId, workspaceId: row.workspaceId, revoked }, '[api-token] revoked');
+  if (revoked) {
+    await recordTokenEvent('token.revoked', session, {
+      name: row.name,
+      workspaceId: row.workspaceId,
+      workspaceName: row.workspace.name,
+    });
+  }
 }
 
 /**
@@ -160,6 +193,7 @@ export async function createAgentToken(
   session: AuthSession,
   input: CreateAgentTokenInput,
 ): Promise<CreatedApiTokenDto> {
+  requireNotImpersonating(session, 'api-token.createAgent');
   const { workspaceId, agentId } = input;
   const agent = await requireAgentOwner(session, workspaceId, agentId);
   if (agent.disabledAt) {
@@ -177,6 +211,12 @@ export async function createAgentToken(
     { tokenId: created.token.id, agentId, workspaceId, by: session.user.id, scopes },
     '[api-token] agent token created',
   );
+  await recordTokenEvent('token.issued', session, {
+    name: created.token.name,
+    workspaceId,
+    workspaceName: created.token.workspace.name,
+    agentId,
+  });
   return created;
 }
 
@@ -211,6 +251,14 @@ export async function revokeAgentToken(
     { tokenId, agentId, workspaceId, by: session.user.id, revoked },
     '[api-token] agent token revoked',
   );
+  if (revoked) {
+    await recordTokenEvent('token.revoked', session, {
+      name: row.name,
+      workspaceId,
+      workspaceName: row.workspace.name,
+      agentId,
+    });
+  }
 }
 
 /**
@@ -221,6 +269,40 @@ export async function revokeAllUserApiTokens(userId: string): Promise<number> {
   const revoked = await apiTokenRepository.revokeAllForUser(userId, new Date());
   log.info({ userId, revoked }, '[api-token] all user tokens revoked');
   return revoked;
+}
+
+/**
+ * Токены пользователя для карточки в админке. Без проверки сессии: только для модуля admin,
+ * уже вызвавшего requireAdmin().
+ */
+export async function listUserApiTokensForAdmin(userId: string): Promise<ApiTokenDto[]> {
+  const rows = await apiTokenRepository.listForUser(userId);
+  log.debug({ userId, count: rows.length }, '[api-token.listForAdmin]');
+  const now = new Date();
+  return rows.map((row) => toDto(row, now));
+}
+
+/**
+ * Отзывает токен пользователя по решению администратора. Без проверки сессии: только для модуля
+ * admin, уже вызвавшего requireAdmin(). Токен другого пользователя — NOT_FOUND. Возвращает
+ * название токена и `revoked: false`, если он уже был отозван.
+ */
+export async function revokeApiTokenBySystem(
+  userId: string,
+  tokenId: string,
+): Promise<{ name: string; revoked: boolean }> {
+  const row = await apiTokenRepository.findOwned(userId, tokenId);
+  if (!row) {
+    log.warn({ userId, tokenId }, '[api-token.revokeBySystem] not found');
+    throw new NotFoundError('Токен не найден');
+  }
+  if (row.revokedAt) return { name: row.name, revoked: false };
+  const revoked = await apiTokenRepository.revoke(tokenId, new Date());
+  log.info(
+    { tokenId, userId, workspaceId: row.workspaceId, revoked },
+    '[api-token] revoked by admin',
+  );
+  return { name: row.name, revoked };
 }
 
 function isBanned(user: { banned: boolean | null; banExpires: Date | null }, now: Date): boolean {

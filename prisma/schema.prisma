@@ -73,6 +73,11 @@ model User {
   agent                WorkspaceAgent?  @relation("AgentUser")
   responsibleForAgents WorkspaceAgent[] @relation("AgentResponsible")
   createdAgents        WorkspaceAgent[] @relation("AgentCreator")
+
+  auditEventsAsActor        AuditEvent[]       @relation("AuditEventActor")
+  auditEventsAsImpersonator AuditEvent[]       @relation("AuditEventImpersonator")
+  auditEventsAsTarget       AuditEvent[]       @relation("AuditEventTarget")
+  updatedResourceSettings   ResourceSettings[] @relation("ResourceSettingsUpdater")
 }
 
 model Session {
@@ -173,22 +178,25 @@ model ActionRateLimit {
 // src/shared/auth/auth.ts (schema плагина) — менять только вместе.
 
 model Workspace {
-  id         String    @id
-  name       String
-  slug       String    @unique
+  id             String    @id
+  name           String
+  slug           String    @unique
   /// Ключ задач (`TSK` → TSK-42): ссылки на задачи в ветках, PR и коммитах GitHub. Уникален глобально,
   /// в верхнем регистре. null — ключ не задан (задачи показываются как #42, привязка GitHub не работает).
   /// Проставляет сервис пространств сразу после создания (поле в плагине с input: false).
-  taskKey    String?   @unique
-  logo       String?
+  taskKey        String?   @unique
+  logo           String?
   /// Ключ предустановленной иконки (shared/entity-icon); null — не выбрана, показывается по id.
   /// Проставляет сервис пространств после создания (поле не входит в схему плагина).
-  icon       String?
-  metadata   String?
+  icon           String?
+  metadata       String?
   /// Пространство в архиве (заморожено): доступ только владельцу к настройкам, токены MCP,
   /// вебхуки GitHub и напоминания его пропускают. Поле плагина organization с input: false.
-  archivedAt DateTime?
-  createdAt  DateTime  @default(now())
+  archivedAt     DateTime?
+  /// Квота хранилища документов, МБ; null — по умолчанию ресурса (ResourceSettings, затем env).
+  /// Задаёт только администратор ресурса (поле не входит в схему плагина).
+  storageQuotaMb Int?
+  createdAt      DateTime  @default(now())
 
   members        WorkspaceMember[]
   invitations    WorkspaceInvitation[]
@@ -209,6 +217,7 @@ model Workspace {
   apiTokens     ApiToken[]
   agents        WorkspaceAgent[]
   mcpActivities McpActivity[]
+  auditEvents   AuditEvent[]
 }
 
 model WorkspaceMember {
@@ -1176,6 +1185,7 @@ model ApiToken {
   historyEntries   TaskHistoryEntry[] @relation("TaskHistoryVia")
   createdDocuments Document[]         @relation("DocumentCreatedVia")
   activities       McpActivity[]
+  auditEvents      AuditEvent[]
 
   @@index([userId, createdAt])
   @@index([workspaceId])
@@ -1231,4 +1241,81 @@ model McpActivity {
   @@index([workspaceId, userId, createdAt])
   @@index([tokenId, createdAt])
   @@index([createdAt])
+}
+
+// ── Журнал действий и настройки ресурса ──────────────────────────────────────────
+// Событие пишет src/shared/audit (recordAuditEvent, никогда не бросает), читает модуль audit.
+// kind — тип из каталога (shared/audit/audit-catalog.ts): строка, чтобы новый тип не требовал
+// миграции; category дублирует каталог для фильтра и индекса. Связи — SetNull: журнал удалённого
+// пользователя или пространства остаётся читаемым по снимкам (actorName, data).
+
+enum AuditCategory {
+  /// Вход, пароль, 2FA, сессии, токены: видит сам пользователь и администратор.
+  security
+  /// Пространство, участники, приглашения, агенты, проекты: видят участники пространства.
+  workspace
+  /// Задачи и документы: видят участники пространства.
+  content
+  /// Действия администраторов ресурса: видят только администраторы.
+  admin
+}
+
+model AuditEvent {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  kind           String
+  category       AuditCategory
+  /// Автор; null — система или неизвестный.
+  actorId        String?
+  /// Снимок имени автора на момент события.
+  actorName      String?
+  /// Администратор, действовавший от имени actorId (имперсонация).
+  impersonatorId String?
+  /// Токен MCP, через который действовал агент или пользователь.
+  viaTokenId     String?       @db.Uuid
+  /// Субъект события: кого заблокировали, чей вход не удался.
+  targetUserId   String?
+  workspaceId    String?
+  /// Снимок для показа (ключ и название задачи, название пространства, роль…), схема — по kind.
+  data           Json
+  /// Только у событий безопасности.
+  ip             String?
+  userAgent      String?
+  createdAt      DateTime      @default(now())
+
+  actor        User?      @relation("AuditEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  impersonator User?      @relation("AuditEventImpersonator", fields: [impersonatorId], references: [id], onDelete: SetNull)
+  targetUser   User?      @relation("AuditEventTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  viaToken     ApiToken?  @relation(fields: [viaTokenId], references: [id], onDelete: SetNull)
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([workspaceId, actorId, createdAt])
+  @@index([category, createdAt])
+  @@index([createdAt])
+  @@index([impersonatorId])
+  @@index([viaTokenId])
+}
+
+enum SignupMode {
+  /// Регистрироваться может любой.
+  open
+  /// Только с активным приглашением в пространство на этот email.
+  invite_only
+  /// Регистрация закрыта (кроме ADMIN_EMAILS).
+  closed
+}
+
+/// Настройки ресурса: одна строка id = "default" (src/shared/resource-settings).
+model ResourceSettings {
+  id                      String     @id @default("default")
+  signupMode              SignupMode @default(open)
+  /// Разрешённые домены email в нижнем регистре; пусто — любые.
+  allowedEmailDomains     String[]   @default([])
+  /// Квота хранилища пространства по умолчанию, МБ; null — DOCUMENTS_WORKSPACE_QUOTA_MB.
+  defaultWorkspaceQuotaMb Int?
+  updatedAt               DateTime   @updatedAt
+  updatedById             String?
+
+  updatedBy User? @relation("ResourceSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
 }

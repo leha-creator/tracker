@@ -1,0 +1,37 @@
+import { Suspense } from 'react';
+
+import { SignupSettingsForm } from '@/components/admin/settings/signup-settings-form';
+import { StorageSettingsForm } from '@/components/admin/settings/storage-settings-form';
+import { SettingsSections } from '@/components/layout/settings-section';
+import { formatRelativeTime } from '@/lib/format-relative-time';
+import { getAdminResourceSettings } from '@/modules/admin';
+import { requireAdminOrNotFound } from '@/shared/access';
+
+// Без metadata.title: заголовок в статическом shell раскрыл бы раздел не-администратору.
+
+export default function AdminSettingsPage() {
+  return (
+    <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-muted" />}>
+      <SettingsContent />
+    </Suspense>
+  );
+}
+
+async function SettingsContent() {
+  await requireAdminOrNotFound('/admin/settings');
+  const settings = await getAdminResourceSettings();
+  return (
+    <div className="grid gap-2">
+      {settings.updatedAt && (
+        <p className="text-sm text-muted-foreground">
+          Изменено {formatRelativeTime(settings.updatedAt)}
+          {settings.updatedBy ? ` · ${settings.updatedBy.name}` : ''}
+        </p>
+      )}
+      <SettingsSections>
+        <SignupSettingsForm policy={settings.signup} />
+        <StorageSettingsForm storage={settings.storage} />
+      </SettingsSections>
+    </div>
+  );
+}

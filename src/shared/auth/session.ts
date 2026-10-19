@@ -39,7 +39,12 @@ export interface AuthVia {
 
 export interface AuthSession {
   user: AuthUser;
-  session: { id: string; expiresAt: Date };
+  session: {
+    id: string;
+    expiresAt: Date;
+    /** Администратор, вошедший от имени пользователя (имперсонация); у сессии токена — нет. */
+    impersonatedBy?: string | null;
+  };
   /** Только у сессии токена MCP; у сессии браузера — undefined. */
   via?: AuthVia;
 }
@@ -57,7 +62,11 @@ function toAuthSession({ user, session }: NonNullable<SessionResult>): AuthSessi
       banned: user.banned ?? false,
       isAgent: user.isAgent ?? false,
     },
-    session: { id: session.id, expiresAt: session.expiresAt },
+    session: {
+      id: session.id,
+      expiresAt: session.expiresAt,
+      impersonatedBy: session.impersonatedBy ?? null,
+    },
   };
 }
 

@@ -30,10 +30,11 @@ tasker/
 │   │   │   │   ├── docs/                                 # Документы: обзор (?folder, ?q, ?tag, ?kind), new, [documentId], [documentId]/edit
 │   │   │   │   ├── settings/members/page.tsx
 │   │   │   │   └── settings/labels/page.tsx                # Метки пространства
-│   │   │   └── admin/                # Глобальная админка (роль ADMIN): users/ — пользователи ресурса
+│   │   │   └── admin/                # Глобальная админка (роль ADMIN): обзор, users/ (+ [userId]), workspaces/ (+ [workspaceId]), activity/, settings/, integrations/
 │   │   └── api/
 │   │       ├── auth/[...all]/route.ts         # Better Auth handler
 │   │       ├── cron/reminders/route.ts        # Напоминания о сроке (Bearer CRON_SECRET, вызывает планировщик)
+│   │       ├── cron/cleanup/route.ts          # Очистка журнала по AUDIT_RETENTION_DAYS и истёкших лимитов (тот же секрет, cron-auth.ts)
 │   │       ├── documents/[documentId]/file/route.ts # файл документа (302) или Markdown заметки
 │   │       ├── mcp/route.ts                   # MCP-сервер для агентов (Bearer-токен)
 │   │       └── webhooks/github/route.ts       # GitHub webhooks
@@ -96,10 +97,20 @@ tasker/
 │   │   │   ├── client.ts
 │   │   │   └── index.ts
 │   │   │
+│   │   ├── audit/                    # Журнал действий: только чтение (запись — shared/audit)
+│   │   │   ├── slices/event/         # лента участника, журнал безопасности, журнал админки, очистка по сроку
+│   │   │   ├── models/               # запрос и курсор, подписи типов, текст события (describeAuditEvent)
+│   │   │   ├── client.ts
+│   │   │   └── index.ts
+│   │   │
 │   │   ├── admin/                    # Администрирование ресурса (роль ADMIN)
 │   │   │   ├── slices/
-│   │   │   │   └── user/             # список пользователей; блокировка, роль, сессии, удаление через плагин admin
-│   │   │   ├── models/               # правила над пользователями (не над собой, администратора — сначала снять роль, единственный владелец), запрос списка
+│   │   │   │   ├── user/             # список и карточка; блокировка, роль, сессии, токены, письма, удаление через плагин admin и порт auth
+│   │   │   │   ├── impersonation/    # вход от имени пользователя (плагин admin), баннер, возврат
+│   │   │   │   ├── workspace/        # все пространства: архив, удаление, смена владельца, квота (системные функции workspaces)
+│   │   │   │   ├── settings/         # настройки ресурса: группы «Регистрация» и «Хранилище» независимо
+│   │   │   │   └── overview/         # обзор ресурса, тестовое письмо
+│   │   │   ├── models/               # правила над пользователями (не над собой, администратора — сначала снять роль, единственный владелец), запросы списков, имперсонация, ряд по дням
 │   │   │   ├── admin-api.ts          # callAdminApi: вызов API плагина admin + маппинг ошибок
 │   │   │   ├── client.ts
 │   │   │   └── index.ts
@@ -170,6 +181,8 @@ tasker/
 │       ├── storage/                  # S3-клиенты (S3_ENDPOINT и S3_PUBLIC_ENDPOINT для подписи), presigned POST/GET, удаление объектов
 │       ├── mail/                     # SMTP (nodemailer): sendMail(), sendMailInBackground(), escapeHtml()
 │       ├── rate-limit/               # Лимиты попыток Server Actions (ActionRateLimit), getClientIp()
+│       ├── audit/                    # Каталог событий журнала (категория, видимость, владелец), recordAuditEvent()
+│       ├── resource-settings/        # Настройки ресурса: «Регистрация» и «Хранилище», кеш процесса
 │       ├── logger/                   # pino, LOG_LEVEL
 │       ├── env/                      # Zod-валидация переменных окружения (ленивая)
 │       ├── health/                   # checkHealth(): агрегирует checkDatabase/checkStorage для /api/health
@@ -196,7 +209,10 @@ tasker/
 - ✅ `agents` зависит от `api-tokens` (отзыв токенов отключённого агента), но не наоборот. `api-tokens`, `notifications`, `workspaces` и `profiles` читают `WorkspaceAgent` и `User.isAgent` своими репозиториями — задокументированное чтение чужой таблицы, чтобы не создавать цикл (`agents` → `api-tokens`, `notifications` ни от кого не зависит)
 - ✅ `documents` зависит от `tasks` (краткие данные и поиск задач для связей), но `tasks` не зависит от `documents`: раздел «Документы» в задаче собирает компонент слоя UI (`components/documents/task-documents`)
 - ✅ `search` зависит от `tasks`, `documents` и `workspaces` (их функции поиска и списки), от него не зависит никто
-- ✅ `admin` зависит от `workspaces` (число пространств, единоличное владение), но не наоборот. Проверки администратора (`requireAdmin`) читают сессию в обход cookie-кеша (`getFreshSession`)
+- ✅ `admin` зависит от `workspaces`, `profiles`, `api-tokens`, `audit`, `auth`, `documents`, `tasks` и `integrations/github` (системные функции без сессии — только после `requireAdmin()`), но не наоборот. Проверки администратора (`requireAdmin`) читают сессию в обход cookie-кеша (`getFreshSession`)
+- ✅ Операции над чужой учётной записью и метрики учётных записей — только через `callAdminApi` и системные функции `auth` (`slices/account`): единый порт под будущий IdP. `admin` не читает `User` и `Session` для метрик напрямую
+- ✅ Журнал пишет `recordAuditEvent` из `shared/audit` (его зовут модули и хуки Better Auth); модуль `audit` только читает. `audit` зависит лишь от `auth/client` (подпись устройства), `auth` читает `AuditEvent` своим репозиторием для метрик
+- ✅ Настройки ресурса — `shared/resource-settings` (нужны `shared/auth` и `documents`), две независимые группы: «Регистрация» удаляется без правок в «Хранилище»
 - ❌ Компоненты и страницы не импортируют `prisma` и репозитории
 - ❌ Actions не вызывают репозитории в обход сервиса
 - ❌ Модели не импортируют сервисы, репозитории и `@prisma/client`

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { betterAuth } from 'better-auth';
+import { APIError } from 'better-auth/api';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { nextCookies } from 'better-auth/next-js';
 import { admin } from 'better-auth/plugins/admin';
@@ -8,13 +9,16 @@ import { organization } from 'better-auth/plugins/organization';
 import { memberAc, ownerAc } from 'better-auth/plugins/organization/access';
 import { twoFactor } from 'better-auth/plugins/two-factor';
 
+import { auditRequestContext, recordAuditEvent } from '@/shared/audit';
 import { prisma } from '@/shared/db';
 import { getEnv } from '@/shared/env';
 import { getGithubAppConfig, type GithubAppConfig } from '@/shared/github-app';
 import { createLogger } from '@/shared/logger';
 import { sendMailInBackground } from '@/shared/mail';
+import { evaluateSignup, SIGNUP_REJECTION_MESSAGES } from '@/shared/resource-settings';
 
 import { allowSessionCreation } from './agent-session-guard';
+import { signInMethodFromPath, signUpMethodFromPath } from './auth-audit';
 import {
   buildPasswordResetEmail,
   buildSignUpAttemptEmail,
@@ -161,18 +165,30 @@ function createAuth(github: GithubAppConfig | null) {
       resetPasswordTokenExpiresIn: PASSWORD_RESET_TTL_SECONDS,
       revokeSessionsOnPasswordReset: true,
       // Письма — в фоне: время ответа не выдаёт, существует ли аккаунт. Ссылки и токены не логируем.
-      sendResetPassword: ({ user, url }) => {
+      sendResetPassword: async ({ user, url }, request) => {
         log.info({ userId: user.id }, '[auth.passwordReset] requested');
+        // Автор неизвестен (письмо может запросить кто угодно) — пользователь только субъект.
+        await recordAuditEvent({
+          kind: 'auth.password_reset_requested',
+          actor: null,
+          targetUserId: user.id,
+          data: {},
+          request: request ? auditRequestContext(request.headers) : null,
+        });
         sendMailInBackground(
           { to: user.email, ...buildPasswordResetEmail({ name: user.name, url }) },
           'password-reset',
         );
-        return Promise.resolve();
       },
-      onPasswordReset: ({ user }) => {
+      onPasswordReset: async ({ user }, request) => {
         log.info({ userId: user.id }, '[auth.passwordReset] completed');
         sendPasswordChangedMail(user);
-        return Promise.resolve();
+        await recordAuditEvent({
+          kind: 'auth.password_reset',
+          actor: { actorId: user.id, actorName: user.name },
+          data: {},
+          request: request ? auditRequestContext(request.headers) : null,
+        });
       },
       // Регистрация на занятый адрес отвечает как успешная; владельцу адреса — письмо.
       onExistingUserSignUp: ({ user }) => {
@@ -206,9 +222,14 @@ function createAuth(github: GithubAppConfig | null) {
         );
         return Promise.resolve();
       },
-      afterEmailVerification: (user) => {
+      afterEmailVerification: async (user, request) => {
         log.info({ userId: user.id }, '[auth.emailVerification] verified');
-        return Promise.resolve();
+        await recordAuditEvent({
+          kind: 'auth.email_verified',
+          actor: { actorId: user.id, actorName: user.name },
+          data: {},
+          request: request ? auditRequestContext(request.headers) : null,
+        });
       },
     },
     // Вход через GitHub — только если настроено GitHub App (GITHUB_* или админка; см. docs/github.md).
@@ -244,16 +265,36 @@ function createAuth(github: GithubAppConfig | null) {
     databaseHooks: {
       user: {
         create: {
-          before: (user) => {
-            if (!env.ADMIN_EMAILS.includes(user.email.toLowerCase())) {
-              return Promise.resolve({ data: user });
+          before: async (user, context) => {
+            const isAdminEmail = env.ADMIN_EMAILS.includes(user.email.toLowerCase());
+            // Правила регистрации из настроек ресурса. Форма регистрации проверяет их заранее
+            // (credentials.signUp), здесь — для входа через GitHub и как страховка.
+            // Пользователей, созданных администратором, они не касаются.
+            if (context?.path !== '/admin/create-user') {
+              const rejection = await evaluateSignup({ email: user.email, isAdminEmail });
+              if (rejection) {
+                // В колбэке OAuth ошибка хука ушла бы JSON-ответом: возвращаем на /login?error=.
+                if (context?.path?.includes('callback')) {
+                  throw context.redirect(`${appUrl()}/login?error=signup_${rejection}`);
+                }
+                throw new APIError('FORBIDDEN', {
+                  message: SIGNUP_REJECTION_MESSAGES[rejection],
+                  code: `SIGNUP_${rejection.toUpperCase()}`,
+                });
+              }
             }
+            if (!isAdminEmail) return { data: user };
             log.info('[auth.hooks] new user promoted to admin via ADMIN_EMAILS');
-            return Promise.resolve({ data: { ...user, role: 'admin' } });
+            return { data: { ...user, role: 'admin' } };
           },
-          after: (user) => {
+          after: async (user, context) => {
             log.info({ userId: user.id }, '[auth.hooks] user created');
-            return Promise.resolve();
+            await recordAuditEvent({
+              kind: 'auth.signed_up',
+              actor: { actorId: user.id, actorName: user.name },
+              data: { method: signUpMethodFromPath(context?.path) },
+              request: context?.headers ? auditRequestContext(context.headers) : null,
+            });
           },
         },
       },
@@ -263,6 +304,35 @@ function createAuth(github: GithubAppConfig | null) {
           before: async (session) => {
             const allowed = await allowSessionCreation(session, findIsAgent);
             return allowed ? undefined : false;
+          },
+          // Вход любым способом (пароль, GitHub, второй шаг 2FA) создаёт сессию — пишем здесь.
+          // Хук выполняется после коммита. Сессию имперсонации пишет сервис администратора.
+          after: async (session, context) => {
+            if (session.impersonatedBy) return;
+            await recordAuditEvent({
+              kind: 'auth.sign_in',
+              actor: { actorId: session.userId },
+              data: { method: signInMethodFromPath(context?.path) },
+              request: {
+                ip: session.ipAddress ?? null,
+                userAgent: session.userAgent?.slice(0, 300) ?? null,
+              },
+            });
+          },
+        },
+      },
+      account: {
+        create: {
+          // Привязка GitHub завершается в OAuth-callback, а не в сервисе профиля. При регистрации
+          // через GitHub событие тоже пишется — рядом с auth.signed_up.
+          after: async (account, context) => {
+            if (account.providerId !== 'github') return;
+            await recordAuditEvent({
+              kind: 'auth.github_linked',
+              actor: { actorId: account.userId },
+              data: { login: null },
+              request: context?.headers ? auditRequestContext(context.headers) : null,
+            });
           },
         },
       },
@@ -278,7 +348,13 @@ function createAuth(github: GithubAppConfig | null) {
     // nextCookies() — последним: выставляет cookie из Server Actions.
     plugins: [
       // Без причины плагин записал бы «No reason»; причину показывает админка.
-      admin({ defaultRole: 'user', adminRoles: ['admin'], defaultBanReason: 'Причина не указана' }),
+      admin({
+        defaultRole: 'user',
+        adminRoles: ['admin'],
+        defaultBanReason: 'Причина не указана',
+        // Вход от имени пользователя — на час (см. modules/admin, IMPERSONATION_SESSION_SECONDS).
+        impersonationSessionDuration: 60 * 60,
+      }),
       workspacesPlugin(env.AUTH_REQUIRE_EMAIL_VERIFICATION),
       // 2FA (TOTP + резервные коды) — только для входа по email и паролю (см. docs/architecture.md).
       twoFactor({

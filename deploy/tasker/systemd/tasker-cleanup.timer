@@ -1,0 +1,12 @@
+# Ежедневная очистка Tasker — в 04:30 по Москве, вне окна резервных копий и напоминаний.
+# Срок хранения журнала — AUDIT_RETENTION_DAYS в /opt/tasker/.env.
+[Unit]
+Description=Daily Tasker cleanup
+
+[Timer]
+OnCalendar=*-*-* 04:30:00 Europe/Moscow
+Persistent=true
+Unit=tasker-cleanup.service
+
+[Install]
+WantedBy=timers.target

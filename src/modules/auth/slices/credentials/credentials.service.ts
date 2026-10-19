@@ -3,11 +3,21 @@ import 'server-only';
 import { headers } from 'next/headers';
 
 import { safeRedirectPath } from '@/shared/access';
-import { getAuth, verifyEmailCallbackPath } from '@/shared/auth';
+import { auditActorFromSession, auditRequestContext, recordAuditEvent } from '@/shared/audit';
+import { getAuth, getSession, verifyEmailCallbackPath } from '@/shared/auth';
+import { getEnv } from '@/shared/env';
+import { ForbiddenError } from '@/shared/errors';
 import { createLogger, maskEmail } from '@/shared/logger';
 import { enforceRateLimit, getClientIp } from '@/shared/rate-limit';
+import {
+  evaluateSignup,
+  getSignupPolicy as loadSignupPolicy,
+  SIGNUP_REJECTION_MESSAGES,
+  type SignupPolicy,
+} from '@/shared/resource-settings';
 
-import { mapAuthError } from './credentials.errors';
+import { authErrorCode, mapAuthError } from './credentials.errors';
+import { credentialsRepository } from './credentials.repository';
 import type { SignInInput, SignUpInput } from './credentials.schema';
 
 const log = createLogger('auth.credentials');
@@ -23,6 +33,13 @@ export async function signUp(input: SignUpInput): Promise<SignUpOutcome> {
   log.debug({ email }, '[credentials.signUp] start');
   const requestHeaders = await headers();
   await enforceRateLimit('sign-up', { ip: getClientIp(requestHeaders) });
+  // До Better Auth: отказ одинаков для занятых и свободных адресов (хук создания пользователя
+  // срабатывает только для новых и выдал бы, что email уже зарегистрирован).
+  const rejection = await evaluateSignup({
+    email: input.email,
+    isAdminEmail: getEnv().ADMIN_EMAILS.includes(input.email.toLowerCase()),
+  });
+  if (rejection) throw new ForbiddenError(SIGNUP_REJECTION_MESSAGES[rejection]);
 
   try {
     const result = await getAuth().api.signUpEmail({
@@ -48,6 +65,11 @@ export async function signUp(input: SignUpInput): Promise<SignUpOutcome> {
     log.warn({ email, code: (mapped as { code?: string }).code }, '[credentials.signUp] failed');
     throw mapped;
   }
+}
+
+/** Политика регистрации из настроек ресурса — для страниц /register и /login. */
+export function getSignupPolicy(): Promise<SignupPolicy> {
+  return loadSignupPolicy();
 }
 
 export async function signIn(input: SignInInput): Promise<SignInOutcome> {
@@ -79,11 +101,42 @@ export async function signIn(input: SignInInput): Promise<SignInOutcome> {
   } catch (error) {
     const mapped = mapAuthError(error);
     log.warn({ email, code: (mapped as { code?: string }).code }, '[credentials.signIn] failed');
+    await recordFailedSignIn(input.email, authErrorCode(error), requestHeaders);
     throw mapped;
   }
 }
 
+/**
+ * Неудачный вход — в журнал пользователя, если такой email есть. Для неизвестного адреса событие
+ * не пишется: журнал не копит чужие адреса, попытку видно в логе.
+ */
+async function recordFailedSignIn(email: string, code: string, requestHeaders: Headers) {
+  try {
+    const userId = await credentialsRepository.findUserIdByEmail(email);
+    if (!userId) return;
+    await recordAuditEvent({
+      kind: 'auth.sign_in_failed',
+      actor: null,
+      targetUserId: userId,
+      data: { method: 'password', reason: code },
+      request: auditRequestContext(requestHeaders),
+    });
+  } catch (error) {
+    log.error({ err: error }, '[credentials.signIn] failed to record audit event');
+  }
+}
+
 export async function signOut(): Promise<void> {
-  await getAuth().api.signOut({ headers: await headers() });
+  const requestHeaders = await headers();
+  const session = await getSession();
+  await getAuth().api.signOut({ headers: requestHeaders });
   log.info('[credentials.signOut] signed out');
+  if (session) {
+    await recordAuditEvent({
+      kind: 'auth.sign_out',
+      actor: auditActorFromSession(session),
+      data: {},
+      request: auditRequestContext(requestHeaders),
+    });
+  }
 }

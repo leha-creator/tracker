@@ -12,7 +12,7 @@
 #   - создаёт docker-сеть edge;
 #   - добавляет ключ деплоя Tasker в authorized_keys пользователя deploy;
 #   - создаёт /opt/tasker/.env со сгенерированными секретами, если его ещё нет (существующий не трогает);
-#   - ставит backup.sh и systemd-таймеры резервных копий, reminders.sh и таймер напоминаний о сроке;
+#   - ставит backup.sh и systemd-таймеры резервных копий, reminders.sh и таймер напоминаний о сроке, cleanup.sh и таймер очистки журнала;
 #   - включает MSS clamping для трафика контейнеров (deploy/host/docker-mss-clamp.service).
 # Секреты в вывод не печатаются.
 set -eu
@@ -60,6 +60,7 @@ fi
 install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 750 "$APP_DIR" "$APP_DIR/backups"
 install -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$SRC/tasker/backup.sh" "$APP_DIR/backup.sh"
 install -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$SRC/tasker/reminders.sh" "$APP_DIR/reminders.sh"
+install -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$SRC/tasker/cleanup.sh" "$APP_DIR/cleanup.sh"
 log "app dir: ok ($APP_DIR)"
 
 # --- ключ деплоя -----------------------------------------------------------------
@@ -109,8 +110,8 @@ if [ -d "$SRC/tasker/systemd" ] && command -v systemctl > /dev/null 2>&1; then
   systemctl enable --now tasker-backup-db.timer tasker-backup-files.timer > /dev/null
   log "backup timers: ok ($(systemctl list-timers 'tasker-backup-*' --no-legend | wc -l) active)"
   # Без CRON_SECRET в .env эндпоинт отвечает 404 — таймер включаем всё равно, он просто не шлёт.
-  systemctl enable --now tasker-reminders.timer > /dev/null
-  log "reminders timer: ok"
+  systemctl enable --now tasker-reminders.timer tasker-cleanup.timer > /dev/null
+  log "reminders and cleanup timers: ok"
 else
   log "backup timers: skip (no systemd units or systemctl)"
 fi

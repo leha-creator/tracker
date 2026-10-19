@@ -1,6 +1,10 @@
 import 'server-only';
 
-import { requireUser } from '@/shared/access';
+import { headers } from 'next/headers';
+
+import { requireNotImpersonating, requireUser } from '@/shared/access';
+import { auditActorFromSession, auditRequestContext, recordAuditEvent } from '@/shared/audit';
+import type { AuthSession } from '@/shared/auth';
 import { NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
@@ -9,6 +13,15 @@ import type { MySessionDto } from './session.dto';
 import { sessionRepository } from './session.repository';
 
 const log = createLogger('auth.session');
+
+async function recordSessionsRevoked(session: AuthSession, scope: 'one' | 'others') {
+  await recordAuditEvent({
+    kind: 'auth.sessions_revoked',
+    actor: auditActorFromSession(session),
+    data: { scope },
+    request: auditRequestContext(await headers()),
+  });
+}
 
 /** Действующие сессии текущего пользователя: текущая — первой, остальные — по активности. */
 export async function listMySessions(): Promise<MySessionDto[]> {
@@ -34,6 +47,7 @@ export async function listMySessions(): Promise<MySessionDto[]> {
  */
 export async function revokeMySession(sessionId: string): Promise<void> {
   const session = await requireUser();
+  requireNotImpersonating(session, 'session.revoke');
   const userId = session.user.id;
   if (sessionId === session.session.id) {
     throw new ValidationError('Текущую сессию завершает кнопка «Выйти»');
@@ -44,12 +58,15 @@ export async function revokeMySession(sessionId: string): Promise<void> {
     throw new NotFoundError('Сессия не найдена');
   }
   log.info({ userId, sessionId }, '[session.revoke]');
+  await recordSessionsRevoked(session, 'one');
 }
 
 /** Завершает все сессии, кроме текущей. */
 export async function revokeMyOtherSessions(): Promise<number> {
   const session = await requireUser();
+  requireNotImpersonating(session, 'session.revokeOthers');
   const count = await sessionRepository.deleteOthers(session.user.id, session.session.id);
   log.info({ userId: session.user.id, count }, '[session.revokeOthers]');
+  if (count > 0) await recordSessionsRevoked(session, 'others');
   return count;
 }

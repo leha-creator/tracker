@@ -6,11 +6,15 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const LINKS = [
+  { href: '/admin', label: 'Обзор' },
   { href: '/admin/users', label: 'Пользователи' },
+  { href: '/admin/workspaces', label: 'Пространства' },
+  { href: '/admin/activity', label: 'Журнал' },
   { href: '/admin/integrations', label: 'Интеграции' },
+  { href: '/admin/settings', label: 'Настройки' },
 ] as const;
 
-/** Вкладки админки. Раздел «Пространства» появится следующим планом этапа. */
+/** Вкладки админки. */
 export function AdminNav() {
   const pathname = usePathname();
   return (
@@ -19,7 +23,9 @@ export function AdminNav() {
       className="flex w-fit gap-1 rounded-lg bg-muted p-1"
     >
       {LINKS.map((link) => {
-        const active = pathname.startsWith(link.href);
+        // «Обзор» (/admin) — префикс всех вкладок: активен только на своём адресе.
+        const active =
+          link.href === '/admin' ? pathname === link.href : pathname.startsWith(link.href);
         return (
           <Link
             key={link.href}

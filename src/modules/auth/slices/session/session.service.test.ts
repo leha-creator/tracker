@@ -7,7 +7,15 @@ const listActive = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
 const deleteOwned = vi.fn<(...args: unknown[]) => Promise<number>>();
 const deleteOthers = vi.fn<(...args: unknown[]) => Promise<number>>();
 
+const recordAuditEvent = vi.fn<(input: Record<string, unknown>) => Promise<void>>();
+vi.mock('@/shared/audit', () => ({
+  recordAuditEvent: (input: Record<string, unknown>) => recordAuditEvent(input),
+  auditActorFromSession: (session: { user: { id: string } }) => ({ actorId: session.user.id }),
+  auditRequestContext: () => ({ ip: '203.0.113.5', userAgent: null }),
+}));
+vi.mock('next/headers', () => ({ headers: () => Promise.resolve(new Headers()) }));
 vi.mock('@/shared/access', () => ({
+  requireNotImpersonating: () => undefined,
   requireUser: () =>
     Promise.resolve({ user: { id: 'u1' }, session: { id: 'current' } } as AuthSession),
 }));
@@ -34,6 +42,7 @@ beforeEach(() => {
   listActive.mockReset();
   deleteOwned.mockReset();
   deleteOthers.mockReset();
+  recordAuditEvent.mockReset().mockResolvedValue();
 });
 
 describe('listMySessions', () => {
@@ -70,6 +79,9 @@ describe('revokeMySession', () => {
   it('deletes an owned session', async () => {
     deleteOwned.mockResolvedValueOnce(1);
     await expect(revokeMySession('other')).resolves.toBeUndefined();
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'auth.sessions_revoked', data: { scope: 'one' } }),
+    );
   });
 });
 

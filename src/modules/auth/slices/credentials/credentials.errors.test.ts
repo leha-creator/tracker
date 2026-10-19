@@ -1,7 +1,7 @@
 import { APIError } from 'better-auth/api';
 import { describe, expect, it } from 'vitest';
 
-import { RateLimitError } from '@/shared/errors';
+import { ForbiddenError, RateLimitError } from '@/shared/errors';
 
 import { EMAIL_NOT_VERIFIED_REASON, mapAuthError } from './credentials.errors';
 
@@ -61,6 +61,12 @@ describe('mapAuthError', () => {
     );
     expect(error).toBeInstanceOf(RateLimitError);
     expect((error as RateLimitError).retryAfterSeconds).toBe(42);
+  });
+
+  it('maps signup rejections from resource settings to ForbiddenError', () => {
+    const error = mapAuthError(apiError('SIGNUP_INVITE_ONLY'));
+    expect(error).toBeInstanceOf(ForbiddenError);
+    expect((error as ForbiddenError).message).toContain('только по приглашению');
   });
 
   it('returns unknown errors unchanged', () => {

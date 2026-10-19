@@ -11,8 +11,18 @@ export {
   listMemberIdentities,
   listMembers,
   listSoleOwnedWorkspaces,
+  listUserMemberships,
   sharesWorkspace,
 } from './slices/member/member.service';
+export {
+  countAllWorkspaces,
+  deleteWorkspaceBySystem,
+  getWorkspaceForAdmin,
+  listAllWorkspaces,
+  setWorkspaceArchivedBySystem,
+  setWorkspaceStorageQuota,
+  transferWorkspaceOwnership,
+} from './slices/system/system.service';
 export {
   archiveWorkspace,
   findWorkspacesByTaskKeys,

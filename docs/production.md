@@ -24,8 +24,10 @@ push в main ──► CI: check, migrations, docker ──► publish (GHCR) �
 | `/opt/tasker/release.env` | `TASKER_TAG=sha-xxxxxxx` — текущий релиз | CI при каждом деплое |
 | `/opt/tasker/backup.sh`, `/opt/tasker/backups/` | Скрипт и резервные копии | CI (скрипт), таймеры (копии) |
 | `/opt/tasker/reminders.sh` | Запуск напоминаний о сроке | CI при каждом деплое |
+| `/opt/tasker/cleanup.sh` | Очистка журнала действий и счётчиков лимитов | CI при каждом деплое |
 | `/etc/systemd/system/tasker-backup*` | Таймеры резервных копий | `bootstrap-server.sh` |
 | `/etc/systemd/system/tasker-reminders.*` | Таймер напоминаний о сроке | `bootstrap-server.sh` |
+| `/etc/systemd/system/tasker-cleanup.*` | Таймер очистки журнала | `bootstrap-server.sh` |
 | `/etc/systemd/system/docker-mss-clamp.service` | MSS clamping для контейнеров (см. «Почта») | `bootstrap-server.sh` |
 
 Файлы, которые копирует CI, руками не правятся: следующий деплой их перезапишет.
@@ -57,7 +59,7 @@ push в main ──► CI: check, migrations, docker ──► publish (GHCR) �
 | Джоб | Когда | Что делает |
 |------|-------|------------|
 | `publish` | push в `main` после `check`, `migrations`, `docker` | Собирает `runner` и `migrate` из кеша `docker` и пушит в GHCR с тегами `sha-<7>` и `main` |
-| `deploy` | после `publish` или Run workflow с `tag` | SSH под `deploy` → копирует `compose.yml`, `backup.sh`, `reminders.sh`, `release.env`, `tracker.caddy` → `backup.sh db` → `docker login` (временный `GITHUB_TOKEN`) → `pull` → `up -d --wait app` → `docker logout` → `caddy validate` + `reload` → smoke `https://tracker.plwedding.ru/api/health` |
+| `deploy` | после `publish` или Run workflow с `tag` | SSH под `deploy` → копирует `compose.yml`, `backup.sh`, `reminders.sh`, `cleanup.sh`, `release.env`, `tracker.caddy` → `backup.sh db` → `docker login` (временный `GITHUB_TOKEN`) → `pull` → `up -d --wait app` → `docker logout` → `caddy validate` + `reload` → smoke `https://tracker.plwedding.ru/api/health` |
 
 Деплои идут по очереди (`concurrency: deploy-production`), новый пуш в `main` не прерывает идущий деплой. Если миграция упала, `app` не пересоздаётся и продолжает работать предыдущая версия: в логе джоба будет ошибка `migrate`, а копия БД до миграции лежит в `/opt/tasker/backups/db/`.
 
@@ -158,6 +160,23 @@ sudo -u deploy sh -c 'cd /opt/tasker && docker compose --env-file .env --env-fil
 install -m 644 /tmp/tasker-deploy/tasker/systemd/tasker-reminders.* /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now tasker-reminders.timer
+```
+
+## Очистка журнала
+
+`tasker-cleanup.timer` раз в день в 04:30 по Москве запускает `/opt/tasker/cleanup.sh` под `deploy`. Скрипт вызывает `POST /api/cron/cleanup` изнутри контейнера: удаляются события журнала действий старше `AUDIT_RETENTION_DAYS` (по умолчанию 180 дней) и истёкшие счётчики лимитов. Секрет — тот же `CRON_SECRET`.
+
+```bash
+sh /opt/tasker/cleanup.sh              # 200 {"result":{"auditDeleted":…,"auditCutoff":"…","rateLimitDeleted":…}}
+journalctl -u tasker-cleanup           # журнал запусков
+```
+
+**Сервер, настроенный до появления очистки.** CI копирует `cleanup.sh`, но таймеры не ставит. Один раз под root (или повторный запуск `bootstrap-server.sh`):
+
+```bash
+install -m 644 /tmp/tasker-deploy/tasker/systemd/tasker-cleanup.* /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now tasker-cleanup.timer
 ```
 
 ## Почта
@@ -274,7 +293,8 @@ curl -sN https://tracker.plwedding.ru/api/realtime/w/<slug> -H 'cookie: __Secure
 - Снаружи открыты только 22, 80 и 443. Postgres и MinIO наружу не публикуются, из MinIO через прокси доступен только путь бакета. Анонимный доступ к бакету закрыт.
 - Ответы содержат `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`; заголовок `Server` убран. Куки сессии в production — `__Secure-`.
 - Пользователь `deploy` в группе `docker` фактически равен root. Ключ `tasker_deploy` используется только для Tasker и отзывается независимо от ключа maxim (удалить строку `tasker-ci` из `/home/deploy/.ssh/authorized_keys`).
-- Регистрация открыта для всех, у кого есть ссылка, но войти можно только после подтверждения email. Роль admin получают только адреса из `ADMIN_EMAILS` в момент регистрации.
+- По умолчанию регистрация открыта для всех, у кого есть ссылка, но войти можно только после подтверждения email. Закрыть её, оставить только по приглашению или ограничить доменами email можно в админке (`/admin/settings`). Роль admin получают только адреса из `ADMIN_EMAILS` в момент регистрации; они регистрируются при любом режиме.
+- Действия пользователей и администраторов пишутся в журнал (`/admin/activity`), срок хранения — `AUDIT_RETENTION_DAYS`. Вход «от имени пользователя» длится час, помечается в журнале и не даёт менять пароль, 2FA, сессии и токены.
 - Попытки входа, регистрации, сброса пароля и ввода кода 2FA ограничены лимитами в БД (таблицы `RateLimit` и `ActionRateLimit`), IP клиента — из `X-Forwarded-For`, который выставляет edge-Caddy. Администратору стоит включить 2FA в профиле («Безопасность»).
 - Токены доступа агентов (`/api/mcp`) действуют в одном пространстве с правами владельца и не дают админских прав. В БД хранится только их SHA-256. Отзыв действует сразу.
 

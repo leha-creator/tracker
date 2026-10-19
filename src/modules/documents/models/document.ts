@@ -72,6 +72,18 @@ export function assertTaskLinksLimit(count: number): void {
   }
 }
 
+/**
+ * Квота хранилища пространства, МБ: своя квота пространства (задаёт администратор) → квота по
+ * умолчанию из настроек ресурса → DOCUMENTS_WORKSPACE_QUOTA_MB.
+ */
+export function resolveWorkspaceQuotaMb(input: {
+  workspaceQuotaMb: number | null;
+  defaultQuotaMb: number | null;
+  envQuotaMb: number;
+}): number {
+  return input.workspaceQuotaMb ?? input.defaultQuotaMb ?? input.envQuotaMb;
+}
+
 /** Квота хранилища пространства: занятое + новый файл не больше квоты. */
 export function assertStorageQuota(input: {
   usedBytes: number;

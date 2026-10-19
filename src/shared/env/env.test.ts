@@ -50,6 +50,16 @@ describe('parseEnv', () => {
     );
   });
 
+  it('defaults and bounds AUDIT_RETENTION_DAYS', () => {
+    expect(parseEnv(VALID_ENV).AUDIT_RETENTION_DAYS).toBe(180);
+    expect(parseEnv({ ...VALID_ENV, AUDIT_RETENTION_DAYS: '365' }).AUDIT_RETENTION_DAYS).toBe(365);
+    for (const value of ['29', '3651', '1.5']) {
+      expect(() => parseEnv({ ...VALID_ENV, AUDIT_RETENTION_DAYS: value })).toThrow(
+        EnvValidationError,
+      );
+    }
+  });
+
   it('lists invalid keys without leaking values', () => {
     const source = {
       ...VALID_ENV,

@@ -5,6 +5,7 @@ import { resolveAuthPageReturnTo } from '@/components/auth/auth-redirect';
 import { FormSkeleton } from '@/components/auth/form-skeleton';
 import { GithubSignIn } from '@/components/auth/github-sign-in';
 import { SignInForm } from '@/components/auth/sign-in-form';
+import { getSignupPolicy } from '@/modules/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const metadata: Metadata = { title: 'Вход — Tasker' };
@@ -28,11 +29,12 @@ export default function LoginPage({ searchParams }: PageProps<'/login'>) {
 
 async function SignInSection({ searchParams }: Pick<PageProps<'/login'>, 'searchParams'>) {
   const returnTo = await resolveAuthPageReturnTo(searchParams);
-  const { error, reset } = await searchParams;
+  const [{ error, reset }, { signupMode }] = await Promise.all([searchParams, getSignupPolicy()]);
   return (
     <div className="grid gap-6">
       <SignInForm
         returnTo={returnTo}
+        signupOpen={signupMode !== 'closed'}
         notice={reset === '1' ? 'Пароль изменён. Войдите с новым паролем.' : undefined}
       />
       <GithubSignIn returnTo={returnTo} errorCode={typeof error === 'string' ? error : undefined} />

@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useActionState, useEffect, useState } from 'react';
 
 import { FormError, FormField } from '@/components/forms/form-field';
@@ -18,6 +19,8 @@ import type { FormState } from '@/shared/types';
 
 interface DeleteUserDialogProps {
   user: { id: string; name: string; email: string };
+  /** Адрес после удаления; без него диалог просто закрывается (список обновится сам). */
+  afterDeleteHref?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -26,7 +29,13 @@ interface DeleteUserDialogProps {
  * Удаление навсегда — с вводом email. Совпадение проверяет и сервер; здесь — только чтобы кнопка
  * не была активна по ошибке. Ошибка «единственный владелец» показывается в диалоге.
  */
-export function DeleteUserDialog({ user, open, onOpenChange }: DeleteUserDialogProps) {
+export function DeleteUserDialog({
+  user,
+  afterDeleteHref,
+  open,
+  onOpenChange,
+}: DeleteUserDialogProps) {
+  const router = useRouter();
   const [state, formAction, pending] = useActionState<FormState, FormData>(deleteUserAction, null);
   const [confirmEmail, setConfirmEmail] = useState('');
   const failure = state && !state.ok ? state : null;
@@ -34,8 +43,10 @@ export function DeleteUserDialog({ user, open, onOpenChange }: DeleteUserDialogP
   const matches = confirmEmail.trim().toLowerCase() === user.email.toLowerCase();
 
   useEffect(() => {
-    if (state?.ok) onOpenChange(false);
-  }, [state, onOpenChange]);
+    if (!state?.ok) return;
+    onOpenChange(false);
+    if (afterDeleteHref) router.replace(afterDeleteHref);
+  }, [state, onOpenChange, afterDeleteHref, router]);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
