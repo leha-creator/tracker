@@ -12,7 +12,7 @@ import {
 import { formValues, type FormState } from '@/shared/types';
 
 import { DescriptionField } from './description-field';
-import { useSettingsDraft } from './settings-draft';
+import { useSettingsDraft } from '@/components/forms/settings-draft';
 
 type Failure = Extract<NonNullable<FormState<ProjectDto>>, { ok: false }>;
 

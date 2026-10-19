@@ -7,7 +7,7 @@ import { SettingsSection, SettingsSections } from '@/components/layout/settings-
 import { DeleteProjectDialog } from '@/components/projects/delete-project-dialog';
 import { ProjectArchiveButton } from '@/components/projects/project-archive-button';
 import { ProjectSettingsForm } from '@/components/projects/project-settings-form';
-import { SettingsDraftProvider } from '@/components/projects/settings-draft';
+import { SettingsDraftProvider } from '@/components/forms/settings-draft';
 import { StatusList } from '@/components/projects/status-list';
 import { getProjectAutomation, isGithubEnabled } from '@/modules/integrations/github';
 import { listStatuses } from '@/modules/projects';

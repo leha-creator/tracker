@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { SettingsSection } from '@/components/layout/settings-section';
 import { githubSignInErrorMessage } from '@/modules/auth';
 import { getMyGithubAccount, isGithubEnabled } from '@/modules/integrations/github';
 import type { AuthSession } from '@/shared/auth';
@@ -25,14 +25,11 @@ export async function GithubAccountSection({
   const error = errorCode ? githubSignInErrorMessage(errorCode) : null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>GitHub</CardTitle>
-        <CardDescription>
-          Вход через GitHub, подключение репозиториев к пространству и уведомления о ревью ваших PR.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-3 text-sm">
+    <SettingsSection
+      title="GitHub"
+      description="Вход через GitHub, подключение репозиториев к пространству и уведомления о ревью ваших PR."
+    >
+      <div className="grid justify-items-start gap-3 text-sm">
         {error && (
           <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-destructive">
             {error}
@@ -65,7 +62,7 @@ export async function GithubAccountSection({
             <LinkGithubButton />
           </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </SettingsSection>
   );
 }

@@ -13,7 +13,7 @@ import {
 } from '@/modules/projects/client';
 
 import { DeleteStatusDialog } from './delete-status-dialog';
-import { useSettingsDraft } from './settings-draft';
+import { useSettingsDraft } from '@/components/forms/settings-draft';
 import { CategorySelect, ColorSelect } from './status-selects';
 import { tasksLabel } from './tasks-label';
 
