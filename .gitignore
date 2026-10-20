@@ -40,3 +40,8 @@ npm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Скриншоты справки: пароли и cookie демо-пользователей, снимки ошибок
+/scripts/help-screenshots/.state/
+/test-results/
+/playwright-report/
