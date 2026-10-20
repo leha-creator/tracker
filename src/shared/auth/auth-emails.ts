@@ -1,4 +1,5 @@
 import { escapeHtml } from '@/shared/mail/escape-html';
+import { MAIL_STYLES, renderMailLayout } from '@/shared/mail/mail-layout';
 
 /** Письмо: тема, текст и HTML. Пользовательские данные в HTML экранируются. */
 export interface AuthEmail {
@@ -18,24 +19,22 @@ function render(subject: string, paragraphs: Paragraph[], link?: { label: string
     ...(link ? [`${link.label}: ${link.url}`] : []),
   ].join('\n\n');
 
-  const body = paragraphs
-    .map((paragraph) =>
-      paragraph.muted
-        ? `<p style="color: #666; font-size: 13px;">${escapeHtml(paragraph.text)}</p>`
-        : `<p>${escapeHtml(paragraph.text)}</p>`,
-    )
-    .join('\n    ');
-  const button = link
-    ? `<p><a href="${escapeHtml(link.url)}">${escapeHtml(link.label)}</a></p>`
-    : '';
+  const paragraphHtml = (paragraph: Paragraph) =>
+    `<p style="${paragraph.muted ? MAIL_STYLES.muted : MAIL_STYLES.paragraph}">${escapeHtml(paragraph.text)}</p>`;
+  // Вторичные абзацы (оговорки «если это были не вы») — в подвал, под кнопку.
+  const footer = paragraphs
+    .filter((paragraph) => paragraph.muted)
+    .map((paragraph) => escapeHtml(paragraph.text))
+    .join('<br>');
 
-  const html = `<!doctype html>
-<html lang="ru">
-  <body style="font-family: system-ui, sans-serif; line-height: 1.5; color: #111;">
-    ${body}
-    ${button}
-  </body>
-</html>`;
+  const html = renderMailLayout({
+    content: paragraphs
+      .filter((paragraph) => !paragraph.muted)
+      .map(paragraphHtml)
+      .join('\n'),
+    action: link,
+    footer: footer || undefined,
+  });
 
   return { subject, text: plain, html } satisfies AuthEmail;
 }

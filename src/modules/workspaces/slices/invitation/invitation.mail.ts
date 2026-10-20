@@ -1,5 +1,6 @@
 import type { WorkspaceRole } from '@/shared/access/workspace-role';
 import { escapeHtml } from '@/shared/mail/escape-html';
+import { MAIL_STYLES, renderMailLayout } from '@/shared/mail/mail-layout';
 
 const ROLE_LABELS: Record<WorkspaceRole, string> = { owner: 'владелец', member: 'участник' };
 
@@ -30,17 +31,13 @@ export function buildInvitationMail(input: InvitationMailInput) {
     `Ссылка действует до ${expires}. Если вы не ждали этого письма, просто проигнорируйте его.`,
   ].join('\n');
 
-  const html = `<!doctype html>
-<html lang="ru">
-  <body style="font-family: system-ui, sans-serif; line-height: 1.5; color: #111;">
-    <p><strong>${escapeHtml(input.inviterName)}</strong> приглашает вас в пространство
-      «${escapeHtml(input.workspaceName)}» в Tasker.</p>
-    <p>Роль: ${role}.</p>
-    <p><a href="${escapeHtml(input.inviteUrl)}">Принять приглашение</a></p>
-    <p style="color: #666; font-size: 13px;">Ссылка действует до ${expires}.
-      Если вы не ждали этого письма, просто проигнорируйте его.</p>
-  </body>
-</html>`;
+  const html = renderMailLayout({
+    content: `<p style="${MAIL_STYLES.paragraph}"><strong>${escapeHtml(input.inviterName)}</strong> приглашает вас в пространство
+            «${escapeHtml(input.workspaceName)}» в Tasker.</p>
+          <p style="${MAIL_STYLES.paragraph}">Роль: ${role}.</p>`,
+    action: { label: 'Принять приглашение', url: input.inviteUrl },
+    footer: `Ссылка действует до ${expires}. Если вы не ждали этого письма, просто проигнорируйте его.`,
+  });
 
   return { subject, text, html };
 }

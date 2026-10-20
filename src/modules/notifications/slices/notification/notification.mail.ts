@@ -1,4 +1,5 @@
 import { escapeHtml } from '@/shared/mail/escape-html';
+import { MAIL_COLORS, MAIL_STYLES, renderMailLayout } from '@/shared/mail/mail-layout';
 
 import type { NotificationText } from '../../models';
 
@@ -28,22 +29,17 @@ export function buildNotificationMail(input: NotificationMailInput) {
     `Настроить уведомления: ${input.settingsUrl}`,
   ].join('\n');
 
-  const html = `<!doctype html>
-<html lang="ru">
-  <body style="font-family: system-ui, sans-serif; line-height: 1.5; color: #111;">
-    <p><strong>${escapeHtml(text.title)}</strong></p>
-    <p>${escapeHtml(who)}${escapeHtml(text.subject)}
-      <span style="color: #666;">(пространство «${escapeHtml(input.workspaceName)}»)</span></p>
-    ${
-      text.excerpt
-        ? `<blockquote style="margin: 0 0 1em; padding-left: 12px; border-left: 3px solid #ddd; color: #444;">${escapeHtml(text.excerpt)}</blockquote>`
-        : ''
-    }
-    <p><a href="${escapeHtml(input.url)}">Открыть в Tasker</a></p>
-    <p style="color: #666; font-size: 13px;">Письма приходят по настройкам уведомлений —
-      <a href="${escapeHtml(input.settingsUrl)}">изменить</a>.</p>
-  </body>
-</html>`;
+  const html = renderMailLayout({
+    content: `<p style="${MAIL_STYLES.paragraph}"><strong>${escapeHtml(text.title)}</strong></p>
+          <p style="${MAIL_STYLES.paragraph}">${escapeHtml(who)}${escapeHtml(text.subject)}
+            <span style="color: ${MAIL_COLORS.muted};">(пространство «${escapeHtml(input.workspaceName)}»)</span></p>${
+              text.excerpt
+                ? `\n          <blockquote style="${MAIL_STYLES.quote}">${escapeHtml(text.excerpt)}</blockquote>`
+                : ''
+            }`,
+    action: { label: 'Открыть в Tasker', url: input.url },
+    footer: `Письма приходят по настройкам уведомлений — <a href="${escapeHtml(input.settingsUrl)}" style="color: ${MAIL_COLORS.brand};">изменить</a>.`,
+  });
 
   return { subject, text: plain, html };
 }

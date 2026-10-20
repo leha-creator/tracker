@@ -13,7 +13,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'],
     setupFiles: ['./src/test/audit-mock.ts'],
     // Тестовое окружение: логи выключены, сервисы не нужны.
     env: {

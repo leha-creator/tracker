@@ -48,11 +48,38 @@
   --radius-4xl: calc(var(--radius) * 2.6);
   --shadow-card: var(--card-shadow);
   --shadow-card-hover: var(--card-shadow-hover);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-tone-gray: var(--tone-gray);
+  --color-tone-blue: var(--tone-blue);
+  --color-tone-green: var(--tone-green);
+  --color-tone-amber: var(--tone-amber);
+  --color-tone-red: var(--tone-red);
+  --color-tone-violet: var(--tone-violet);
+  --color-tone-gray-strong: var(--tone-gray-strong);
+  --color-tone-blue-strong: var(--tone-blue-strong);
+  --color-tone-green-strong: var(--tone-green-strong);
+  --color-tone-amber-strong: var(--tone-amber-strong);
+  --color-tone-red-strong: var(--tone-red-strong);
+  --color-tone-violet-strong: var(--tone-violet-strong);
+}
+
+/* Мелкий служебный текст (счётчики, метки на плотных карточках) — 11 px. */
+@theme {
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
 }
 
 /*
  * Палитра (светлая и тёмная): холодные нейтральные цвета одной гаммы (оттенок 265) и приглушённый индиго-акцент.
  * Фон страницы чуть темнее карточек, чтобы карточки отделялись без рамок.
+ * Группы: поверхности и текст, бренд, семантика (success / warning / info), тона статусов (--tone-*),
+ * графики. Полный список с назначением — src/components/design-system/token-catalog.ts:
+ * новый токен добавляется и сюда (обе темы), и в каталог — иначе упадёт тест каталога.
  */
 :root {
   --background: oklch(0.985 0.003 265);
@@ -93,6 +120,31 @@
   --sidebar-ring: oklch(0.5 0.13 270);
   --card-shadow: 0 1px 2px oklch(0.3 0.03 265 / 0.06), 0 1px 3px oklch(0.3 0.03 265 / 0.08);
   --card-shadow-hover: 0 2px 4px oklch(0.3 0.03 265 / 0.06), 0 8px 20px oklch(0.3 0.03 265 / 0.1);
+  /* Цвет бренда для статичных материалов (фавикон, письма, OG): светлый --primary, в тёмной теме не меняется. */
+  --brand: oklch(0.5 0.13 270);
+  /* Семантика: текст цветом токена читается на фоне страницы; *-foreground — текст на заливке. */
+  --success: oklch(0.54 0.12 160);
+  --success-foreground: oklch(0.985 0.01 160);
+  --warning: oklch(0.58 0.14 60);
+  --warning-foreground: oklch(0.985 0.01 60);
+  --info: oklch(0.54 0.11 235);
+  --info-foreground: oklch(0.985 0.01 235);
+  /*
+   * Тона статусов, меток и состояний PR: приглушённые, одинаково читаемые в обеих темах,
+   * синий уведён от индиго-акцента. *-strong — темнее: белое число на них читается (≈ 4.5:1).
+   */
+  --tone-gray: oklch(0.7 0.02 265);
+  --tone-blue: oklch(0.68 0.11 230);
+  --tone-green: oklch(0.68 0.12 160);
+  --tone-amber: oklch(0.77 0.12 80);
+  --tone-red: oklch(0.64 0.15 25);
+  --tone-violet: oklch(0.62 0.12 305);
+  --tone-gray-strong: oklch(0.55 0.02 265);
+  --tone-blue-strong: oklch(0.53 0.11 235);
+  --tone-green-strong: oklch(0.53 0.11 160);
+  --tone-amber-strong: oklch(0.58 0.12 70);
+  --tone-red-strong: oklch(0.55 0.17 25);
+  --tone-violet-strong: oklch(0.52 0.13 305);
 }
 
 .dark {
@@ -129,6 +181,12 @@
   --sidebar-ring: oklch(0.68 0.12 270);
   --card-shadow: 0 1px 2px oklch(0 0 0 / 0.3), inset 0 1px 0 oklch(1 0 0 / 0.04);
   --card-shadow-hover: 0 4px 16px oklch(0 0 0 / 0.4), inset 0 1px 0 oklch(1 0 0 / 0.06);
+  --success: oklch(0.74 0.12 160);
+  --success-foreground: oklch(0.17 0.02 160);
+  --warning: oklch(0.8 0.13 75);
+  --warning-foreground: oklch(0.17 0.02 75);
+  --info: oklch(0.74 0.1 235);
+  --info-foreground: oklch(0.17 0.02 235);
 }
 
 @layer base {
