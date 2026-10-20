@@ -1,6 +1,7 @@
 'use client';
 
 import { Trash2 } from 'lucide-react';
+import type { ComponentProps } from 'react';
 
 import { ConfirmActionDialog } from '@/components/forms/confirm-action-dialog';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import {
 } from '@/modules/tasks/client';
 
 import { AttachmentIcon } from './attachment-icon';
+import { useImageGallery } from './image-gallery';
 
 export interface AttachmentItemProps {
   workspaceId: string;
@@ -30,10 +32,23 @@ export function AttachmentItem({
   meta,
   deletable = true,
 }: AttachmentItemProps) {
-  // Картинку открываем в новой вкладке, остальное скачивается (Content-Disposition: attachment).
+  // Картинку показываем в модальном просмотре (ImageGallery), без него — в новой вкладке;
+  // остальное скачивается (Content-Disposition: attachment).
+  const openImage = useImageGallery();
   const isImage = attachment.previewHref !== null;
   const href = attachment.previewHref ?? attachment.href;
-  const linkProps = isImage ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+  const linkProps: ComponentProps<'a'> = !isImage
+    ? {}
+    : openImage
+      ? {
+          onClick: (event) => {
+            // Ctrl/Cmd/Shift/средняя кнопка — как у обычной ссылки.
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+            event.preventDefault();
+            openImage(attachment.id);
+          },
+        }
+      : { target: '_blank', rel: 'noopener noreferrer' };
 
   return (
     <li className="flex min-w-0 items-center gap-3 rounded-lg border p-2">

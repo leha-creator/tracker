@@ -18,6 +18,7 @@ import {
 import type { FormState } from '@/shared/types';
 
 import { AttachmentItem } from '../attachments/attachment-item';
+import { ImageGallery } from '../attachments/image-gallery';
 import { CommentBodyField } from './comment-body-field';
 
 /** Дата, отформатированная на сервере: часовой пояс браузера не влияет на гидратацию. */
@@ -196,18 +197,20 @@ export function CommentItem({
         )
       )}
       {comment.attachments.length > 0 && (
-        <ul className="grid gap-2 @lg:grid-cols-2" aria-label="Файлы комментария">
-          {comment.attachments.map((attachment) => (
-            <AttachmentItem
-              key={attachment.id}
-              workspaceId={workspaceId}
-              taskId={taskId}
-              attachment={attachment}
-              // Удаление отдельных файлов — в режиме правки, чтобы не путать с удалением комментария.
-              deletable={editing}
-            />
-          ))}
-        </ul>
+        <ImageGallery attachments={comment.attachments}>
+          <ul className="grid gap-2 @lg:grid-cols-2" aria-label="Файлы комментария">
+            {comment.attachments.map((attachment) => (
+              <AttachmentItem
+                key={attachment.id}
+                workspaceId={workspaceId}
+                taskId={taskId}
+                attachment={attachment}
+                // Удаление отдельных файлов — в режиме правки, чтобы не путать с удалением комментария.
+                deletable={editing}
+              />
+            ))}
+          </ul>
+        </ImageGallery>
       )}
     </li>
   );

@@ -3,6 +3,7 @@ import type { AuthSession } from '@/shared/auth';
 
 import { AttachmentDropzone } from './attachment-dropzone';
 import { AttachmentItem } from './attachment-item';
+import { ImageGallery } from './image-gallery';
 
 const DATE_TIME = new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -32,19 +33,21 @@ export async function TaskAttachmentsSection({
         existingCount={attachments.length}
       >
         {attachments.length > 0 && (
-          <ul className="grid gap-2 @lg:grid-cols-2">
-            {attachments.map(({ createdAt, ...attachment }) => (
-              <AttachmentItem
-                key={attachment.id}
-                workspaceId={workspaceId}
-                taskId={taskId}
-                attachment={attachment}
-                meta={[attachment.uploader?.name, DATE_TIME.format(createdAt)]
-                  .filter(Boolean)
-                  .join(' · ')}
-              />
-            ))}
-          </ul>
+          <ImageGallery attachments={attachments}>
+            <ul className="grid gap-2 @lg:grid-cols-2">
+              {attachments.map(({ createdAt, ...attachment }) => (
+                <AttachmentItem
+                  key={attachment.id}
+                  workspaceId={workspaceId}
+                  taskId={taskId}
+                  attachment={attachment}
+                  meta={[attachment.uploader?.name, DATE_TIME.format(createdAt)]
+                    .filter(Boolean)
+                    .join(' · ')}
+                />
+              ))}
+            </ul>
+          </ImageGallery>
         )}
       </AttachmentDropzone>
     </>
