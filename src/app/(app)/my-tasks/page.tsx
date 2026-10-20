@@ -2,11 +2,13 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
 import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { TaskListEmpty } from '@/components/tasks/task-list/task-list-empty';
 import { TaskListPagination } from '@/components/tasks/task-list/task-list-pagination';
 import { TaskListShell } from '@/components/tasks/task-list/task-list-shell';
 import { TaskListTable } from '@/components/tasks/task-list/task-list-table';
 import { TaskListToolbar } from '@/components/tasks/task-list/task-list-toolbar';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   hasActiveFilters,
   listMyTasks,
@@ -27,15 +29,12 @@ export default function MyTasksPage({ searchParams }: PageProps<'/my-tasks'>) {
   return (
     <PageContainer as="main" id="main-content" size="wide" className="grid gap-6 py-6">
       <section className="grid gap-4" aria-labelledby="my-tasks-heading">
-        <div className="grid gap-1">
-          <h1 id="my-tasks-heading" className="text-2xl font-semibold tracking-tight">
-            Мои задачи
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Открытые задачи, где вы ответственный, во всех ваших пространствах.
-          </p>
-        </div>
-        <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
+        <PageHeader
+          id="my-tasks-heading"
+          title="Мои задачи"
+          description="Открытые задачи, где вы ответственный, во всех ваших пространствах."
+        />
+        <Suspense fallback={<Skeleton className="h-64 rounded-xl" />}>
           <MyTasksSection searchParams={searchParams} />
         </Suspense>
       </section>
@@ -67,9 +66,8 @@ async function MyTasksSection({ searchParams }: Pick<PageProps<'/my-tasks'>, 'se
           query={shown}
           scope="mine"
           basePath={BASE_PATH}
-        >
-          <p>На вас нет открытых задач.</p>
-        </TaskListEmpty>
+          title="На вас нет открытых задач."
+        />
       ) : (
         <>
           <TaskListTable items={page.items} scope="mine" basePath={BASE_PATH} searchParams={raw} />

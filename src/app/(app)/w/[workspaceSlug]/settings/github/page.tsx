@@ -4,6 +4,8 @@ import { Suspense } from 'react';
 
 import { GithubNotConfigured } from '@/components/github/github-not-configured';
 import { GithubSettings } from '@/components/github/github-settings';
+import { PageHeader } from '@/components/layout/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
 import { getGithubSettings, isGithubEnabled } from '@/modules/integrations/github';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
 
@@ -13,7 +15,7 @@ type Props = PageProps<'/w/[workspaceSlug]/settings/github'>;
 
 export default function WorkspaceGithubSettingsPage({ params, searchParams }: Props) {
   return (
-    <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-64 rounded-xl" />}>
       <GithubSection params={params} searchParams={searchParams} />
     </Suspense>
   );
@@ -31,7 +33,7 @@ async function GithubSection({ params, searchParams }: Props) {
       >
         ← Настройки пространства
       </Link>
-      <h1 className="text-2xl font-semibold tracking-tight">GitHub</h1>
+      <PageHeader title="GitHub" />
     </div>
   );
 

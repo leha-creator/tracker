@@ -4,6 +4,8 @@ import { Suspense } from 'react';
 
 import { DocumentBreadcrumbs } from '@/components/documents/document-breadcrumbs';
 import { NoteEditor } from '@/components/documents/note-editor/note-editor';
+import { PageHeader } from '@/components/layout/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
 import { folderPath, listFolderTree } from '@/modules/documents';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
 
@@ -19,7 +21,7 @@ function first(value: string | string[] | undefined): string | undefined {
 
 export default function NewNotePage({ params, searchParams }: Props) {
   return (
-    <Suspense fallback={<div className="h-[70dvh] animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-[70dvh] rounded-xl" />}>
       <NewNoteSection params={params} searchParams={searchParams} />
     </Suspense>
   );
@@ -46,14 +48,11 @@ async function NewNoteSection({ params, searchParams }: Props) {
           path={path.map(({ id, name }) => ({ id, name }))}
           current="Новая заметка"
         />
-        <h1 id="new-note-heading" className="text-2xl font-semibold tracking-tight">
-          Новая заметка
-        </h1>
-        {linkTaskId && (
-          <p className="text-sm text-muted-foreground">
-            После создания заметка будет привязана к задаче.
-          </p>
-        )}
+        <PageHeader
+          id="new-note-heading"
+          title="Новая заметка"
+          description={linkTaskId && 'После создания заметка будет привязана к задаче.'}
+        />
       </div>
       <NoteEditor
         mode="create"

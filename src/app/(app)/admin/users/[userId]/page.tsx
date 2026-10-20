@@ -7,6 +7,8 @@ import { UserMemberships } from '@/components/admin/users/detail/user-membership
 import { UserSessionsList } from '@/components/admin/users/detail/user-sessions-list';
 import { ApiTokensTable } from '@/components/api-tokens/api-tokens-table';
 import { AuditEventList } from '@/components/audit/audit-event-list';
+import { SectionHeading } from '@/components/layout/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
 import { getAdminUserDetail } from '@/modules/admin';
 import { EMPTY_ADMIN_AUDIT_QUERY, listAdminAuditEvents, parseAuditCursor } from '@/modules/audit';
 import { requireAdminOrNotFound } from '@/shared/access';
@@ -18,7 +20,7 @@ type Props = PageProps<'/admin/users/[userId]'>;
 
 export default function AdminUserPage({ params, searchParams }: Props) {
   return (
-    <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-96 rounded-xl" />}>
       <UserCard params={params} searchParams={searchParams} />
     </Suspense>
   );
@@ -70,7 +72,7 @@ async function UserCard({ params, searchParams }: Props) {
         title="Журнал"
         description="События, где пользователь — автор или субъект: входы, безопасность, действия в пространствах и действия администраторов над ним."
       >
-        <Suspense fallback={<div className="h-40 animate-pulse rounded-xl bg-muted" />}>
+        <Suspense fallback={<Skeleton className="h-40 rounded-xl" />}>
           <UserAudit userId={user.id} searchParams={searchParams} />
         </Suspense>
       </Section>
@@ -122,7 +124,7 @@ function Section({
   return (
     <section className="grid gap-3">
       <div className="grid gap-1">
-        <h2 className="text-base font-semibold">{title}</h2>
+        <SectionHeading size="group" title={title} />
         {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </div>
       {children}

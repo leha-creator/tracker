@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 
 import { ProjectArchivedBanner } from '@/components/projects/project-archived-banner';
 import { ProjectNav } from '@/components/projects/project-nav';
+import { Skeleton } from '@/components/ui/skeleton';
 
 import { loadProjectPage } from './_lib/load-project';
 
@@ -11,7 +12,7 @@ export default function ProjectLayout({ children, params }: Props) {
   return (
     <div data-project-shell className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
       {/* Шапка читает проект за границей Suspense: {children} не ждёт её. Страницы проверяют доступ сами. */}
-      <Suspense fallback={<div className="h-32 animate-pulse rounded-lg bg-muted" />}>
+      <Suspense fallback={<Skeleton className="h-32 rounded-lg" />}>
         <ProjectHeader params={params} />
       </Suspense>
       {children}

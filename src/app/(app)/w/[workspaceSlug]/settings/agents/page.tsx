@@ -5,8 +5,10 @@ import { Suspense } from 'react';
 
 import { AgentFormDialog } from '@/components/agents/agent-form-dialog';
 import { AgentsTable } from '@/components/agents/agents-table';
+import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { AGENTS_PER_WORKSPACE_LIMIT, listAgents } from '@/modules/agents';
 import { listMembers } from '@/modules/workspaces';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
@@ -17,7 +19,7 @@ type Props = PageProps<'/w/[workspaceSlug]/settings/agents'>;
 
 export default function WorkspaceAgentsPage({ params }: Props) {
   return (
-    <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-64 rounded-xl" />}>
       <AgentsSection params={params} />
     </Suspense>
   );
@@ -45,7 +47,7 @@ async function AgentsSection({ params }: Pick<Props, 'params'>) {
         >
           ← Настройки пространства
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Агенты</h1>
+        <PageHeader title="Агенты" />
       </div>
 
       <Card>

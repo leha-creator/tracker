@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { InviteMemberForm } from '@/components/workspaces/invite-member-form';
 import { MembersTable } from '@/components/workspaces/members-table';
 import { PendingInvitations } from '@/components/workspaces/pending-invitations';
@@ -14,7 +16,7 @@ type Props = PageProps<'/w/[workspaceSlug]/settings/members'>;
 
 export default function WorkspaceMembersPage({ params }: Props) {
   return (
-    <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-64 rounded-xl" />}>
       <MembersSection params={params} />
     </Suspense>
   );
@@ -31,7 +33,7 @@ async function MembersSection({ params }: Pick<Props, 'params'>) {
 
   return (
     <div className="grid w-full max-w-3xl gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Участники</h1>
+      <PageHeader title="Участники" />
       {isOwner && (
         <Card>
           <CardHeader>

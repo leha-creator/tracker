@@ -11,6 +11,7 @@ import { TaskListShell } from '@/components/tasks/task-list/task-list-shell';
 import { TaskListTable } from '@/components/tasks/task-list/task-list-table';
 import { TaskListToolbar } from '@/components/tasks/task-list/task-list-toolbar';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { getPullRequestBadges } from '@/modules/integrations/github';
 import { listStatuses } from '@/modules/projects';
 import {
@@ -31,7 +32,7 @@ type Props = PageProps<'/w/[workspaceSlug]/projects/[projectId]/list'>;
 export default function ProjectListPage({ params, searchParams }: Props) {
   return (
     <>
-      <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
+      <Suspense fallback={<Skeleton className="h-64 rounded-xl" />}>
         <ListSection params={params} searchParams={searchParams} />
       </Suspense>
       {/* Панель задачи (`?task=`) — своя граница Suspense, список её не ждёт. */}
@@ -94,19 +95,20 @@ async function ListSection({ params, searchParams }: Props) {
           query={shown}
           scope="project"
           basePath={basePath}
-        >
-          <p>В проекте пока нет задач.</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            <Button asChild size="sm">
-              <Link href={taskPanelHref(basePath, raw, 'new')} scroll={false}>
-                Новая задача
-              </Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href={`${projectPath}/board`}>Открыть доску</Link>
-            </Button>
-          </div>
-        </TaskListEmpty>
+          title="В проекте пока нет задач."
+          action={
+            <>
+              <Button asChild size="sm">
+                <Link href={taskPanelHref(basePath, raw, 'new')} scroll={false}>
+                  Новая задача
+                </Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link href={`${projectPath}/board`}>Открыть доску</Link>
+              </Button>
+            </>
+          }
+        />
       ) : (
         <>
           <TaskListTable

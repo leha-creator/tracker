@@ -2,12 +2,14 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 
 import { UserMenu } from '@/components/auth/user-menu';
+import { Logo } from '@/components/brand/logo';
 import { AppHotkeys } from '@/components/hotkeys/app-hotkeys';
 import { ShortcutsDialog } from '@/components/hotkeys/shortcuts-dialog';
 import { ImpersonationBanner } from '@/components/layout/impersonation-banner';
 import { PageContainer } from '@/components/layout/page-container';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { SearchTrigger } from '@/components/search/search-trigger';
+import { Skeleton } from '@/components/ui/skeleton';
 import { WorkspaceSwitcher } from '@/components/workspaces/workspace-switcher';
 
 export default function AppLayout({ children }: LayoutProps<'/'>) {
@@ -29,14 +31,13 @@ export default function AppLayout({ children }: LayoutProps<'/'>) {
             href="/"
             className="flex h-14 items-center gap-2 rounded-md font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
-            <LogoMark />
-            <span className="max-sm:sr-only">Tasker</span>
+            <Logo hideWordmarkOnMobile />
           </Link>
           <span aria-hidden className="text-muted-foreground/40">
             /
           </span>
           {/* Переключатель и разделы пространства — соседние элементы строки; разделы на мобильных уходят вниз. */}
-          <Suspense fallback={<div className="h-7 w-32 animate-pulse rounded-md bg-muted" />}>
+          <Suspense fallback={<Skeleton className="h-7 w-32" />}>
             <WorkspaceSwitcher />
           </Suspense>
           {/* Сессия читается внутри границы: шапка и {children} не ждут её на верхнем уровне. */}
@@ -45,10 +46,10 @@ export default function AppLayout({ children }: LayoutProps<'/'>) {
             <Suspense fallback={<div className="h-8 rounded-lg bg-muted max-md:size-8 md:w-52" />}>
               <SearchTrigger />
             </Suspense>
-            <Suspense fallback={<div className="size-8 animate-pulse rounded-lg bg-muted" />}>
+            <Suspense fallback={<Skeleton className="size-8 rounded-lg" />}>
               <NotificationBell />
             </Suspense>
-            <Suspense fallback={<div className="size-8 animate-pulse rounded-lg bg-muted" />}>
+            <Suspense fallback={<Skeleton className="size-8 rounded-lg" />}>
               <UserMenu />
             </Suspense>
           </div>
@@ -58,21 +59,5 @@ export default function AppLayout({ children }: LayoutProps<'/'>) {
       <AppHotkeys />
       {children}
     </>
-  );
-}
-
-/** Знак приложения: три колонки доски разной высоты. */
-function LogoMark() {
-  return (
-    <span
-      aria-hidden
-      className="grid size-7 place-items-center rounded-lg bg-primary text-primary-foreground"
-    >
-      <svg viewBox="0 0 16 16" className="size-4" fill="currentColor">
-        <rect x="2" y="3" width="3" height="10" rx="1" />
-        <rect x="6.5" y="3" width="3" height="7" rx="1" />
-        <rect x="11" y="3" width="3" height="4" rx="1" />
-      </svg>
-    </span>
   );
 }

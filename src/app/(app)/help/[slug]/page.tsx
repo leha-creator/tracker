@@ -8,6 +8,7 @@ import { AudienceBadges } from '@/components/help/audience-badge';
 import { HELP_HREF } from '@/components/help/help-href';
 import { HelpPager } from '@/components/help/help-pager';
 import { HelpToc } from '@/components/help/help-toc';
+import { PageHeader } from '@/components/layout/page-header';
 import {
   extractHeadings,
   findHelpArticle,
@@ -50,7 +51,7 @@ export default async function HelpArticlePage({ params }: PageProps<'/help/[slug
             </Link>
             {section ? <> · {section.title}</> : null}
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight">{meta.title}</h1>
+          <PageHeader title={meta.title} />
           <p className="text-muted-foreground">{meta.summary}</p>
           <AudienceBadges audience={meta.audience} />
         </header>

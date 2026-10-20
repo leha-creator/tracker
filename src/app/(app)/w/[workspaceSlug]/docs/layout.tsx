@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 
 import { DocumentsNav } from '@/components/documents/documents-nav';
 import { StorageUsage } from '@/components/documents/storage-usage';
+import { Skeleton } from '@/components/ui/skeleton';
 import { getWorkspaceStorageUsage, listFolderTree } from '@/modules/documents';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
 
@@ -42,7 +43,7 @@ function NavSkeleton() {
   return (
     <div className="hidden gap-2 lg:grid" aria-hidden>
       {Array.from({ length: 6 }, (_, index) => (
-        <div key={index} className="h-7 animate-pulse rounded-md bg-muted" />
+        <Skeleton key={index} className="h-7" />
       ))}
     </div>
   );

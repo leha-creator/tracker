@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { LiveRefresh } from '@/components/realtime/use-live-refresh';
 import { TaskPanel } from '@/components/tasks/task-panel/task-panel';
 import { taskPanelHref } from '@/components/tasks/task-panel/task-panel-href';
@@ -11,6 +12,7 @@ import { TaskListShell } from '@/components/tasks/task-list/task-list-shell';
 import { TaskListTable } from '@/components/tasks/task-list/task-list-table';
 import { TaskListToolbar } from '@/components/tasks/task-list/task-list-toolbar';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { getPullRequestBadges } from '@/modules/integrations/github';
 import { listProjects } from '@/modules/projects';
 import {
@@ -30,7 +32,7 @@ type Props = PageProps<'/w/[workspaceSlug]/tasks'>;
 export default function TasksPage({ params, searchParams }: Props) {
   return (
     <>
-      <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
+      <Suspense fallback={<Skeleton className="h-64 rounded-xl" />}>
         <TasksSection params={params} searchParams={searchParams} />
       </Suspense>
       {/* Панель задачи (`?task=`) — своя граница Suspense, список её не ждёт. */}
@@ -75,16 +77,17 @@ async function TasksSection({ params, searchParams }: Props) {
 
   return (
     <section className="grid gap-4" aria-labelledby="tasks-heading">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 id="tasks-heading" className="text-2xl font-semibold tracking-tight">
-          Задачи
-        </h1>
-        <Button asChild size="sm">
-          <Link href={taskPanelHref(basePath, raw, 'new')} scroll={false}>
-            Новая задача
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        id="tasks-heading"
+        title="Задачи"
+        actions={
+          <Button asChild size="sm">
+            <Link href={taskPanelHref(basePath, raw, 'new')} scroll={false}>
+              Новая задача
+            </Link>
+          </Button>
+        }
+      />
       <TaskListShell query={shown} scope="workspace" basePath={basePath}>
         <LiveRefresh tasksOnly debounceMs={1000} />
         <TaskListToolbar
@@ -103,9 +106,9 @@ async function TasksSection({ params, searchParams }: Props) {
             query={shown}
             scope="workspace"
             basePath={basePath}
-          >
-            <p>Задач пока нет. Создайте первую — или добавьте её прямо в колонке доски проекта.</p>
-          </TaskListEmpty>
+            title="Задач пока нет"
+            description="Создайте первую — или добавьте её прямо в колонке доски проекта."
+          />
         ) : (
           <>
             <TaskListTable

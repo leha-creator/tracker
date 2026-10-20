@@ -5,7 +5,9 @@ import { adminWorkspacesHref } from '@/components/admin/workspaces/admin-workspa
 import { AdminWorkspacesPagination } from '@/components/admin/workspaces/admin-workspaces-pagination';
 import { AdminWorkspacesTable } from '@/components/admin/workspaces/admin-workspaces-table';
 import { AdminWorkspacesToolbar } from '@/components/admin/workspaces/admin-workspaces-toolbar';
+import { EmptyState } from '@/components/feedback/empty-state';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   defaultAdminWorkspaceListQuery,
   hasActiveAdminWorkspaceFilters,
@@ -20,7 +22,7 @@ type Props = PageProps<'/admin/workspaces'>;
 
 export default function AdminWorkspacesPage({ searchParams }: Props) {
   return (
-    <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-96 rounded-xl" />}>
       <WorkspacesSection searchParams={searchParams} />
     </Suspense>
   );
@@ -40,20 +42,24 @@ async function WorkspacesSection({ searchParams }: Pick<Props, 'searchParams'>) 
           <AdminWorkspacesPagination list={list} query={query} />
         </>
       ) : (
-        <div className="grid justify-items-center gap-3 rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-          {hasActiveAdminWorkspaceFilters(query) ? (
-            <>
-              <p>Пространства не найдены. Измените поиск или фильтр.</p>
-              <Button asChild variant="outline" size="sm">
-                <Link href={adminWorkspacesHref(defaultAdminWorkspaceListQuery())} scroll={false}>
-                  Сбросить фильтры
-                </Link>
-              </Button>
-            </>
-          ) : (
-            <p>На этой странице пространств нет.</p>
-          )}
-        </div>
+        <EmptyState
+          {...(hasActiveAdminWorkspaceFilters(query)
+            ? {
+                title: 'Пространства не найдены',
+                description: 'Измените поиск или фильтр.',
+                action: (
+                  <Button asChild variant="outline" size="sm">
+                    <Link
+                      href={adminWorkspacesHref(defaultAdminWorkspaceListQuery())}
+                      scroll={false}
+                    >
+                      Сбросить фильтры
+                    </Link>
+                  </Button>
+                ),
+              }
+            : { title: 'На этой странице пространств нет.' })}
+        />
       )}
     </div>
   );

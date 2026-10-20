@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { GithubAccountSection } from '@/components/github/github-account-section';
 import { SettingsSection, SettingsSections } from '@/components/layout/settings-section';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { WORKSPACE_ROLE_LABELS } from '@/components/workspaces/role-label';
 import { getMyProfile } from '@/modules/profiles';
 import { listMyWorkspaces } from '@/modules/workspaces';
@@ -16,7 +17,7 @@ const DATE = new Intl.DateTimeFormat('ru', { dateStyle: 'long' });
 
 export default function ProfileAccountPage({ searchParams }: PageProps<'/profile/account'>) {
   return (
-    <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-64 rounded-xl" />}>
       <AccountSections searchParams={searchParams} />
     </Suspense>
   );

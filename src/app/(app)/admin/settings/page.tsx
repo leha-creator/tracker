@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { SignupSettingsForm } from '@/components/admin/settings/signup-settings-form';
 import { StorageSettingsForm } from '@/components/admin/settings/storage-settings-form';
 import { SettingsSections } from '@/components/layout/settings-section';
+import { Skeleton } from '@/components/ui/skeleton';
 import { formatRelativeTime } from '@/lib/format-relative-time';
 import { getAdminResourceSettings } from '@/modules/admin';
 import { requireAdminOrNotFound } from '@/shared/access';
@@ -11,7 +12,7 @@ import { requireAdminOrNotFound } from '@/shared/access';
 
 export default function AdminSettingsPage() {
   return (
-    <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-96 rounded-xl" />}>
       <SettingsContent />
     </Suspense>
   );

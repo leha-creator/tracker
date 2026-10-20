@@ -5,7 +5,9 @@ import { Suspense, type ReactNode } from 'react';
 import { WorkspaceAdminActions } from '@/components/admin/workspaces/workspace-admin-actions';
 import { AuditEventList } from '@/components/audit/audit-event-list';
 import { EntityIconTile } from '@/components/entity-icon/entity-icon';
+import { SectionHeading } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { UserAvatar } from '@/components/users/user-avatar';
 import { WORKSPACE_ROLE_LABELS } from '@/components/workspaces/role-label';
 import { getAdminWorkspaceDetail } from '@/modules/admin';
@@ -23,7 +25,7 @@ const SHORT_DATE = new Intl.DateTimeFormat('ru', { dateStyle: 'medium' });
 
 export default function AdminWorkspacePage({ params, searchParams }: Props) {
   return (
-    <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-96 rounded-xl" />}>
       <WorkspaceCard params={params} searchParams={searchParams} />
     </Suspense>
   );
@@ -135,7 +137,7 @@ async function WorkspaceCard({ params, searchParams }: Props) {
       </Section>
 
       <Section title="Журнал пространства">
-        <Suspense fallback={<div className="h-40 animate-pulse rounded-xl bg-muted" />}>
+        <Suspense fallback={<Skeleton className="h-40 rounded-xl" />}>
           <WorkspaceAudit workspaceId={workspace.id} searchParams={searchParams} />
         </Suspense>
       </Section>
@@ -188,7 +190,7 @@ function Stat({ label, children }: { label: string; children: ReactNode }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="grid gap-3">
-      <h2 className="text-base font-semibold">{title}</h2>
+      <SectionHeading size="group" title={title} />
       {children}
     </section>
   );

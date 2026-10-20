@@ -6,6 +6,7 @@ import { SettingsSection, SettingsSections } from '@/components/layout/settings-
 import { ActiveSessions } from '@/components/profile/security/active-sessions';
 import { ChangePasswordForm } from '@/components/profile/security/change-password-form';
 import { TwoFactorSection } from '@/components/profile/security/two-factor-section';
+import { Skeleton } from '@/components/ui/skeleton';
 import { listMySecurityEvents, parseAuditCursor } from '@/modules/audit';
 import { getMyTwoFactorState, listMySessions } from '@/modules/auth';
 import { requireUserOrRedirect } from '@/shared/access';
@@ -14,7 +15,7 @@ export const metadata: Metadata = { title: 'Безопасность — Tasker'
 
 export default function ProfileSecurityPage({ searchParams }: PageProps<'/profile/security'>) {
   return (
-    <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-96 rounded-xl" />}>
       <SecuritySections searchParams={searchParams} />
     </Suspense>
   );

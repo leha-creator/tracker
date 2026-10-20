@@ -7,8 +7,11 @@ import { OverdueList } from '@/components/dashboard/overdue-list';
 import { ProjectsBreakdown } from '@/components/dashboard/projects-breakdown';
 import { StatTiles } from '@/components/dashboard/stat-tiles';
 import { WorkloadTable } from '@/components/dashboard/workload-table';
+import { EmptyState } from '@/components/feedback/empty-state';
+import { PageHeader, SectionHeading } from '@/components/layout/page-header';
 import { LiveRefresh } from '@/components/realtime/use-live-refresh';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { getWorkspaceDashboard } from '@/modules/tasks';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
@@ -20,9 +23,7 @@ type Props = PageProps<'/w/[workspaceSlug]/overview'>;
 export default function OverviewPage({ params }: Props) {
   return (
     <section className="grid grid-cols-[minmax(0,1fr)] gap-6" aria-labelledby="overview-heading">
-      <h1 id="overview-heading" className="text-2xl font-semibold tracking-tight">
-        Обзор
-      </h1>
+      <PageHeader id="overview-heading" title="Обзор" />
       <Suspense fallback={<OverviewSkeleton />}>
         <OverviewSection params={params} />
       </Suspense>
@@ -43,14 +44,17 @@ async function OverviewSection({ params }: Pick<Props, 'params'>) {
       <LiveRefresh tasksOnly debounceMs={2000} />
       <StatTiles counts={dashboard.counts} workspaceSlug={slug} />
       {empty ? (
-        <div className="grid justify-items-center gap-3 rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-          <p>Открытых задач нет. Создайте задачу — здесь появятся нагрузка и сроки.</p>
-          <Button asChild size="sm">
-            <Link href={`/w/${slug}/tasks?task=new`} scroll={false}>
-              Создать задачу
-            </Link>
-          </Button>
-        </div>
+        <EmptyState
+          title="Открытых задач нет"
+          description="Создайте задачу — здесь появятся нагрузка и сроки."
+          action={
+            <Button asChild size="sm">
+              <Link href={`/w/${slug}/tasks?task=new`} scroll={false}>
+                Создать задачу
+              </Link>
+            </Button>
+          }
+        />
       ) : (
         <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
           <Block title="Нагрузка" description="Открытые задачи участников">
@@ -91,7 +95,7 @@ function Block({
       )}
     >
       <header>
-        <h2 className="font-medium">{title}</h2>
+        <SectionHeading size="group" title={title} />
         <p className="text-sm text-muted-foreground">{description}</p>
       </header>
       {children}
@@ -104,12 +108,12 @@ function OverviewSkeleton() {
     <div aria-hidden className="grid gap-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {Array.from({ length: 5 }, (_, index) => (
-          <div key={index} className="h-24 animate-pulse rounded-xl bg-muted" />
+          <Skeleton key={index} className="h-24 rounded-xl" />
         ))}
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
-        <div className="h-64 animate-pulse rounded-xl bg-muted" />
-        <div className="h-64 animate-pulse rounded-xl bg-muted" />
+        <Skeleton className="h-64 rounded-xl" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     </div>
   );

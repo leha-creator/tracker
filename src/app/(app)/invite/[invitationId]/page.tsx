@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { InvitationResponse } from '@/components/workspaces/invitation-response';
 import { WORKSPACE_ROLE_LABELS } from '@/components/workspaces/role-label';
 import { signOutAction } from '@/modules/auth';
@@ -22,7 +23,7 @@ export default function InvitationPage({ params }: Props) {
   return (
     <main id="main-content" className="flex flex-1 justify-center px-4 py-6 sm:px-6">
       <Card className="w-full max-w-md self-start">
-        <Suspense fallback={<div className="m-6 h-32 animate-pulse rounded-md bg-muted" />}>
+        <Suspense fallback={<Skeleton className="m-6 h-32" />}>
           <InvitationSection params={params} />
         </Suspense>
       </Card>

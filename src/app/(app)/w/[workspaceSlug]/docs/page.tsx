@@ -1,3 +1,4 @@
+import { FileTextIcon, SearchIcon } from 'lucide-react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
@@ -12,6 +13,9 @@ import {
   DocumentUploadQueue,
 } from '@/components/documents/document-upload';
 import { DocumentsActions } from '@/components/documents/documents-actions';
+import { EmptyState } from '@/components/feedback/empty-state';
+import { PageHeader } from '@/components/layout/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   listDocuments,
   listFolderTree,
@@ -60,25 +64,28 @@ async function DocumentsSection({ params, searchParams }: Props) {
           {!page.isSearch && page.path.length > 0 && (
             <DocumentBreadcrumbs workspaceSlug={workspace.slug} path={page.path} />
           )}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 id="documents-heading" className="truncate text-2xl font-semibold tracking-tight">
-              {title}
-            </h1>
-            {canManage && !page.isSearch && (
-              <DocumentsActions
-                workspaceId={workspace.id}
-                workspaceSlug={workspace.slug}
-                folderId={query.folder}
-                tags={tags}
-              />
-            )}
-          </div>
+          <PageHeader
+            id="documents-heading"
+            title={title}
+            overflow="truncate"
+            actions={
+              canManage &&
+              !page.isSearch && (
+                <DocumentsActions
+                  workspaceId={workspace.id}
+                  workspaceSlug={workspace.slug}
+                  folderId={query.folder}
+                  tags={tags}
+                />
+              )
+            }
+          />
         </div>
         <DocumentListToolbar workspaceSlug={workspace.slug} query={shown} tags={tags} />
         <DocumentUploadQueue />
         <DocumentDropzone>
           {empty ? (
-            <EmptyState isSearch={page.isSearch} canManage={canManage} />
+            <DocumentsEmpty isSearch={page.isSearch} canManage={canManage} />
           ) : (
             <DocumentList
               workspaceId={workspace.id}
@@ -100,26 +107,27 @@ async function DocumentsSection({ params, searchParams }: Props) {
   );
 }
 
-function EmptyState({ isSearch, canManage }: { isSearch: boolean; canManage: boolean }) {
+function DocumentsEmpty({ isSearch, canManage }: { isSearch: boolean; canManage: boolean }) {
   return (
-    <div className="grid place-items-center gap-1 rounded-xl border border-dashed px-6 py-14 text-center">
-      <p className="font-medium">{isSearch ? 'Ничего не найдено' : 'Здесь пока пусто'}</p>
-      <p className="max-w-md text-sm text-muted-foreground">
-        {isSearch
+    <EmptyState
+      icon={isSearch ? SearchIcon : FileTextIcon}
+      title={isSearch ? 'Ничего не найдено' : 'Здесь пока пусто'}
+      description={
+        isSearch
           ? 'Попробуйте другое название или сбросьте фильтры.'
           : canManage
             ? 'Создайте заметку или папку через «Создать» — или перетащите сюда файлы.'
-            : 'Документы появятся, когда их добавят участники с правом на документы.'}
-      </p>
-    </div>
+            : 'Документы появятся, когда их добавят участники с правом на документы.'
+      }
+    />
   );
 }
 
 function ListSkeleton() {
   return (
     <div className="grid gap-4" aria-hidden>
-      <div className="h-8 w-48 animate-pulse rounded-md bg-muted" />
-      <div className="h-9 animate-pulse rounded-md bg-muted" />
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-9" />
       <div className="grid gap-px overflow-hidden rounded-xl border">
         {Array.from({ length: 6 }, (_, index) => (
           <div key={index} className="h-14 animate-pulse bg-muted/60" />

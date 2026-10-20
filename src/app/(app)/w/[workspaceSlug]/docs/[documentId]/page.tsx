@@ -17,6 +17,9 @@ import {
   TruncatedNotice,
 } from '@/components/documents/viewers/file-viewers';
 import { pickViewer } from '@/components/documents/viewers/pick-viewer';
+import { EmptyState } from '@/components/feedback/empty-state';
+import { PageHeader } from '@/components/layout/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   folderPath,
   formatBytes,
@@ -43,7 +46,7 @@ const DATE_FORMAT = new Intl.DateTimeFormat('ru', {
 
 export default function DocumentPage({ params }: Props) {
   return (
-    <Suspense fallback={<div className="h-[70dvh] animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-[70dvh] rounded-xl" />}>
       <DocumentSection params={params} />
     </Suspense>
   );
@@ -77,13 +80,13 @@ async function DocumentSection({ params }: Pick<Props, 'params'>) {
           path={path.map(({ id, name }) => ({ id, name }))}
           current={document.title}
         />
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="grid min-w-0 gap-2">
-            <h1 id="document-heading" className="text-2xl font-semibold tracking-tight break-words">
-              {document.title}
-            </h1>
-            {document.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
+        <PageHeader
+          id="document-heading"
+          title={document.title}
+          align="start"
+          meta={
+            document.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
                 {document.tags.map((tag) => (
                   <TagBadge
                     key={tag.id}
@@ -93,15 +96,17 @@ async function DocumentSection({ params }: Pick<Props, 'params'>) {
                   />
                 ))}
               </div>
-            )}
-          </div>
-          <DocumentActions
-            document={document}
-            folders={folders}
-            tags={tags}
-            canManage={canManage}
-          />
-        </div>
+            )
+          }
+          actions={
+            <DocumentActions
+              document={document}
+              folders={folders}
+              tags={tags}
+              canManage={canManage}
+            />
+          }
+        />
         <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
           <div className="flex gap-1.5">
             <dt>Вид:</dt>
@@ -143,9 +148,7 @@ async function DocumentSection({ params }: Pick<Props, 'params'>) {
               <MarkdownView source={document.content} />
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
-              Заметка пустая.
-            </p>
+            <EmptyState variant="compact" title="Заметка пустая." />
           ))}
         {choice.kind === 'inline' && (
           <InlineFileViewer document={document} viewer={choice.viewer} />

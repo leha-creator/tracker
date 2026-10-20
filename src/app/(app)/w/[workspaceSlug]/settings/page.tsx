@@ -3,7 +3,9 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 
 import { SettingsDraftProvider } from '@/components/forms/settings-draft';
+import { PageHeader } from '@/components/layout/page-header';
 import { SettingsSection, SettingsSections } from '@/components/layout/settings-section';
+import { Skeleton } from '@/components/ui/skeleton';
 import { DeleteWorkspaceDialog } from '@/components/workspaces/delete-workspace-dialog';
 import { RenameWorkspaceForm } from '@/components/workspaces/rename-workspace-form';
 import { TaskKeyForm } from '@/components/workspaces/task-key-form';
@@ -17,7 +19,7 @@ type Props = PageProps<'/w/[workspaceSlug]/settings'>;
 export default function WorkspaceSettingsPage({ params }: Props) {
   return (
     <div className="grid gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Настройки пространства</h1>
+      <PageHeader title="Настройки пространства" />
       <Suspense fallback={<SettingsSkeleton />}>
         <SettingsContent params={params} />
       </Suspense>
@@ -34,10 +36,10 @@ function SettingsSkeleton() {
           key={section}
           className="grid gap-x-10 gap-y-4 py-6 first:pt-2 lg:grid-cols-[15rem_minmax(0,48rem)]"
         >
-          <div className="h-5 w-28 animate-pulse rounded bg-muted" />
+          <Skeleton className="h-5 w-28 rounded-sm" />
           <div className="grid gap-3">
             {Array.from({ length: rows }, (_, row) => (
-              <div key={row} className="h-9 animate-pulse rounded-md bg-muted" />
+              <Skeleton key={row} className="h-9" />
             ))}
           </div>
         </div>

@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { ActivityFeed } from '@/components/api-tokens/activity-feed';
+import { SectionHeading } from '@/components/layout/page-header';
+import { Skeleton } from '@/components/ui/skeleton';
 import { listTokenActivity, parseActivityCursor } from '@/modules/api-tokens';
 import { requireUserOrRedirect } from '@/shared/access';
 import { NotFoundError } from '@/shared/errors';
@@ -14,7 +16,7 @@ type Props = PageProps<'/profile/tokens/[tokenId]'>;
 
 export default function TokenActivityPage({ params, searchParams }: Props) {
   return (
-    <Suspense fallback={<div className="h-48 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-48 rounded-xl" />}>
       <TokenActivity params={params} searchParams={searchParams} />
     </Suspense>
   );
@@ -39,9 +41,10 @@ async function TokenActivity({ params, searchParams }: Props) {
         ← Токены доступа
       </Link>
       <div className="grid gap-1">
-        <h2 id="token-activity-heading" className="text-lg font-semibold break-words">
-          Журнал токена «{result.token.name}»
-        </h2>
+        <SectionHeading
+          id="token-activity-heading"
+          title={`Журнал токена «${result.token.name}»`}
+        />
         <p className="text-sm text-muted-foreground">
           Изменения, которые агент сделал этим токеном в пространстве{' '}
           {`«${result.token.workspace.name}»`}. Записи хранятся 90 дней.

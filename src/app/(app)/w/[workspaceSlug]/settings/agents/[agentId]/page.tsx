@@ -6,8 +6,10 @@ import { Suspense } from 'react';
 import { ActivityFeed } from '@/components/api-tokens/activity-feed';
 import { ApiTokensTable } from '@/components/api-tokens/api-tokens-table';
 import { CreateApiTokenDialog } from '@/components/api-tokens/create-api-token-dialog';
+import { PageHeader } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { UserAvatar } from '@/components/users/user-avatar';
 import { getAgent } from '@/modules/agents';
 import { listAgentActivity, listAgentTokens, parseActivityCursor } from '@/modules/api-tokens';
@@ -21,7 +23,7 @@ type Props = PageProps<'/w/[workspaceSlug]/settings/agents/[agentId]'>;
 
 export default function AgentPage({ params, searchParams }: Props) {
   return (
-    <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-64 rounded-xl" />}>
       <AgentSection params={params} searchParams={searchParams} />
     </Suspense>
   );
@@ -57,22 +59,23 @@ async function AgentSection({ params, searchParams }: Props) {
         ← Агенты
       </Link>
 
-      <header className="flex flex-wrap items-center gap-4">
-        <UserAvatar user={agent} size="lg" />
-        <div className="grid min-w-0 flex-1 gap-1">
-          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight">
-            <span className="break-words">{agent.name}</span>
+      <PageHeader
+        as="header"
+        title={agent.name}
+        leading={<UserAvatar user={agent} size="lg" />}
+        titleAddon={
+          <>
             <Badge variant="secondary">Агент</Badge>
             {agent.disabledAt && <Badge variant="outline">Отключён</Badge>}
-          </h1>
-          {agent.description && (
-            <p className="text-sm break-words text-muted-foreground">{agent.description}</p>
-          )}
-          <p className="text-sm text-muted-foreground">
-            Ответственный: {agent.responsible?.name ?? 'не назначен'}
-          </p>
-        </div>
-      </header>
+          </>
+        }
+        description={
+          <>
+            {agent.description && <p className="break-words">{agent.description}</p>}
+            <p>Ответственный: {agent.responsible?.name ?? 'не назначен'}</p>
+          </>
+        }
+      />
 
       <Card>
         <CardHeader className="flex flex-wrap items-start justify-between gap-4">

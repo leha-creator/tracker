@@ -48,7 +48,7 @@ function BoardSkeleton() {
       <div className="flex items-start gap-3">
         {SKELETON_CARDS.map((count, column) => (
           <div key={column} className="grid w-72 shrink-0 gap-2 rounded-xl bg-muted/70 p-3">
-            <div className="h-4 w-24 animate-pulse rounded bg-muted-foreground/15" />
+            <div className="h-4 w-24 animate-pulse rounded-sm bg-muted-foreground/15" />
             {Array.from({ length: count }, (_, card) => (
               <div key={card} className="h-20 animate-pulse rounded-lg bg-card shadow-card" />
             ))}

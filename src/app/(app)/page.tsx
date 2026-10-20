@@ -8,8 +8,10 @@ import {
   NEW_WORKSPACE_HREF,
 } from '@/components/layout/create-panel-href';
 import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { SidePanel } from '@/components/layout/side-panel';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ArchivedWorkspaces } from '@/components/workspaces/archived-workspaces';
 import { CreateWorkspaceForm } from '@/components/workspaces/create-workspace-form';
 import { WorkspaceList } from '@/components/workspaces/workspace-list';
@@ -19,23 +21,25 @@ import { requireUserOrRedirect } from '@/shared/access';
 export default function HomePage({ searchParams }: PageProps<'/'>) {
   return (
     <PageContainer as="main" id="main-content" size="wide" className="grid gap-6 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Мои пространства</h1>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline">
-            <Link href="/my-tasks">
-              <ListChecksIcon />
-              Мои задачи
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link href={NEW_WORKSPACE_HREF} scroll={false}>
-              Создать пространство
-            </Link>
-          </Button>
-        </div>
-      </div>
-      <Suspense fallback={<div className="h-24 animate-pulse rounded-xl bg-muted" />}>
+      <PageHeader
+        title="Мои пространства"
+        actions={
+          <>
+            <Button asChild variant="outline">
+              <Link href="/my-tasks">
+                <ListChecksIcon />
+                Мои задачи
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href={NEW_WORKSPACE_HREF} scroll={false}>
+                Создать пространство
+              </Link>
+            </Button>
+          </>
+        }
+      />
+      <Suspense fallback={<Skeleton className="h-24 rounded-xl" />}>
         <WorkspacesSection />
       </Suspense>
       <Suspense fallback={null}>

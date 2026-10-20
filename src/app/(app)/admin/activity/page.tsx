@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { adminActivityHref } from '@/components/admin/activity/admin-activity-href';
 import { AdminActivityToolbar } from '@/components/admin/activity/admin-activity-toolbar';
 import { AuditEventList } from '@/components/audit/audit-event-list';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   hasActiveAuditFilters,
   listAdminAuditEvents,
@@ -17,7 +18,7 @@ type Props = PageProps<'/admin/activity'>;
 
 export default function AdminActivityPage({ searchParams }: Props) {
   return (
-    <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-96 rounded-xl" />}>
       <ActivitySection searchParams={searchParams} />
     </Suspense>
   );

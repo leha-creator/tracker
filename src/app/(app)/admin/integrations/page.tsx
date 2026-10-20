@@ -1,12 +1,13 @@
 import { Suspense } from 'react';
 
 import { GithubAppSetup } from '@/components/admin/github-app-setup';
+import { Skeleton } from '@/components/ui/skeleton';
 import { getGithubAppSetup } from '@/modules/integrations/github';
 import { requireAdminOrNotFound } from '@/shared/access';
 
 export default function AdminIntegrationsPage({ searchParams }: PageProps<'/admin/integrations'>) {
   return (
-    <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-64 rounded-xl" />}>
       <IntegrationsSection searchParams={searchParams} />
     </Suspense>
   );

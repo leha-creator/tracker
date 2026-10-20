@@ -9,10 +9,12 @@ import {
   isCreatePanelOpen,
   newProjectHref,
 } from '@/components/layout/create-panel-href';
+import { PageHeader } from '@/components/layout/page-header';
 import { SidePanel } from '@/components/layout/side-panel';
 import { CreateProjectForm } from '@/components/projects/create-project-form';
 import { ProjectList } from '@/components/projects/project-list';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { listProjects } from '@/modules/projects';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
 import type { AuthSession } from '@/shared/auth';
@@ -21,7 +23,7 @@ const DATE = new Intl.DateTimeFormat('ru', { dateStyle: 'medium' });
 
 export default function WorkspacePage({ params, searchParams }: PageProps<'/w/[workspaceSlug]'>) {
   return (
-    <Suspense fallback={<div className="h-28 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-28 rounded-xl" />}>
       <ProjectsSection params={params} searchParams={searchParams} />
     </Suspense>
   );
@@ -47,27 +49,22 @@ async function ProjectsSection({
 
   return (
     <section className="grid gap-8" aria-labelledby="projects-heading">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          {/* Плитка 48px = строка названия 28px + строка «Проекты» 20px. */}
-          <EntityIconTile icon={workspace.icon} size="xl" />
-          <div className="min-w-0">
-            <h1 className="truncate text-2xl leading-7 font-semibold tracking-tight">
-              {workspace.name}
-            </h1>
-            <h2 id="projects-heading" className="text-sm leading-5 text-muted-foreground">
-              Проекты
-            </h2>
-          </div>
-        </div>
-        {canManage && projects.length > 0 && (
-          <Button asChild size="sm">
-            <Link href={newProjectHref(workspace.slug)} scroll={false}>
-              Создать проект
-            </Link>
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title={workspace.name}
+        overflow="truncate"
+        leading={<EntityIconTile icon={workspace.icon} size="xl" />}
+        description={<h2 id="projects-heading">Проекты</h2>}
+        actions={
+          canManage &&
+          projects.length > 0 && (
+            <Button asChild size="sm">
+              <Link href={newProjectHref(workspace.slug)} scroll={false}>
+                Создать проект
+              </Link>
+            </Button>
+          )
+        }
+      />
       <ProjectList workspaceSlug={workspace.slug} items={projects} canManage={canManage} />
       <Suspense fallback={null}>
         <ArchivedProjects session={session} workspace={workspace} />

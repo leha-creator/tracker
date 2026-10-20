@@ -2,8 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { LabelsManager } from '@/components/tasks/labels/labels-manager';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { listLabels, TASK_LABELS_PER_WORKSPACE } from '@/modules/tasks';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
 
@@ -13,7 +15,7 @@ type Props = PageProps<'/w/[workspaceSlug]/settings/labels'>;
 
 export default function WorkspaceLabelsPage({ params }: Props) {
   return (
-    <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-64 rounded-xl" />}>
       <LabelsSection params={params} />
     </Suspense>
   );
@@ -37,7 +39,7 @@ async function LabelsSection({ params }: Pick<Props, 'params'>) {
             ← Настройки пространства
           </Link>
         )}
-        <h1 className="text-2xl font-semibold tracking-tight">Метки задач</h1>
+        <PageHeader title="Метки задач" />
       </div>
 
       <Card>

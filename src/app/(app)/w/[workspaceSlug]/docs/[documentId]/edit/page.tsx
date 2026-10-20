@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { documentHref } from '@/components/documents/docs-href';
 import { DocumentBreadcrumbs } from '@/components/documents/document-breadcrumbs';
 import { NoteEditor } from '@/components/documents/note-editor/note-editor';
+import { Skeleton } from '@/components/ui/skeleton';
 import { folderPath, getDocument, listFolderTree } from '@/modules/documents';
 import { requireWorkspaceAccessBySlug } from '@/shared/access';
 import { NotFoundError } from '@/shared/errors';
@@ -15,7 +16,7 @@ type Props = PageProps<'/w/[workspaceSlug]/docs/[documentId]/edit'>;
 
 export default function EditNotePage({ params }: Props) {
   return (
-    <Suspense fallback={<div className="h-[70dvh] animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-[70dvh] rounded-xl" />}>
       <EditNoteSection params={params} />
     </Suspense>
   );

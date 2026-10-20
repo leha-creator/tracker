@@ -9,6 +9,7 @@ import { ProjectArchiveButton } from '@/components/projects/project-archive-butt
 import { ProjectSettingsForm } from '@/components/projects/project-settings-form';
 import { SettingsDraftProvider } from '@/components/forms/settings-draft';
 import { StatusList } from '@/components/projects/status-list';
+import { Skeleton } from '@/components/ui/skeleton';
 import { getProjectAutomation, isGithubEnabled } from '@/modules/integrations/github';
 import { listStatuses } from '@/modules/projects';
 
@@ -35,10 +36,10 @@ function SettingsSkeleton() {
           key={section}
           className="grid gap-x-10 gap-y-4 py-6 first:pt-2 lg:grid-cols-[15rem_minmax(0,48rem)]"
         >
-          <div className="h-5 w-28 animate-pulse rounded bg-muted" />
+          <Skeleton className="h-5 w-28 rounded-sm" />
           <div className="grid gap-3">
             {Array.from({ length: rows }, (_, row) => (
-              <div key={row} className="h-9 animate-pulse rounded-md bg-muted" />
+              <Skeleton key={row} className="h-9" />
             ))}
           </div>
         </div>

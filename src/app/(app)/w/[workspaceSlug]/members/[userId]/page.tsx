@@ -4,11 +4,13 @@ import { notFound } from 'next/navigation';
 import { Suspense, type ReactNode } from 'react';
 
 import { AuditEventList } from '@/components/audit/audit-event-list';
+import { PageHeader, SectionHeading } from '@/components/layout/page-header';
 import { DueDate } from '@/components/tasks/due-date';
 import { PriorityBadge } from '@/components/tasks/priority-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { UserAvatar } from '@/components/users/user-avatar';
 import { WORKSPACE_ROLE_LABELS } from '@/components/workspaces/role-label';
 import { listMemberWorkspaceActivity, parseAuditCursor } from '@/modules/audit';
@@ -28,7 +30,7 @@ const DATE_TIME = new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyle
 
 export default function MemberProfilePage({ params, searchParams }: Props) {
   return (
-    <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-muted" />}>
+    <Suspense fallback={<Skeleton className="h-96 rounded-xl" />}>
       <MemberProfile params={params} searchParams={searchParams} />
     </Suspense>
   );
@@ -63,16 +65,17 @@ async function MemberProfile({ params, searchParams }: Props) {
         ← Участники
       </Link>
 
-      <header className="flex flex-wrap items-center gap-5">
-        <UserAvatar user={{ name: member.name, image }} size="xl" />
-        <div className="grid min-w-0 flex-1 gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight break-words">
-            {member.name}
-            {member.isCurrentUser && (
-              <span className="text-base font-normal text-muted-foreground"> (вы)</span>
-            )}
-          </h1>
-          {card?.position && <p className="text-muted-foreground">{card.position}</p>}
+      <PageHeader
+        as="header"
+        title={member.name}
+        titleAddon={
+          member.isCurrentUser && (
+            <span className="text-base font-normal text-muted-foreground">(вы)</span>
+          )
+        }
+        leading={<UserAvatar user={{ name: member.name, image }} size="xl" />}
+        description={card?.position && <p className="text-base">{card.position}</p>}
+        meta={
           <div className="flex flex-wrap items-center gap-2 pt-1">
             {member.isAgent ? (
               <Badge variant="secondary">Агент</Badge>
@@ -88,19 +91,19 @@ async function MemberProfile({ params, searchParams }: Props) {
               <Badge variant="outline">Управляет документами</Badge>
             )}
           </div>
-        </div>
-        {member.isCurrentUser && (
-          <Button asChild variant="outline">
-            <Link href="/profile">Редактировать профиль</Link>
-          </Button>
-        )}
-      </header>
+        }
+        actions={
+          member.isCurrentUser && (
+            <Button asChild variant="outline">
+              <Link href="/profile">Редактировать профиль</Link>
+            </Button>
+          )
+        }
+      />
 
       {card?.bio && (
         <section aria-labelledby="member-bio-heading" className="grid gap-1.5">
-          <h2 id="member-bio-heading" className="text-sm font-semibold">
-            О себе
-          </h2>
+          <SectionHeading id="member-bio-heading" size="group" title="О себе" />
           <p className="text-sm break-words whitespace-pre-wrap">{card.bio}</p>
         </section>
       )}
@@ -197,10 +200,8 @@ async function MemberProfile({ params, searchParams }: Props) {
       </div>
 
       <section aria-labelledby="member-activity-heading" className="grid gap-3">
-        <h2 id="member-activity-heading" className="text-base font-semibold">
-          Последние действия
-        </h2>
-        <Suspense fallback={<div className="h-40 animate-pulse rounded-xl bg-muted" />}>
+        <SectionHeading id="member-activity-heading" size="group" title="Последние действия" />
+        <Suspense fallback={<Skeleton className="h-40 rounded-xl" />}>
           <MemberActivity
             session={session}
             workspace={workspace}
