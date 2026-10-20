@@ -63,7 +63,8 @@ interface NoteEditorProps {
   linkTaskId?: string;
 }
 
-const SHORTCUTS: Record<string, MarkdownAction> = { b: 'bold', i: 'italic', k: 'link' };
+/** По физической клавише (event.code): в русской раскладке event.key — «и», «ш», «л». */
+const SHORTCUTS: Record<string, MarkdownAction> = { KeyB: 'bold', KeyI: 'italic', KeyK: 'link' };
 
 /**
  * Редактор Markdown-заметки: поле с панелью форматирования, вкладки «Редактор / Просмотр /
@@ -155,13 +156,12 @@ export function NoteEditor(props: NoteEditorProps) {
 
   function onKeyDown(event: KeyboardEvent) {
     if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
-    const key = event.key.toLowerCase();
-    if (key === 's') {
+    if (event.code === 'KeyS') {
       event.preventDefault();
       save();
       return;
     }
-    const action = SHORTCUTS[key];
+    const action = SHORTCUTS[event.code];
     if (action && event.target === textareaRef.current) {
       event.preventDefault();
       format(action);
