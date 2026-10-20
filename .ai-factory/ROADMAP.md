@@ -53,12 +53,17 @@
   - [x] Дизайн-система и айдентика — знак и фавикон, токены и тона, общие компоненты, UI-кит `/admin/design`, guard-тесты (план `design-system`)
 - [ ] **Эксплуатация** — наблюдаемость и надёжность
   - [ ] Error tracking и метрики (Sentry / OpenTelemetry) поверх pino
-  - [ ] Регулярная проверка восстановления из бэкапа
+  - [ ] Регулярная проверка восстановления из бэкапа — для дампов Postgres сделано в infra (вывоз в Object Storage, еженедельный `infra-backup-restore-check`); остаются файлы MinIO (`tasker-backup-files`)
   - [ ] Очистка «сиротских» объектов в S3 после удалений и неудачных загрузок
 - [ ] **Переход на общую инфраструктуру** — сторона tasker; сама инфраструктура — в роадмапе `leha-creator/infra` (`D:\work\infra`)
   - [ ] Файлы в Yandex Object Storage — бакет `tasker-attachments` со своим сервисным аккаунтом вместо root-учётки MinIO, `rclone sync`, новые `S3_ENDPOINT` / `S3_PUBLIC_ENDPOINT`, маршрут бакета убрать из `tracker.caddy`, затем удалить MinIO и `minio-init`. Перед переездом проверить на тестовом бакете: CORS (XHR с прогрессом шлёт preflight), presigned POST до 50 МБ на медленном канале при TTL 10 мин, отсутствие `X-Frame-Options` (PDF во `<iframe>`), `HeadObject` и чтение начала объекта из контейнера (MSS clamping), задержку с сервера
   - [ ] Общий PostgreSQL 18 — переезд с 17 через dump/restore, `pg_trgm`, сервис `postgres` убрать из `deploy/tasker/compose.yml`, бэкапы — из infra
-  - [ ] `deploy/edge` и bootstrap — после переноса в infra заменить ссылкой
+  - [ ] `deploy/edge` и bootstrap — заменить ссылкой на infra (перенос сделан 2026-10-20, описание — `infra/docs/tasker-handoff.md`). **До этого не запускать `deploy/bootstrap-server.sh`**: он перезапишет `/opt/edge` старым конфигом без healthcheck и сниппета `access_log`
+    - удалить `deploy/edge/*` и `deploy/host/docker-mss-clamp.service` — живут в `infra/edge`, `infra/host`
+    - из `deploy/bootstrap-server.sh` убрать общую часть: каталоги и копирование конфига `/opt/edge`, `docker network create edge`, MSS clamping, проверки sshd (`infra/host/bootstrap-server.sh`); остаются `/opt/tasker`, ключ деплоя, `.env`, `backup.sh`/`reminders.sh`/`cleanup.sh` и таймеры
+    - bootstrap tasker падает с понятной ошибкой, если нет `deploy`, `/opt/edge/sites` или сети `edge` (как `bootstrap-app-server.sh` в meet), и не создаёт их сам; в документации — сначала bootstrap infra
+    - контракты CI не меняются: `/opt/edge/sites/tracker.caddy`, `docker compose exec -T caddy caddy validate|reload` в `/opt/edge`, алиас `tasker-app` в сети `edge`, дампы `tasker-*.dump` в `/opt/tasker/backups/db` (их забирает вывоз infra)
+    - необязательно: в `tracker.caddy` — `import access_log` вместо своего блока `log`
 - [ ] **Единый вход (SSO)** — tasker как OIDC-клиент IdP `auth.plwedding.ru` (`genericOAuth`) с прежними локальными сессиями; сам IdP — в роадмапе `leha-creator/auth` (`D:\work\auth`). Регистрация свободная, своего допуска у tasker поверх IdP нет
   - [ ] Вход через IdP — локально остаются агенты (`isAgent`) и API-токены, роли пространств, глобальная роль admin, `UserProfile`, привязка GitHub-аккаунта для PR, имперсонация; имя, email и фото — из claims IdP; пароль, 2FA и сессии в `/profile/security` — ссылка на страницу аккаунта IdP
   - [ ] Журнал действий сохраняется — события `owner = identity` пишет IdP, tasker сливает их со своими в ленты (профиль «Безопасность», карточка пользователя, `/admin/activity`, обзор); операции админки над учётной записью идут в admin API IdP через прежний порт (см. «Совместимость с будущим IdP» в плане `admin-resource`)
