@@ -1,4 +1,4 @@
-[← Разработка](development.md) · [Back to README](../README.md) · [Продакшен →](production.md)
+[← Дизайн-система](design.md) · [Back to README](../README.md) · [Продакшен →](production.md)
 
 # Docker-образ и CI
 

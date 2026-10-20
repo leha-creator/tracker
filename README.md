@@ -101,6 +101,7 @@ export async function archiveTaskAction(taskId: string): Promise<ActionResult<nu
 | [Архитектура](docs/architecture.md) | Модули, слои, аутентификация, пространства, проекты, задачи, доска и список, доступ, `/api/health` |
 | [Логирование и ошибки](docs/logging-and-errors.md) | `createLogger`, `LOG_LEVEL`, `AppError`, `ActionResult` |
 | [Разработка](docs/development.md) | Команды, линтеры, тесты, Prisma, справка и скриншоты, коммиты |
+| [Дизайн-система](docs/design.md) | Знак и логотип, цвета и тона, типографика, компоненты, тексты интерфейса, UI-кит `/admin/design` |
 | [Docker-образ и CI](docs/deployment.md) | Сборка образа, `compose.app.yml`, миграции, GitHub Actions |
 | [Продакшен](docs/production.md) | Сервер, прод-стек, CD и откат, резервные копии, почта |
 | [Интеграция с GitHub](docs/github.md) | GitHub App, вебхуки, ключ задач, привязка PR, автосмена статуса, локальная разработка |

@@ -36,10 +36,10 @@ tasker/
 ├── prisma.config.ts          # Подключение Prisma CLI (DATABASE_URL, миграции)
 ├── src/
 │   ├── proxy.ts              # Оптимистичный редирект на /login по session-cookie (не авторизация)
-│   ├── app/                  # Представление (Next.js): страницы, layout, route handlers
+│   ├── app/                  # Представление (Next.js): страницы, layout, route handlers; icon.svg, favicon.ico, apple-icon.png, manifest.ts — иконки приложения (pnpm brand:icons)
 │   │   ├── (auth)/           # /login (+ two-factor — второй шаг 2FA), /register, /forgot-password, /reset-password, /verify-email
 │   │   ├── not-found.tsx     # 404 для неизвестных адресов (+ w/[workspaceSlug]/not-found.tsx внутри пространства)
-│   │   ├── (app)/            # Защищённая зона: sticky-шапка (переключатель и разделы пространства, колокольчик уведомлений, меню пользователя, skip-link), реалтайм и горячие клавиши, /, /my-tasks (мои задачи по всем пространствам), /admin (обзор; users, users/[userId] — карточка, workspaces, workspaces/[workspaceId], activity — журнал, settings — настройки ресурса, integrations — GitHub App),
+│   │   ├── (app)/            # Защищённая зона: sticky-шапка (переключатель и разделы пространства, колокольчик уведомлений, меню пользователя, skip-link), реалтайм и горячие клавиши, /, /my-tasks (мои задачи по всем пространствам), /admin (обзор; users, users/[userId] — карточка, workspaces, workspaces/[workspaceId], activity — журнал, settings — настройки ресурса, integrations — GitHub App, design — брендбук и UI-кит),
 │   │   │                     # / (+ ?create=workspace — панель «Новое пространство»), /w/[workspaceSlug] (+ ?create=project — панель «Новый проект»; settings, settings/members, settings/github, settings/agents, settings/agents/[agentId], settings/labels — метки), /invite/[invitationId],
 │   │   │                     # /w/[workspaceSlug]/projects/[projectId]/{board,list,settings} (/workspaces/new и projects/new — редиректы на панели),
 │   │   │                     # /w/[workspaceSlug]/overview (обзор: счётчики, нагрузка, просрочка), /w/[workspaceSlug]/tasks (+ new, [taskNumber]), /w/[workspaceSlug]/members/[userId] (публичный профиль),
@@ -80,7 +80,10 @@ tasker/
 │   │   └── admin/            # Администрирование ресурса: модели (правила, запросы списков, имперсонация, ряд по дням), срезы user (карточка, сессии, токены, письма; изменения — плагин admin через callAdminApi и порт auth), impersonation, workspace, settings, overview; зависит от workspaces, profiles, api-tokens, audit, auth, documents, tasks, integrations/github
 │   ├── components/
 │   │   ├── layout/           # Каркас: PageContainer (ширина страниц), WorkspaceSections и TabLink (навигация),
-│   │   │                     # nav-items.ts (чистые функции активного раздела), ThemeProvider (next-themes), NotFoundMessage, SettingsSection (секция настроек без карточки: заголовок слева, поля справа, разделитель), SidePanel (модальная панель справа) и create-panel-href (адреса панелей создания)
+│   │   │                     # nav-items.ts (чистые функции активного раздела), ThemeProvider (next-themes), NotFoundMessage, SettingsSection (секция настроек без карточки: заголовок слева, поля справа, разделитель), SidePanel (модальная панель справа) и create-panel-href (адреса панелей создания), PageHeader (h1) и SectionHeading (h2)
+│   │   ├── brand/            # Logo и LogoMark (знак — галочка в плитке), mark-geometry.ts — геометрия знака для компонентов и файлов
+│   │   ├── feedback/         # EmptyState (пустое состояние), Callout (блок-сообщение с тоном), ToneBadge / ToneDot
+│   │   ├── design-system/    # token-catalog.ts (токены, STATIC_HEX, шкалы), tones.ts (смысл → классы тона), разделы UI-кита /admin/design, style-guard.test.ts (запрет сырых цветов)
 │   │   ├── auth/             # Формы входа/регистрации, «Забыли пароль?», новый пароль, повторное письмо, шаг 2FA, меню пользователя (аватар, тема, выход)
 │   │   ├── forms/            # FormField, FormError, ConfirmActionDialog (подтверждение; управляемый режим open/onOpenChange), settings-draft (общее сохранение страницы настроек плавающей панелью снизу: проект, пространство)
 │   │   ├── admin/            # Навигация админки; github-app-setup — мастер GitHub App; users/ — таблица пользователей, фильтры (URL), меню действий, диалоги блокировки и удаления, detail/ — карточка; workspaces/, activity/ (фильтры журнала), settings/ (формы групп), overview/ (плитки, столбцы регистраций, состояние)
@@ -137,6 +140,8 @@ tasker/
 │   └── tasker/               # Прод-стек: compose.yml, tracker.caddy (сайт), .env.example, backup.sh, reminders.sh (запуск напоминаний через docker exec), cleanup.sh (очистка журнала), systemd/ (в т.ч. tasker-reminders.timer, tasker-cleanup.timer)
 ├── scripts/help-screenshots/ # pnpm help:screenshots — Playwright: засев демо-данных через UI и API, съёмка в public/help-media/ (.state/ — в .gitignore)
 ├── public/help-media/        # Скриншоты справки: <article>/<name>.png
+├── public/brand/             # Файлы знака: logo*.svg, icon-192/512.png, logo-mail.png (письма), og.png
+├── scripts/brand/            # pnpm brand:icons — рендер PNG/ICO знака через Playwright, ico.mjs — упаковщик ICO
 ├── scripts/smoke-health.sh   # Ожидание 200 и {"status":"ok"} от /api/health (CI и ручная проверка)
 ├── scripts/run-reminders.mjs # Локальный запуск напоминаний (pnpm reminders:run → POST /api/cron/reminders)
 ├── scripts/run-cleanup.mjs # Локальный запуск очистки (pnpm cleanup:run → POST /api/cron/cleanup)
@@ -207,6 +212,7 @@ tasker/
 | `pnpm db:migrate` | Создать и применить миграцию Prisma |
 | `pnpm reminders:run` | Разово разослать напоминания о сроке (нужны `CRON_SECRET` в `.env` и запущенный dev-сервер) |
 | `pnpm cleanup:run` | Разово очистить журнал старше `AUDIT_RETENTION_DAYS` и истёкшие лимиты (нужны `CRON_SECRET` и dev-сервер) |
+| `pnpm brand:icons` | Пересобрать PNG и ICO знака из SVG (после изменения `mark-geometry.ts` или `public/brand/*.svg`) |
 | `pnpm help:screenshots` | Засеять демо-данные и переснять скриншоты справки (`--shots-only`, `--only=<article>`; нужен отдельный сервер с чистой базой, см. `docs/development.md`) |
 | `pnpm app:up` / `pnpm app:down` | Собрать образ и запустить приложение с миграциями в Docker (проект `tasker-app`, порт 3001) / остановить стек |
 
@@ -220,6 +226,7 @@ tasker/
 | Архитектура | `docs/architecture.md` | Слои, границы ESLint, аутентификация и её безопасность (подтверждение email, сброс пароля, 2FA, сессии, лимиты попыток), пространства, проекты, задачи, доска, список, комментарии, @упоминания и вложения, профили, уведомления, администрирование, раскладка, навигация и тема, доступ, HTTP-эндпоинты |
 | Логирование и ошибки | `docs/logging-and-errors.md` | `createLogger`, `AppError`, `ActionResult` |
 | Разработка | `docs/development.md` | Команды, линтеры, тесты, Prisma, справка и скриншоты |
+| Дизайн-система | `docs/design.md` | Брендбук: знак, цвет бренда, токены и тона, типографика, радиусы, иконки, компоненты, тексты, письма; UI-кит — `/admin/design`; правила для агентов — `.ai-factory/rules/design.md` |
 | Docker-образ и CI | `docs/deployment.md` | Dockerfile, `compose.app.yml`, миграции, smoke-скрипт, GitHub Actions |
 | Продакшен | `docs/production.md` | Сервер, edge-прокси, прод-стек, CD и откат, резервные копии, почта |, GitHub App на сервере |
 | Интеграция с GitHub | `docs/github.md` | GitHub App, вебхуки, ключ задач, привязка PR, автосмена статуса |
@@ -241,6 +248,7 @@ tasker/
   - Правильно: сначала `git checkout main`, затем `git pull origin main`
 - Все запросы к данным фильтруются по `workspaceId` с проверкой членства и роли пользователя
 - Не обращайтесь к Prisma из React-компонентов напрямую — только через серверные сервисы модулей
+- UI — по правилам [`.ai-factory/rules/design.md`](.ai-factory/rules/design.md): цвета только токенами и тонами, h1 — `PageHeader`, пустые состояния — `EmptyState`; новый общий компонент показывайте на `/admin/design`
 
 <!-- BEGIN:nextjs-agent-rules -->
 

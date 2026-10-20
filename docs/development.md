@@ -1,4 +1,4 @@
-[← Логирование и ошибки](logging-and-errors.md) · [Back to README](../README.md) · [Docker-образ и CI →](deployment.md)
+[← Логирование и ошибки](logging-and-errors.md) · [Back to README](../README.md) · [Дизайн-система →](design.md)
 
 # Разработка
 
@@ -20,6 +20,15 @@
 | `pnpm db:deploy` | Применить миграции (CI / production) |
 | `pnpm db:studio` | Prisma Studio |
 | `pnpm help:screenshots` | Засеять демо-данные и переснять скриншоты справки ([подробнее](#как-переснять-скриншоты)) |
+| `pnpm brand:icons` | Пересобрать PNG и ICO знака (фавикон, apple-icon, иконки манифеста, логотип для писем, OG) из SVG через Playwright ([подробнее](design.md#файлы-знака)) |
+
+## Интерфейс
+
+UI собирается по правилам [Дизайн-системы](design.md). Коротко:
+
+- цвета — только токенами и тонами (`tones.ts`); guard-тест `src/components/design-system/style-guard.test.ts` падает на `text-red-600`, `[oklch(…)]`, `[#…]` и `text-[11px]`;
+- новый токен — в `globals.css` (обе темы) и в `token-catalog.ts`, иначе упадёт `token-catalog.test.ts`;
+- новый общий компонент или вариант — на страницу `/admin/design` (`design-system-sections.tsx`) в том же изменении.
 
 ## Линтеры и форматирование
 
