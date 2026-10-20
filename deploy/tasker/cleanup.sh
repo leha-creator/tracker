@@ -5,7 +5,7 @@
 #   cleanup.sh
 #
 # Запускается systemd-таймером tasker-cleanup.timer под пользователем deploy (ставит
-# deploy/bootstrap-server.sh); вручную — тем же пользователем. Секрет берётся из окружения
+# deploy/bootstrap-app-server.sh); вручную — тем же пользователем. Секрет берётся из окружения
 # контейнера (CRON_SECRET из /opt/tasker/.env) и не попадает в командную строку: её видно в ps.
 # Повторный запуск безопасен.
 set -eu

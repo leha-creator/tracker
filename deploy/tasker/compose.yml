@@ -2,13 +2,13 @@
 #
 # На сервере лежит в /opt/tasker; копируется workflow деплоя (.github/workflows/ci.yml, джоб deploy).
 # Секреты — в /opt/tasker/.env (создаётся один раз, см. .env.example рядом и
-# deploy/bootstrap-server.sh), тег релиза — в /opt/tasker/release.env (пишет CI):
+# deploy/bootstrap-app-server.sh), тег релиза — в /opt/tasker/release.env (пишет CI):
 #
 #   cd /opt/tasker
 #   docker compose --env-file .env --env-file release.env up -d --wait app
 #
 # Порты на хост не публикуются: снаружи приложение и путь бакета доступны только через
-# edge-прокси (deploy/edge, сеть `edge`), файл сайта — tracker.caddy.
+# общий edge-прокси (leha-creator/infra, edge/; сеть `edge`), файл сайта — tracker.caddy.
 name: tasker
 
 x-logging: &logging
@@ -165,7 +165,7 @@ services:
 
 networks:
   tasker: {}
-  # Общая сеть edge-прокси (deploy/edge/compose.yml).
+  # Общая сеть edge-прокси (infra/edge/compose.yml), создаёт infra/host/bootstrap-server.sh.
   edge:
     external: true
     name: edge

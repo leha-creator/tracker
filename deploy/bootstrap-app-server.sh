@@ -1,19 +1,20 @@
 #!/bin/sh
-# Разовая подготовка сервера под Tasker (идемпотентно, можно запускать повторно).
+# Разовая подготовка сервера приложения под Tasker (идемпотентно, можно запускать повторно).
+# Сервер уже подготовлен репозиторием leha-creator/infra (infra/host/bootstrap-server.sh):
+# Docker, пользователь deploy, ufw, swap, общий edge-прокси (/opt/edge, сеть edge), MSS clamping.
+# Этот скрипт общий edge не меняет и без него останавливается.
 # Запускается под root из копии каталога deploy/ на сервере:
 #
 #   scp -r deploy root@<host>:/tmp/tasker-deploy
 #   ssh root@<host> "TASKER_DEPLOY_PUBKEY='ssh-ed25519 AAAA... tasker-ci' ADMIN_EMAILS='me@example.com' \
-#     sh /tmp/tasker-deploy/bootstrap-server.sh"
+#     sh /tmp/tasker-deploy/bootstrap-app-server.sh"
 #
 # Что делает:
-#   - каталоги /opt/edge (+ sites/) и /opt/tasker (+ backups/) с правами для пользователя deploy;
-#   - копирует конфиг edge-прокси (deploy/edge) в /opt/edge — сам прокси НЕ запускает;
-#   - создаёт docker-сеть edge;
+#   - проверяет пользователя deploy, Docker, сеть edge и каталог /opt/edge/sites;
+#   - каталоги /opt/tasker и /opt/tasker/backups для deploy, копирует backup.sh, reminders.sh, cleanup.sh;
 #   - добавляет ключ деплоя Tasker в authorized_keys пользователя deploy;
 #   - создаёт /opt/tasker/.env со сгенерированными секретами, если его ещё нет (существующий не трогает);
-#   - ставит backup.sh и systemd-таймеры резервных копий, reminders.sh и таймер напоминаний о сроке, cleanup.sh и таймер очистки журнала;
-#   - включает MSS clamping для трафика контейнеров (deploy/host/docker-mss-clamp.service).
+#   - ставит systemd-таймеры резервных копий, напоминаний о сроке и очистки журнала.
 # Секреты в вывод не печатаются.
 set -eu
 
@@ -21,6 +22,7 @@ SRC="$(cd "$(dirname "$0")" && pwd)"
 DEPLOY_USER="${DEPLOY_USER:-deploy}"
 EDGE_DIR=/opt/edge
 APP_DIR=/opt/tasker
+INFRA_HINT="run infra/host/bootstrap-server.sh from leha-creator/infra first"
 
 log() {
   echo "[bootstrap] $*"
@@ -31,32 +33,33 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 if ! id "$DEPLOY_USER" > /dev/null 2>&1; then
-  log "fail: user $DEPLOY_USER does not exist"
+  log "fail: user $DEPLOY_USER does not exist ($INFRA_HINT)"
   exit 1
 fi
-for f in edge/compose.yml edge/Caddyfile tasker/.env.example tasker/backup.sh; do
+for f in tasker/.env.example tasker/backup.sh tasker/reminders.sh tasker/cleanup.sh tasker/systemd/tasker-backup@.service; do
   if [ ! -f "$SRC/$f" ]; then
     log "fail: $SRC/$f not found (copy the whole deploy/ directory)"
     exit 1
   fi
 done
 
-# --- edge-прокси -----------------------------------------------------------------
-install -d -o root -g "$DEPLOY_USER" -m 750 "$EDGE_DIR"
-# setgid: файлы сайтов, которые пишет deploy, остаются в группе deploy.
-install -d -o root -g "$DEPLOY_USER" -m 2775 "$EDGE_DIR/sites"
-install -o root -g "$DEPLOY_USER" -m 644 "$SRC/edge/compose.yml" "$SRC/edge/Caddyfile" "$EDGE_DIR/"
-[ -f "$SRC/edge/README.md" ] && install -o root -g "$DEPLOY_USER" -m 644 "$SRC/edge/README.md" "$EDGE_DIR/"
-log "edge config: ok ($EDGE_DIR)"
-
-if docker network inspect edge > /dev/null 2>&1; then
-  log "docker network edge: skip (exists)"
-else
-  docker network create edge > /dev/null
-  log "docker network edge: ok (created)"
+# --- общий edge-прокси (только проверка) -------------------------------------------
+if ! command -v docker > /dev/null 2>&1; then
+  log "fail: docker is not installed ($INFRA_HINT)"
+  exit 1
 fi
+if ! docker network inspect edge > /dev/null 2>&1; then
+  log "fail: docker network edge does not exist (edge proxy is not set up: $INFRA_HINT)"
+  exit 1
+fi
+if [ ! -d "$EDGE_DIR/sites" ]; then
+  log "fail: $EDGE_DIR/sites does not exist (edge proxy is not set up: $INFRA_HINT)"
+  exit 1
+fi
+log "edge proxy: ok (network edge, $EDGE_DIR/sites)"
 
 # --- каталог приложения ----------------------------------------------------------
+# backups/db не трогаем: его читает вывоз дампов infra.
 install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 750 "$APP_DIR" "$APP_DIR/backups"
 install -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$SRC/tasker/backup.sh" "$APP_DIR/backup.sh"
 install -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$SRC/tasker/reminders.sh" "$APP_DIR/reminders.sh"
@@ -116,28 +119,4 @@ else
   log "backup timers: skip (no systemd units or systemctl)"
 fi
 
-# --- MSS clamping для контейнеров (MTU сервера меньше, чем у сетей Docker) -------------
-if [ -f "$SRC/host/docker-mss-clamp.service" ] && command -v systemctl > /dev/null 2>&1; then
-  install -o root -g root -m 644 "$SRC/host/docker-mss-clamp.service" /etc/systemd/system/
-  systemctl daemon-reload
-  systemctl enable docker-mss-clamp.service > /dev/null
-  systemctl restart docker-mss-clamp.service
-  log "docker MSS clamping: ok ($(iptables -t mangle -S FORWARD | grep -c TCPMSS) rule)"
-else
-  log "docker MSS clamping: skip (no unit file or systemctl)"
-fi
-
-# --- проверки SSH ----------------------------------------------------------------
-sshd_conf="$(sshd -T 2> /dev/null || true)"
-if echo "$sshd_conf" | grep -qi '^passwordauthentication no'; then
-  log "sshd PasswordAuthentication: ok (no)"
-else
-  log "sshd PasswordAuthentication: WARN (enabled) — disable it"
-fi
-if echo "$sshd_conf" | grep -Eqi '^permitrootlogin (prohibit-password|without-password|no)'; then
-  log "sshd PermitRootLogin: ok"
-else
-  log "sshd PermitRootLogin: WARN (password login allowed) — set prohibit-password"
-fi
-
-log "done. Next: start edge proxy (see $EDGE_DIR/README.md, section about moving from maxim)"
+log "done. Next: run the deploy workflow (see docs/production.md)"

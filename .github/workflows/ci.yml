@@ -357,12 +357,17 @@ jobs:
           printf '%s\n' "${KNOWN_HOSTS}" > ~/.ssh/known_hosts
           printf 'Host target\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/id_ed25519\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n  BatchMode yes\n' "${HOST}" "${USER_NAME}" > ~/.ssh/config
           ssh target 'echo "connected to $(hostname) as $(whoami)"'
-          ssh target "test -f ${APP_DIR}/.env" || { echo "::error::${APP_DIR}/.env is missing: run deploy/bootstrap-server.sh"; exit 1; }
+          ssh target "test -f ${APP_DIR}/.env" || { echo "::error::${APP_DIR}/.env is missing: run infra/host/bootstrap-server.sh, then deploy/bootstrap-app-server.sh"; exit 1; }
 
       - name: Upload stack files
         env:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
+          # tracker.caddy делает `import access_log`: без сниппета в Caddyfile сайт не пройдёт validate,
+          # а уже записанный файл сломает reload остальным проектам. Проверяем до любых изменений.
+          ssh target "grep -q '^(access_log)' ${EDGE_DIR}/Caddyfile" || {
+            echo "::error::${EDGE_DIR}/Caddyfile has no (access_log) snippet: apply infra/edge first (leha-creator/infra)"; exit 1;
+          }
           echo "::group::compose.yml, backup.sh, reminders.sh, cleanup.sh, release.env -> ${APP_DIR}; tracker.caddy -> ${EDGE_DIR}/sites"
           scp deploy/tasker/compose.yml deploy/tasker/backup.sh deploy/tasker/reminders.sh deploy/tasker/cleanup.sh "target:${APP_DIR}/"
           printf 'TASKER_TAG=%s\n' "${TAG}" | ssh target "cat > ${APP_DIR}/release.env"

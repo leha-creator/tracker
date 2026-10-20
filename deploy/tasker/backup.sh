@@ -4,7 +4,7 @@
 #   backup.sh db      # pg_dump -Fc → /opt/tasker/backups/db, хранится BACKUP_KEEP_DB (7) последних
 #   backup.sh files   # tar тома MinIO → /opt/tasker/backups/files, хранится BACKUP_KEEP_FILES (2)
 #
-# Запускается systemd-таймерами под пользователем deploy (ставит deploy/bootstrap-server.sh)
+# Запускается systemd-таймерами под пользователем deploy (ставит deploy/bootstrap-app-server.sh)
 # и workflow деплоя перед миграциями. Копии лежат на том же диске: защищают от ошибок
 # и неудачных миграций, но не от потери сервера.
 #

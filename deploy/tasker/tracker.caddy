@@ -1,5 +1,5 @@
-# Сайт Tasker для edge-прокси (deploy/edge). Деплой подставляет домен вместо __DOMAIN__
-# и копирует файл в /opt/edge/sites/tracker.caddy, затем делает `caddy reload`.
+# Сайт Tasker для общего edge-прокси (leha-creator/infra, edge/). Деплой подставляет домен
+# вместо __DOMAIN__ и копирует файл в /opt/edge/sites/tracker.caddy, затем делает `caddy reload`.
 __DOMAIN__ {
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -8,23 +8,9 @@ __DOMAIN__ {
 		-Server
 	}
 
-	# В query presigned-ссылок — подпись и учётка ключа: в access-лог не пишем.
-	log {
-		output stdout
-		format filter {
-			wrap json
-			fields {
-				request>uri query {
-					delete X-Amz-Signature
-					delete X-Amz-Credential
-					delete X-Amz-Security-Token
-				}
-				request>headers>Cookie delete
-				request>headers>Authorization delete
-				resp_headers>Set-Cookie delete
-			}
-		}
-	}
+	# В query presigned-ссылок — подпись и учётка ключа: в access-лог не пишем. Фильтр
+	# (и Cookie, Authorization, Set-Cookie) — в сниппете access_log из infra/edge/Caddyfile.
+	import access_log
 
 	# Бакет вложений (path-style, имя = S3_BUCKET из /opt/tasker/.env). Браузер загружает
 	# (presigned POST на /tasker-attachments) и скачивает (presigned GET) файлы напрямую.
