@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
+import { SectionHeading } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -148,9 +149,15 @@ export function DocumentTasks({
       aria-busy={pending || undefined}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="document-tasks-heading" className="text-base font-semibold">
-          Задачи <span className="text-muted-foreground tabular-nums">{tasks.length}</span>
-        </h2>
+        <SectionHeading
+          id="document-tasks-heading"
+          size="group"
+          title={
+            <>
+              Задачи <span className="text-muted-foreground tabular-nums">{tasks.length}</span>
+            </>
+          }
+        />
         <TaskSearch workspaceId={workspaceId} documentId={documentId} onPick={link} />
       </div>
       {tasks.length === 0 ? (

@@ -1,3 +1,4 @@
+import { Callout } from '@/components/feedback/callout';
 import { Badge } from '@/components/ui/badge';
 import { UserAvatar } from '@/components/users/user-avatar';
 import type { AdminUserDetailDto } from '@/modules/admin/client';
@@ -66,9 +67,9 @@ export function UserDetailHeader({ user }: { user: AdminUserDetailDto['user'] })
         )}
       </div>
       {user.ban.kind === 'banned' && user.ban.reason && (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm break-words">
-          <span className="font-medium">Причина блокировки:</span> {user.ban.reason}
-        </p>
+        <Callout tone="destructive" title="Причина блокировки" icon={null}>
+          <span className="break-words">{user.ban.reason}</span>
+        </Callout>
       )}
       {user.bio && <p className="text-sm break-words whitespace-pre-wrap">{user.bio}</p>}
       <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">

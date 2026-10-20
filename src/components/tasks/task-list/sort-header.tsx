@@ -29,7 +29,7 @@ export function SortHeader({ sort, label, className }: SortHeaderProps) {
         type="button"
         onClick={() => navigate(toggleSort(query, sort))}
         className={cn(
-          '-mx-1.5 inline-flex items-center gap-1 rounded px-1.5 py-1 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          '-mx-1.5 inline-flex items-center gap-1 rounded-sm px-1.5 py-1 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
           active ? 'text-foreground' : 'text-muted-foreground',
         )}
       >

@@ -270,7 +270,7 @@ export function CommandPalette({ workspaces }: { workspaces: WorkspaceListItemDt
         <span className="max-md:sr-only">Поиск…</span>
         <kbd
           aria-hidden
-          className="ml-auto rounded border bg-background px-1.5 font-sans text-[11px] leading-5 font-medium max-md:hidden"
+          className="ml-auto rounded-sm border bg-background px-1.5 font-sans text-2xs leading-5 font-medium max-md:hidden"
         >
           {isMac ? '⌘K' : 'Ctrl K'}
         </kbd>

@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { toast } from 'sonner';
 
+import { Callout } from '@/components/feedback/callout';
 import { FormError } from '@/components/forms/form-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -308,25 +309,26 @@ export function NoteEditor(props: NoteEditorProps) {
       </div>
 
       {conflict && (
-        <div
+        <Callout
+          tone="destructive"
           role="alert"
-          className="grid gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm"
+          title="Заметку изменили, пока вы её редактировали"
+          action={
+            <>
+              <Button type="button" size="sm" variant="outline" onClick={() => void copyMyText()}>
+                <CopyIcon aria-hidden />
+                Скопировать мой текст
+              </Button>
+              <Button type="button" size="sm" onClick={() => window.location.reload()}>
+                <RotateCcwIcon aria-hidden />
+                Загрузить актуальную версию
+              </Button>
+            </>
+          }
         >
-          <p>
-            <strong>Заметку изменили, пока вы её редактировали.</strong> Сохранение перезаписало бы
-            чужие правки. Скопируйте свой текст и загрузите актуальную версию.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => void copyMyText()}>
-              <CopyIcon aria-hidden />
-              Скопировать мой текст
-            </Button>
-            <Button type="button" size="sm" onClick={() => window.location.reload()}>
-              <RotateCcwIcon aria-hidden />
-              Загрузить актуальную версию
-            </Button>
-          </div>
-        </div>
+          Сохранение перезаписало бы чужие правки. Скопируйте свой текст и загрузите актуальную
+          версию.
+        </Callout>
       )}
 
       {/* Скрытая область тоже отправляется с формой: textarea остаётся в DOM. */}

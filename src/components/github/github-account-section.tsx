@@ -1,3 +1,4 @@
+import { FormError } from '@/components/forms/form-field';
 import { SettingsSection } from '@/components/layout/settings-section';
 import { githubSignInErrorMessage } from '@/modules/auth';
 import { getMyGithubAccount, isGithubEnabled } from '@/modules/integrations/github';
@@ -30,11 +31,7 @@ export async function GithubAccountSection({
       description="Вход через GitHub, подключение репозиториев к пространству и уведомления о ревью ваших PR."
     >
       <div className="grid justify-items-start gap-3 text-sm">
-        {error && (
-          <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-destructive">
-            {error}
-          </p>
-        )}
+        <FormError message={error ?? undefined} />
         {account.linked ? (
           <>
             <p role={linked ? 'status' : undefined}>

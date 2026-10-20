@@ -9,6 +9,8 @@ import {
 import Link from 'next/link';
 
 import { ViaAgentBadge } from '@/components/agents/via-agent-badge';
+import { EmptyState } from '@/components/feedback/empty-state';
+import { ToneBadge } from '@/components/feedback/tone-badge';
 import { UserAvatar } from '@/components/users/user-avatar';
 import { cn } from '@/lib/utils';
 import type { AuditEventDto, AuditEventPageDto } from '@/modules/audit/client';
@@ -46,11 +48,7 @@ export function AuditEventList({
   emptyText,
 }: AuditEventListProps) {
   if (page.items.length === 0) {
-    return (
-      <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-        {emptyText}
-      </p>
-    );
+    return <EmptyState variant="compact" title={emptyText} />;
   }
   return (
     <div className="grid gap-3">
@@ -125,9 +123,7 @@ function AuditEventItem({
             </span>
           ))}
           {event.impersonator && (
-            <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-amber-700 dark:text-amber-300">
-              через администратора {event.impersonator.name}
-            </span>
+            <ToneBadge tone="warning">через администратора {event.impersonator.name}</ToneBadge>
           )}
           <ViaAgentBadge via={event.viaTokenName ? { tokenName: event.viaTokenName } : null} />
         </span>

@@ -1,15 +1,8 @@
+import { priorityTone, TONE_TEXT } from '@/components/design-system/tones';
 import { cn } from '@/lib/utils';
 import { TASK_PRIORITY_LABELS, type TaskPriority } from '@/modules/tasks/client';
 
 import { isPriorityProminent, priorityLevel } from './priority-level';
-
-// Полные имена классов: Tailwind находит их в исходниках.
-const PRIORITY_TONES: Record<Exclude<TaskPriority, 'none'>, string> = {
-  low: 'text-muted-foreground',
-  medium: 'text-muted-foreground',
-  high: 'text-orange-600 dark:text-orange-400',
-  urgent: 'text-red-600 dark:text-red-400',
-};
 
 const BARS = [0, 1, 2];
 
@@ -32,7 +25,7 @@ export function PriorityBadge({ priority, compact = false, className }: Priority
       title={`Приоритет: ${label}`}
       className={cn(
         'inline-flex items-center gap-1 text-xs font-medium',
-        PRIORITY_TONES[priority],
+        TONE_TEXT[priorityTone(priority)],
         className,
       )}
     >

@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { SectionHeading } from './page-header';
+
 interface SettingsSectionProps {
   title: string;
   description?: ReactNode;
@@ -18,10 +20,7 @@ export function SettingsSection({ title, description, id, children }: SettingsSe
       id={id}
       className="grid scroll-mt-20 gap-x-10 gap-y-4 py-6 first:pt-2 lg:grid-cols-[15rem_minmax(0,48rem)]"
     >
-      <div className="grid content-start gap-1">
-        <h2 className="text-base font-medium">{title}</h2>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
-      </div>
+      <SectionHeading title={title} size="group" description={description} />
       <div className="min-w-0">{children}</div>
     </section>
   );

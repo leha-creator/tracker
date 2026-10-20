@@ -139,7 +139,7 @@ export function FolderTree({
                     onClick={() => toggle(folder.id)}
                     aria-expanded={isOpen}
                     aria-label={`${isOpen ? 'Свернуть' : 'Развернуть'} «${folder.name}»`}
-                    className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    className="grid size-6 shrink-0 place-items-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   >
                     <ChevronRightIcon
                       className={cn(

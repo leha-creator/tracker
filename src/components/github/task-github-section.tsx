@@ -49,7 +49,7 @@ export async function TaskGithubSection({ session, workspace, task }: TaskGithub
                 ветки, PR или текст коммита — они появятся здесь.
               </p>
               <div className="flex flex-wrap items-center gap-2">
-                <code className="min-w-0 truncate rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
+                <code className="min-w-0 truncate rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
                   {branchName}
                 </code>
                 <CopyLinkButton url={branchName} label="Скопировать имя ветки" />

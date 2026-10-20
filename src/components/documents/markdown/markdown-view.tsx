@@ -158,7 +158,7 @@ function buildComponents(imagePrefixes: readonly string[] | undefined): Componen
       </pre>
     ),
     code: ({ children, className }) => (
-      <code className={cn('rounded bg-muted px-1.5 py-0.5 font-mono text-[0.875em]', className)}>
+      <code className={cn('rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[0.875em]', className)}>
         {children}
       </code>
     ),

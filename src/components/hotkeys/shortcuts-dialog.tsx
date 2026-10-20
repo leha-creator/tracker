@@ -73,7 +73,7 @@ export function ShortcutsDialog() {
                       {item.keys.map((key) => (
                         <kbd
                           key={key}
-                          className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground"
+                          className="rounded-sm border bg-muted px-1.5 py-0.5 font-mono text-2xs leading-none text-muted-foreground"
                         >
                           {key}
                         </kbd>

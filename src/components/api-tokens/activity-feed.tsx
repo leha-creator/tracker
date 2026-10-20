@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { EmptyState } from '@/components/feedback/empty-state';
 import type { McpActivityPageDto } from '@/modules/api-tokens/client';
 
 // Лента рендерится на сервере: даты форматируются здесь, без расхождения часовых поясов.
@@ -27,9 +28,10 @@ interface ActivityFeedProps {
 export function ActivityFeed({ page, workspaceSlug, showToken, nextHref }: ActivityFeedProps) {
   if (page.items.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-        Действий пока нет. Здесь появятся изменения, которые агент делает через MCP.
-      </p>
+      <EmptyState
+        variant="compact"
+        title="Действий пока нет. Здесь появятся изменения, которые агент делает через MCP."
+      />
     );
   }
   return (

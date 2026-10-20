@@ -7,7 +7,7 @@ export function PullRequestIndicator({ badge }: { badge: PullRequestBadgeDto }) 
   const state = PULL_REQUEST_STATE_LABELS[badge.state].toLowerCase();
   const label = badge.count > 1 ? `PR: ${badge.count}, главный — ${state}` : `PR: ${state}`;
   return (
-    <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground tabular-nums">
+    <span className="inline-flex items-center gap-0.5 text-2xs text-muted-foreground tabular-nums">
       <PrStateIcon state={badge.state} label={label} className="size-3.5" />
       {badge.count > 1 && <span aria-hidden>{badge.count}</span>}
     </span>

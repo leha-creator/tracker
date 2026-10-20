@@ -9,6 +9,12 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
+import {
+  checksTone,
+  pullRequestTone,
+  reviewTone,
+  TONE_TEXT,
+} from '@/components/design-system/tones';
 import { cn } from '@/lib/utils';
 import type {
   ChecksState,
@@ -16,18 +22,22 @@ import type {
   ReviewState,
 } from '@/modules/integrations/github/client';
 
-// Те же приглушённые тона, что у статусов проектов (status-badge.tsx): читаемы в обеих темах.
+// Цвета состояний — тона дизайн-системы (design-system/tones.ts): читаемы в обеих темах.
 const STATE_STYLES: Record<
   PullRequestState,
   { icon: LucideIcon; label: string; className: string }
 > = {
-  open: { icon: GitPullRequest, label: 'Открыт', className: 'text-[oklch(0.6_0.13_160)]' },
-  draft: { icon: GitPullRequestDraft, label: 'Черновик', className: 'text-muted-foreground' },
-  merged: { icon: GitMerge, label: 'Слит', className: 'text-[oklch(0.58_0.14_305)]' },
+  open: { icon: GitPullRequest, label: 'Открыт', className: TONE_TEXT[pullRequestTone('open')] },
+  draft: {
+    icon: GitPullRequestDraft,
+    label: 'Черновик',
+    className: TONE_TEXT[pullRequestTone('draft')],
+  },
+  merged: { icon: GitMerge, label: 'Слит', className: TONE_TEXT[pullRequestTone('merged')] },
   closed: {
     icon: GitPullRequestClosed,
     label: 'Закрыт',
-    className: 'text-[oklch(0.6_0.16_25)]',
+    className: TONE_TEXT[pullRequestTone('closed')],
   },
 };
 
@@ -71,8 +81,11 @@ export function PrStateBadge({ state }: { state: PullRequestState }) {
 }
 
 const REVIEW_LABELS: Record<Exclude<ReviewState, 'none'>, { label: string; className: string }> = {
-  approved: { label: 'Одобрен', className: 'text-[oklch(0.6_0.13_160)]' },
-  changes_requested: { label: 'Нужны изменения', className: 'text-[oklch(0.64_0.14_60)]' },
+  approved: { label: 'Одобрен', className: TONE_TEXT[reviewTone('approved')] },
+  changes_requested: {
+    label: 'Нужны изменения',
+    className: TONE_TEXT[reviewTone('changes_requested')],
+  },
 };
 
 /** Итог ревью; без ревью — ничего. */
@@ -86,9 +99,13 @@ const CHECKS: Record<
   Exclude<ChecksState, 'none'>,
   { icon: LucideIcon; label: string; className: string }
 > = {
-  pending: { icon: CircleDashed, label: 'CI выполняется', className: 'text-[oklch(0.7_0.12_80)]' },
-  success: { icon: CircleCheck, label: 'CI пройден', className: 'text-[oklch(0.6_0.13_160)]' },
-  failure: { icon: CircleX, label: 'CI упал', className: 'text-[oklch(0.6_0.16_25)]' },
+  pending: {
+    icon: CircleDashed,
+    label: 'CI выполняется',
+    className: TONE_TEXT[checksTone('pending')],
+  },
+  success: { icon: CircleCheck, label: 'CI пройден', className: TONE_TEXT[checksTone('success')] },
+  failure: { icon: CircleX, label: 'CI упал', className: TONE_TEXT[checksTone('failure')] },
 };
 
 /** Итог CI с подписью; без проверок — ничего. */

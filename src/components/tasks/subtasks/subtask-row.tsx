@@ -74,7 +74,7 @@ export function SubtaskRow({
       className="group/subtask flex min-h-10 items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/60 data-pending:opacity-60"
       data-pending={detaching || undefined}
     >
-      <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
+      <span className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
         {subtask.key}
       </span>
       <Link

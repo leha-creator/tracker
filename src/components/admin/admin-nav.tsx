@@ -12,6 +12,7 @@ const LINKS = [
   { href: '/admin/activity', label: 'Журнал' },
   { href: '/admin/integrations', label: 'Интеграции' },
   { href: '/admin/settings', label: 'Настройки' },
+  { href: '/admin/design', label: 'Дизайн' },
 ] as const;
 
 /** Вкладки админки. */
@@ -20,7 +21,7 @@ export function AdminNav() {
   return (
     <nav
       aria-label="Разделы администрирования"
-      className="flex w-fit gap-1 rounded-lg bg-muted p-1"
+      className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1"
     >
       {LINKS.map((link) => {
         // «Обзор» (/admin) — префикс всех вкладок: активен только на своём адресе.
@@ -32,7 +33,7 @@ export function AdminNav() {
             href={link.href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'rounded-md px-3 py-1.5 text-sm transition-colors',
+              'shrink-0 rounded-md px-3 py-1.5 text-sm whitespace-nowrap transition-colors',
               active
                 ? 'bg-background font-medium shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',

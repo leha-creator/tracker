@@ -123,7 +123,7 @@ function SortHeader({ sort, query }: { sort: AdminWorkspaceSort; query: AdminWor
         href={adminWorkspacesHref(toggleAdminWorkspaceSort(query, sort))}
         scroll={false}
         className={cn(
-          '-mx-1.5 inline-flex items-center gap-1 rounded px-1.5 py-1 hover:bg-muted',
+          '-mx-1.5 inline-flex items-center gap-1 rounded-sm px-1.5 py-1 hover:bg-muted',
           active ? 'text-foreground' : 'text-muted-foreground',
         )}
       >

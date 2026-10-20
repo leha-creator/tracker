@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react';
 
+import { Callout } from '@/components/feedback/callout';
 import { ConfirmActionDialog } from '@/components/forms/confirm-action-dialog';
 import { FormError, FormField } from '@/components/forms/form-field';
 import { Badge } from '@/components/ui/badge';
@@ -45,12 +46,9 @@ export function GithubAppSetup({ setup, created, errorCode }: GithubAppSetupProp
       </CardHeader>
       <CardContent className="grid gap-4 text-sm">
         {created && (
-          <p
-            role="status"
-            className="rounded-md bg-emerald-500/10 px-3 py-2 text-emerald-700 dark:text-emerald-400"
-          >
+          <Callout tone="success" role="status">
             GitHub App создан. Владельцы пространств уже могут подключать репозитории.
-          </p>
+          </Callout>
         )}
         <FormError message={queryError} />
         {setup.source === 'env' && (
@@ -161,11 +159,11 @@ function CreateAppForm({ setup }: { setup: GithubAppSetupDto }) {
   return (
     <div className="grid gap-4">
       {setup.local && (
-        <p className="rounded-md bg-amber-500/10 px-3 py-2 text-amber-800 dark:text-amber-300">
+        <Callout tone="warning">
           Tasker открыт по адресу {setup.baseUrl}, GitHub до него не достучится. Приложение будет
           создано без вебхука: подключение репозиториев и ручная привязка PR работают, а новые PR и
           коммиты автоматически не появятся.
-        </p>
+        </Callout>
       )}
       <form action={submit} className="grid gap-4">
         <FormField

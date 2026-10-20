@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { FormError } from '@/components/forms/form-field';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { GithubSettingsDto } from '@/modules/integrations/github/client';
@@ -40,11 +41,7 @@ export function GithubSettings({
           Установка подключена. Выберите репозитории, события которых привязываются к задачам.
         </p>
       )}
-      {setupError && (
-        <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {setupError}
-        </p>
-      )}
+      <FormError message={setupError ?? undefined} />
 
       <Card>
         <CardHeader>

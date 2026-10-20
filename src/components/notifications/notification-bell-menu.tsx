@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   markAllNotificationsReadAction,
   markNotificationReadAction,
@@ -172,7 +173,7 @@ export function NotificationBellMenu({ initialUnreadCount }: { initialUnreadCoun
           ) : (
             <div className="grid gap-1 p-1" aria-label="Загрузка">
               {[0, 1, 2].map((key) => (
-                <div key={key} className="h-14 animate-pulse rounded-lg bg-muted" />
+                <Skeleton key={key} className="h-14 rounded-lg" />
               ))}
             </div>
           )}

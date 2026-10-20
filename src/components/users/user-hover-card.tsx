@@ -105,7 +105,7 @@ export function UserHoverCard({ user, children, focusable = true, className }: U
                 </span>
               </>
             ) : state.status === 'loading' ? (
-              <span className="mt-1 h-3 w-32 animate-pulse rounded bg-muted" aria-hidden />
+              <span className="mt-1 h-3 w-32 animate-pulse rounded-sm bg-muted" aria-hidden />
             ) : (
               <span className="text-xs text-muted-foreground">Не удалось загрузить</span>
             )}

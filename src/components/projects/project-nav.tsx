@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 
 import { EntityIconTile } from '@/components/entity-icon/entity-icon';
 import { getProjectTabs } from '@/components/layout/nav-items';
+import { PageHeader } from '@/components/layout/page-header';
 import { TabLink } from '@/components/layout/tab-link';
 import { taskPanelHref } from '@/components/tasks/task-panel/task-panel-href';
 import { Button } from '@/components/ui/button';
@@ -42,38 +43,36 @@ export function ProjectNav({
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-3 border-b">
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
-        <div className="min-w-0 flex-1 max-sm:basis-full">
-          <p className="text-sm text-muted-foreground">
-            <Link
-              href={projectsHref}
-              className="rounded-sm transition-colors hover:text-foreground"
-            >
-              Проекты
-            </Link>
-            <span aria-hidden className="px-1.5 text-muted-foreground/50">
-              /
-            </span>
-          </p>
-          <div className="flex min-w-0 items-center gap-2.5">
-            <EntityIconTile icon={icon} />
-            <h1 className="min-w-0 text-2xl font-semibold tracking-tight break-words sm:truncate">
-              {name}
-            </h1>
-          </div>
-          {description && (
-            <p className="mt-0.5 truncate text-sm text-muted-foreground" title={description}>
-              {description}
-            </p>
-          )}
-        </div>
-        {!archived && (
-          <Button asChild size="sm">
-            <Link href={newTaskHref} scroll={false}>
-              Новая задача
-            </Link>
-          </Button>
-        )}
+      <div className="grid gap-1">
+        <p className="text-sm text-muted-foreground">
+          <Link href={projectsHref} className="rounded-sm transition-colors hover:text-foreground">
+            Проекты
+          </Link>
+          <span aria-hidden className="px-1.5 text-muted-foreground/50">
+            /
+          </span>
+        </p>
+        <PageHeader
+          title={name}
+          overflow="wrap-mobile-truncate"
+          leading={<EntityIconTile icon={icon} />}
+          description={
+            description && (
+              <p className="truncate" title={description}>
+                {description}
+              </p>
+            )
+          }
+          actions={
+            !archived && (
+              <Button asChild size="sm">
+                <Link href={newTaskHref} scroll={false}>
+                  Новая задача
+                </Link>
+              </Button>
+            )
+          }
+        />
       </div>
       <nav
         aria-label="Разделы проекта"

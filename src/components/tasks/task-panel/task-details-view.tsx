@@ -6,6 +6,7 @@ import { ViaAgentBadge } from '@/components/agents/via-agent-badge';
 import { TaskDocumentsSection } from '@/components/documents/task-documents/task-documents-section';
 import { TaskGithubSection } from '@/components/github/task-github-section';
 import { LiveRefresh } from '@/components/realtime/use-live-refresh';
+import { Skeleton } from '@/components/ui/skeleton';
 import { listProjects, listWorkspaceStatuses } from '@/modules/projects';
 import {
   getTaskByNumber,
@@ -262,7 +263,7 @@ export async function TaskDetailsView({
           </section>
 
           <section aria-labelledby="task-subtasks-heading" className="grid gap-2">
-            <Suspense fallback={<div className="h-16 animate-pulse rounded-xl bg-muted" />}>
+            <Suspense fallback={<Skeleton className="h-16 rounded-xl" />}>
               <TaskSubtasksSection
                 session={session}
                 workspaceId={workspace.id}
@@ -276,7 +277,7 @@ export async function TaskDetailsView({
           </section>
 
           <section aria-labelledby="task-attachments-heading" className="grid gap-3">
-            <Suspense fallback={<div className="h-24 animate-pulse rounded-xl bg-muted" />}>
+            <Suspense fallback={<Skeleton className="h-24 rounded-xl" />}>
               <TaskAttachmentsSection
                 session={session}
                 workspaceId={workspace.id}
@@ -286,7 +287,7 @@ export async function TaskDetailsView({
           </section>
 
           <section aria-labelledby="task-documents-heading" className="grid gap-3">
-            <Suspense fallback={<div className="h-16 animate-pulse rounded-xl bg-muted" />}>
+            <Suspense fallback={<Skeleton className="h-16 rounded-xl" />}>
               <TaskDocumentsSection
                 session={session}
                 workspaceId={workspace.id}
@@ -304,7 +305,7 @@ export async function TaskDetailsView({
             />
           </Suspense>
 
-          <Suspense fallback={<div className="h-5 w-32 animate-pulse rounded-md bg-muted" />}>
+          <Suspense fallback={<Skeleton className="h-5 w-32" />}>
             <TaskHistorySection
               session={session}
               workspaceId={workspace.id}
@@ -315,7 +316,7 @@ export async function TaskDetailsView({
           </Suspense>
 
           <section aria-labelledby="task-comments-heading" className="grid gap-3 border-t pt-5">
-            <Suspense fallback={<div className="h-32 animate-pulse rounded-xl bg-muted" />}>
+            <Suspense fallback={<Skeleton className="h-32 rounded-xl" />}>
               <TaskComments
                 session={session}
                 workspaceId={workspace.id}

@@ -48,18 +48,18 @@ export function TaskCard({ card, href, active, pullRequest, className, ...props 
         >
           <CornerDownRight aria-hidden className="size-3 shrink-0 self-center" />
           <span className="sr-only">Подзадача</span>
-          <span className="shrink-0 font-mono text-[11px] tabular-nums">{card.parent.key}</span>
+          <span className="shrink-0 font-mono text-2xs tabular-nums">{card.parent.key}</span>
           <span className="truncate">{card.parent.title}</span>
         </span>
       )}
       <span className="line-clamp-3 font-medium break-words">{card.title}</span>
       <LabelChipList labels={card.labels} />
       <span className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{card.key}</span>
+        <span className="font-mono text-2xs text-muted-foreground tabular-nums">{card.key}</span>
         {pullRequest && <PullRequestIndicator badge={pullRequest} />}
         {card.subtaskProgress && (
           <span
-            className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground tabular-nums"
+            className="inline-flex items-center gap-0.5 text-2xs text-muted-foreground tabular-nums"
             title={`Подзадачи: выполнено ${card.subtaskProgress.done} из ${card.subtaskProgress.total}`}
           >
             <ListChecks aria-hidden className="size-3.5" />

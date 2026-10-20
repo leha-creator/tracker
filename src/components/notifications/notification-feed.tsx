@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
+import { EmptyState } from '@/components/feedback/empty-state';
 import { Button } from '@/components/ui/button';
 import {
   loadMoreNotificationsAction,
@@ -67,9 +68,10 @@ export function NotificationFeed({ initial, unreadOnly }: NotificationFeedProps)
 
   if (items.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed px-4 py-12 text-center text-sm text-muted-foreground">
-        {unreadOnly ? 'Непрочитанных уведомлений нет' : 'Уведомлений пока нет'}
-      </p>
+      <EmptyState
+        variant="compact"
+        title={unreadOnly ? 'Непрочитанных уведомлений нет' : 'Уведомлений пока нет'}
+      />
     );
   }
 

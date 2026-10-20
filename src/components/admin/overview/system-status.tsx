@@ -1,5 +1,6 @@
 import { CheckCircle2, XCircle } from 'lucide-react';
 
+import { SectionHeading } from '@/components/layout/page-header';
 import { cn } from '@/lib/utils';
 import type { ResourceOverviewDto, StorageTotalsDto } from '@/modules/admin/client';
 import { formatBytes } from '@/modules/documents/client';
@@ -43,14 +44,14 @@ export function SystemStatus({ overview }: { overview: ResourceOverviewDto }) {
   return (
     <div className="grid gap-4 md:grid-cols-3">
       <section className={CARD_CLASS}>
-        <h2 className="text-base font-medium">Состояние</h2>
+        <SectionHeading size="group" title="Состояние" />
         <ul className="grid gap-2">
           <StatusRow label="База данных" ok={overview.health.db} />
           <StatusRow label="Хранилище файлов" ok={overview.health.storage} />
         </ul>
       </section>
       <section className={CARD_CLASS}>
-        <h2 className="text-base font-medium">Хранилище</h2>
+        <SectionHeading size="group" title="Хранилище" />
         <ul className="grid gap-2">
           <StorageRow label="Документы" usage={documents} />
           <StorageRow label="Вложения задач" usage={attachments} />
@@ -64,7 +65,7 @@ export function SystemStatus({ overview }: { overview: ResourceOverviewDto }) {
         </ul>
       </section>
       <section className={CARD_CLASS}>
-        <h2 className="text-base font-medium">Почта</h2>
+        <SectionHeading size="group" title="Почта" />
         <p className="text-sm text-muted-foreground">
           Письмо уйдёт на ваш адрес {overview.adminEmail}. Не больше 10 писем в час.
         </p>

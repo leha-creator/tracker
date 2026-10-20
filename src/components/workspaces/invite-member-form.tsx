@@ -78,7 +78,7 @@ export function InviteMemberForm({ workspaceId }: { workspaceId: string }) {
               : 'Письмо отправить не удалось. Передайте ссылку приглашённому самостоятельно:'}
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded bg-background px-2 py-1">
+            <code className="min-w-0 flex-1 truncate rounded-sm bg-background px-2 py-1">
               {state.data.inviteUrl}
             </code>
             <CopyLinkButton url={state.data.inviteUrl} />

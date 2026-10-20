@@ -1,5 +1,6 @@
 import { MonitorSmartphoneIcon } from 'lucide-react';
 
+import { EmptyState } from '@/components/feedback/empty-state';
 import { Badge } from '@/components/ui/badge';
 import type { AdminUserSessionDto } from '@/modules/admin/client';
 
@@ -17,11 +18,7 @@ interface UserSessionsListProps {
 /** Действующие сессии пользователя: устройство, IP, вход и активность. */
 export function UserSessionsList({ userId, sessions, canRevoke }: UserSessionsListProps) {
   if (sessions.length === 0) {
-    return (
-      <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-        Активных сессий нет.
-      </p>
-    );
+    return <EmptyState variant="compact" title="Активных сессий нет." />;
   }
   return (
     <ul className="grid divide-y rounded-xl border">

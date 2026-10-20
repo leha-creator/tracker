@@ -1,3 +1,4 @@
+import { EmptyState } from '@/components/feedback/empty-state';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -47,11 +48,7 @@ export function ApiTokensTable({
   emptyText = 'Токенов пока нет. Создайте токен, чтобы подключить Claude Code к задачам.',
 }: ApiTokensTableProps) {
   if (items.length === 0) {
-    return (
-      <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-        {emptyText}
-      </p>
-    );
+    return <EmptyState variant="compact" title={emptyText} />;
   }
 
   return (

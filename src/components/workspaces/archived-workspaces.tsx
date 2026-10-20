@@ -5,6 +5,7 @@ import { useTransition } from 'react';
 import { toast } from 'sonner';
 
 import { EntityIconTile } from '@/components/entity-icon/entity-icon';
+import { SectionHeading } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { restoreWorkspaceAction, type WorkspaceListItemDto } from '@/modules/workspaces/client';
 
@@ -20,9 +21,7 @@ export function ArchivedWorkspaces({ items }: { items: WorkspaceListItemDto[] })
       aria-labelledby="archived-workspaces-heading"
       className="grid scroll-mt-20 gap-3"
     >
-      <h2 id="archived-workspaces-heading" className="text-base font-medium">
-        Архивные пространства
-      </h2>
+      <SectionHeading id="archived-workspaces-heading" size="group" title="Архивные пространства" />
       <ul className="grid divide-y rounded-xl border">
         {items.map((workspace) => (
           <li

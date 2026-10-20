@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { SectionHeading } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 
 import { TaskCloseLink, TaskToolbar } from './task-toolbar';
@@ -12,7 +13,7 @@ export function TaskPanelNotFound({ closeHref }: { closeHref: string }) {
         <TaskCloseLink href={closeHref} variant="panel" />
       </TaskToolbar>
       <div className="grid flex-1 place-content-center justify-items-center gap-3 p-6 text-center">
-        <h2 className="text-lg font-semibold">Задача не найдена</h2>
+        <SectionHeading title="Задача не найдена" />
         <p className="max-w-xs text-sm text-muted-foreground">
           Возможно, её удалили или ссылка ведёт в другое пространство.
         </p>

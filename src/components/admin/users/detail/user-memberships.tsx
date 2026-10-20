@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { EmptyState } from '@/components/feedback/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { WORKSPACE_ROLE_LABELS } from '@/components/workspaces/role-label';
 import type { UserMembershipDto } from '@/modules/workspaces/client';
@@ -10,9 +11,7 @@ const DATE = new Intl.DateTimeFormat('ru', { dateStyle: 'medium' });
 export function UserMemberships({ items }: { items: UserMembershipDto[] }) {
   if (items.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-        Пользователь не состоит ни в одном пространстве.
-      </p>
+      <EmptyState variant="compact" title="Пользователь не состоит ни в одном пространстве." />
     );
   }
   return (

@@ -214,7 +214,7 @@ function ScanStep({
           <div className="grid justify-items-center gap-1 text-center">
             <p className="text-xs text-muted-foreground">Или введите ключ вручную:</p>
             <div className="flex items-center gap-1">
-              <code className="rounded bg-muted px-2 py-1 text-center font-mono text-sm">
+              <code className="rounded-sm bg-muted px-2 py-1 text-center font-mono text-sm">
                 {formatTotpSecret(secret)}
               </code>
               <Button

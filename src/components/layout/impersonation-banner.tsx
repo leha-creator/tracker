@@ -13,10 +13,7 @@ export async function ImpersonationBanner() {
   const state = await getMyImpersonation();
   if (!state) return null;
   return (
-    <div
-      role="status"
-      className="border-b border-amber-500/40 bg-amber-100 text-amber-950 dark:bg-amber-950 dark:text-amber-100"
-    >
+    <div role="status" className="border-b border-warning/40 bg-warning/15 text-foreground">
       <PageContainer
         size="wide"
         className="flex flex-wrap items-center gap-x-4 gap-y-1 py-1.5 text-sm"

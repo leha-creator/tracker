@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, type ReactNode } from 'react';
 
+import { Skeleton } from '@/components/ui/skeleton';
+
 interface TaskPanelFrameProps {
   /** Адрес текущей страницы без `?task` — Esc ведёт сюда. */
   closeHref: string;
@@ -68,18 +70,18 @@ export function TaskPanelSkeleton() {
       <div className="h-12 border-b" />
       <div className="grid gap-5 px-4 py-5 sm:px-6">
         <div className="grid gap-2">
-          <div className="h-4 w-32 animate-pulse rounded bg-muted" />
-          <div className="h-8 w-3/4 animate-pulse rounded bg-muted" />
+          <Skeleton className="h-4 w-32 rounded-sm" />
+          <Skeleton className="h-8 w-3/4 rounded-sm" />
         </div>
         <div className="grid gap-3">
           {[0, 1, 2, 3].map((row) => (
             <div key={row} className="flex gap-4">
-              <div className="h-5 w-24 animate-pulse rounded bg-muted" />
-              <div className="h-5 w-40 animate-pulse rounded bg-muted" />
+              <Skeleton className="h-5 w-24 rounded-sm" />
+              <Skeleton className="h-5 w-40 rounded-sm" />
             </div>
           ))}
         </div>
-        <div className="h-24 animate-pulse rounded-lg bg-muted" />
+        <Skeleton className="h-24 rounded-lg" />
       </div>
     </div>
   );
