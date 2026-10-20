@@ -423,6 +423,25 @@ jobs:
           echo "::error::smoke check failed: ${APP_URL}/api/health"
           exit 1
 
+      # Каждый релиз оставляет на сервере пару образов (~1 ГБ); без очистки диск заполняется,
+      # и MinIO отвечает 507 на загрузку файлов. Откат скачивает тег из GHCR заново.
+      - name: Prune old images
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          echo "::group::remove ${IMAGE} and ${MIGRATE_IMAGE} images except ${TAG}"
+          ssh target "docker images --format '{{.Repository}}:{{.Tag}}' \
+            | grep -E '^(${IMAGE}|${MIGRATE_IMAGE}):' \
+            | grep -vxF -e '${IMAGE}:${TAG}' -e '${MIGRATE_IMAGE}:${TAG}' \
+            | xargs -r docker rmi" || echo "::warning::failed to remove some old images"
+          ssh target "docker image prune -f" || true
+          usage=$(ssh target "df --output=pcent / | tail -1 | tr -dc 0-9")
+          ssh target "df -h /"
+          echo "::endgroup::"
+          if [ "${usage:-0}" -ge 85 ]; then
+            echo "::warning::root disk on ${HOST} is ${usage}% full: file uploads fail with 507 when it runs out"
+          fi
+
       - name: Diagnostics on failure
         if: failure()
         run: |

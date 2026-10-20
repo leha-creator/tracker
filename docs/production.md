@@ -59,7 +59,7 @@ push в main ──► CI: check, migrations, docker ──► publish (GHCR) �
 | Джоб | Когда | Что делает |
 |------|-------|------------|
 | `publish` | push в `main` после `check`, `migrations`, `docker` | Собирает `runner` и `migrate` из кеша `docker` и пушит в GHCR с тегами `sha-<7>` и `main` |
-| `deploy` | после `publish` или Run workflow с `tag` | SSH под `deploy` → копирует `compose.yml`, `backup.sh`, `reminders.sh`, `cleanup.sh`, `release.env`, `tracker.caddy` → `backup.sh db` → `docker login` (временный `GITHUB_TOKEN`) → `pull` → `up -d --wait app` → `docker logout` → `caddy validate` + `reload` → smoke `https://tracker.plwedding.ru/api/health` |
+| `deploy` | после `publish` или Run workflow с `tag` | SSH под `deploy` → копирует `compose.yml`, `backup.sh`, `reminders.sh`, `cleanup.sh`, `release.env`, `tracker.caddy` → `backup.sh db` → `docker login` (временный `GITHUB_TOKEN`) → `pull` → `up -d --wait app` → `docker logout` → `caddy validate` + `reload` → smoke `https://tracker.plwedding.ru/api/health` → удаление старых образов `tracker` и `tracker-migrate` (остаётся текущий тег) и предупреждение, если `/` занят на 85% и больше |
 
 Деплои идут по очереди (`concurrency: deploy-production`), новый пуш в `main` не прерывает идущий деплой. Если миграция упала, `app` не пересоздаётся и продолжает работать предыдущая версия: в логе джоба будет ошибка `migrate`, а копия БД до миграции лежит в `/opt/tasker/backups/db/`.
 
@@ -100,6 +100,16 @@ docker stats --no-stream           # память
 ```
 
 `LOG_LEVEL` меняется в `/opt/tasker/.env`, затем `$C up -d app`.
+
+### Место на диске
+
+Корневой диск сервера — 19 ГБ, его делят все проекты. Когда место кончается, MinIO отвечает `507` (`XMinioStorageFull`) на любую загрузку файла, квота пространства тут ни при чём. Больше всего места занимают Docker-образы прошлых релизов: деплой Tasker удаляет свои, а образы других проектов (meet, maxim) копятся, пока их не удалит их собственный CI.
+
+```bash
+df -h /                                       # свободное место
+docker system df                              # образы, тома, кеш
+docker image prune -af --filter "until=1h"    # удалить образы без контейнеров (откат скачает тег из GHCR заново)
+```
 
 ## Резервные копии
 
