@@ -2,6 +2,7 @@
 
 import {
   BellIcon,
+  CircleHelpIcon,
   KeyboardIcon,
   ListChecksIcon,
   LogOutIcon,
@@ -23,6 +24,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { HELP_HREF } from '@/components/help/help-href';
 import { openShortcutsDialog } from '@/components/hotkeys/shortcuts-dialog';
 import { UserAvatar } from '@/components/users/user-avatar';
 
@@ -93,6 +95,13 @@ export function UserMenuDropdown({
           <KeyboardIcon />
           Горячие клавиши
           <DropdownMenuShortcut>?</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={HELP_HREF}>
+            <CircleHelpIcon />
+            Справка
+            <DropdownMenuShortcut>G H</DropdownMenuShortcut>
+          </Link>
         </DropdownMenuItem>
         {/* Ссылка скрыта для не-админов ради UX; доступ проверяет сама страница /admin. */}
         {isAdmin && (

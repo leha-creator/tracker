@@ -26,7 +26,7 @@ function textOf(nodes: readonly HastNode[] | undefined): string {
 
 type HeadingTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
 
-function buildComponents(): Components {
+function buildComponents(imagePrefixes: readonly string[] | undefined): Components {
   const slug = createHeadingSlugger();
   const heading = (Tag: HeadingTag, className: string) => {
     function MarkdownHeading({ node, children }: { node?: HastNode; children?: ReactNode }) {
@@ -63,9 +63,9 @@ function buildComponents(): Components {
         </a>
       );
     },
-    img: ({ src, alt }) => {
+    img: ({ src, alt, title }) => {
       const source = typeof src === 'string' ? src : undefined;
-      if (!isAllowedImageSrc(source)) {
+      if (!isAllowedImageSrc(source, imagePrefixes)) {
         // Внешние картинки не загружаем (трекинг, подмена) — показываем ссылкой.
         const href = source ? safeMarkdownUrl(source) : '';
         return href ? (
@@ -79,6 +79,26 @@ function buildComponents(): Components {
           </a>
         ) : (
           <span>{alt}</span>
+        );
+      }
+      if (imagePrefixes) {
+        // Скриншот справки: во всю ширину, с подписью из title. Обёртка — span, а не figure:
+        // картинка Markdown стоит внутри <p>.
+        return (
+          <span className="my-5 block">
+            {/* Статический файл из public/: next/image не нужен. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={source}
+              alt={alt ?? ''}
+              title={title ?? undefined}
+              loading="lazy"
+              className="block h-auto w-full rounded-lg border shadow-xs"
+            />
+            {title ? (
+              <span className="mt-2 block text-center text-sm text-muted-foreground">{title}</span>
+            ) : null}
+          </span>
         );
       }
       return (
@@ -165,15 +185,26 @@ function buildComponents(): Components {
  * Markdown документа (GFM: таблицы, чек-листы, зачёркивание, автоссылки). Сырой HTML
  * пропускается (`skipHtml`), адреса проходят через `safeMarkdownUrl`, картинки — только из
  * хранилища пространства. Работает и на сервере, и в предпросмотре редактора.
+ *
+ * `imagePrefixes` заменяет список разрешённых префиксов картинок и включает оформление
+ * скриншотов с подписью — так справка показывает `/help-media/`, а заметки — нет.
  */
-export function MarkdownView({ source, className }: { source: string; className?: string }) {
+export function MarkdownView({
+  source,
+  className,
+  imagePrefixes,
+}: {
+  source: string;
+  className?: string;
+  imagePrefixes?: readonly string[];
+}) {
   return (
     <div className={cn('min-w-0 text-[0.9375rem] break-words', className)}>
       <Markdown
         remarkPlugins={[remarkGfm]}
         skipHtml
         urlTransform={safeMarkdownUrl}
-        components={buildComponents()}
+        components={buildComponents(imagePrefixes)}
       >
         {source}
       </Markdown>

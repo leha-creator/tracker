@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import {
@@ -9,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { helpArticleHref } from '@/components/help/help-href';
 import { useHotkeys } from '@/lib/use-hotkeys';
 
 import { SHORTCUTS, shortcutGroups } from './shortcuts';
@@ -40,7 +42,14 @@ export function ShortcutsDialog() {
         <DialogHeader>
           <DialogTitle>Горячие клавиши</DialogTitle>
           <DialogDescription>
-            Работают в любой раскладке. Одиночные клавиши не срабатывают, пока курсор в поле ввода.
+            Работают в любой раскладке. Одиночные клавиши не срабатывают, пока курсор в поле ввода.{' '}
+            <Link
+              href={helpArticleHref('search-and-shortcuts')}
+              onClick={() => setOpen(false)}
+              className="font-medium text-primary underline underline-offset-4 hover:no-underline"
+            >
+              Подробнее в справке
+            </Link>
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-5 sm:grid-cols-2">

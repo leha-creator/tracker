@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   // pino использует worker threads и динамические require — не бандлим.
   serverExternalPackages: ['pino', 'pino-pretty'],
+  // Статьи справки читаются через fs во время работы — явно кладём их в standalone-сборку.
+  outputFileTracingIncludes: {
+    '/help/**': ['./content/help/**/*.md'],
+  },
   redirects() {
     return Promise.resolve([
       // Создание пространства и проекта — панели справа на страницах списков.

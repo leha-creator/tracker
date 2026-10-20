@@ -74,10 +74,11 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0
 # Только результат `output: 'standalone'`: server.js + оттрассированные node_modules.
 # Статику `.next/static` server.js раздаёт сам, если положить её рядом.
-# Каталога public/ в проекте пока нет; когда появится — добавить
-#   COPY --from=builder --chown=node:node /app/public ./public
+# public/ (аватар агента, скриншоты справки) тоже раздаёт server.js. Статьи справки
+# (content/help) попадают в standalone через outputFileTracingIncludes.
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/public ./public
 # Пользователь `node` (uid 1000) есть в базовом образе.
 USER node
 EXPOSE 3000

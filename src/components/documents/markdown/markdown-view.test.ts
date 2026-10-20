@@ -52,6 +52,23 @@ describe('url helpers', () => {
     expect(isAllowedImageSrc(undefined)).toBe(false);
   });
 
+  it('allows help screenshots only with an explicit prefix', () => {
+    expect(isAllowedImageSrc('/help-media/board/board.png')).toBe(false);
+    expect(isAllowedImageSrc('/help-media/board/board.png', ['/help-media/'])).toBe(true);
+    expect(isAllowedImageSrc('/help-media/../agent-avatar.svg', ['/help-media/'])).toBe(false);
+    expect(isAllowedImageSrc('/api/documents/1/file', ['/help-media/'])).toBe(false);
+  });
+
+  it('rejects encoded path traversal and malformed escapes', () => {
+    const help = ['/help-media/'];
+    expect(isAllowedImageSrc('/help-media/%2e%2e/agent-avatar.svg', help)).toBe(false);
+    expect(isAllowedImageSrc('/help-media/%2E%2E%2Fagent-avatar.svg', help)).toBe(false);
+    expect(isAllowedImageSrc('/help-media/..%5cagent-avatar.svg', help)).toBe(false);
+    expect(isAllowedImageSrc('/help-media/a%5c..%5cb.png', help)).toBe(false);
+    expect(isAllowedImageSrc('/help-media/%E0%A4%A.png', help)).toBe(false);
+    expect(isAllowedImageSrc('/api/documents/abc/file?inline=1')).toBe(true);
+  });
+
   it('builds unique heading ids', () => {
     const slug = createHeadingSlugger();
     expect(slug('Регламент релизов!')).toBe('регламент-релизов');
@@ -82,6 +99,18 @@ describe('MarkdownView', () => {
     expect(html).not.toContain('<img src="https://evil.test');
     expect(html).toContain('href="https://evil.test/p.gif"');
     expect(html).toContain('<img src="/api/documents/abc/file?inline=1"');
+  });
+
+  it('shows help screenshots with a caption only when the prefix is passed', () => {
+    const source = '![Доска](/help-media/board/board.png "Доска проекта")';
+    expect(render(source)).not.toContain('<img');
+
+    const html = renderToStaticMarkup(
+      createElement(MarkdownView, { source, imagePrefixes: ['/help-media/'] }),
+    );
+    expect(html).toContain('<img src="/help-media/board/board.png"');
+    expect(html).toContain('Доска проекта</span>');
+    expect(html).not.toContain('<figure');
   });
 
   it('renders GFM tables, task lists and heading anchors', () => {

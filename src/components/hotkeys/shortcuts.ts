@@ -11,6 +11,7 @@ export const SHORTCUTS = {
   goTasks: { keys: 'g t', label: 'Задачи', group: 'Переходы' },
   goDocs: { keys: 'g d', label: 'Документы', group: 'Переходы' },
   goMyTasks: { keys: 'g m', label: 'Мои задачи', group: 'Переходы' },
+  goHelp: { keys: 'g h', label: 'Справка', group: 'Переходы' },
   boardMove: {
     keys: 'up down left right',
     label: 'Карточка выше, ниже, соседняя колонка',

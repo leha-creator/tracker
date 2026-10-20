@@ -5,8 +5,8 @@
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
 
-/** Картинки показываются только из своих эндпоинтов с проверкой доступа. */
-const IMAGE_PREFIXES = ['/api/documents/', '/api/attachments/'];
+/** Картинки документов показываются только из своих эндпоинтов с проверкой доступа. */
+export const DEFAULT_IMAGE_PREFIXES: readonly string[] = ['/api/documents/', '/api/attachments/'];
 
 /**
  * Адрес ссылки: `http(s)`, `mailto` и относительные адреса; всё прочее (`javascript:`, `data:`,
@@ -31,10 +31,24 @@ export function isExternalUrl(url: string): boolean {
   return /^(?:https?:)?\/\//i.test(url) || /^mailto:/i.test(url);
 }
 
-/** Картинку можно показать: относительный адрес своего эндпоинта файлов. */
-export function isAllowedImageSrc(src: string | undefined): boolean {
+/**
+ * Картинку можно показать: относительный адрес с разрешённым префиксом. По умолчанию — свои
+ * эндпоинты файлов; справка передаёт `/help-media/` (статические скриншоты).
+ */
+export function isAllowedImageSrc(
+  src: string | undefined,
+  prefixes: readonly string[] = DEFAULT_IMAGE_PREFIXES,
+): boolean {
   if (!src) return false;
-  return IMAGE_PREFIXES.some((prefix) => src.startsWith(prefix)) && !src.includes('..');
+  // Выход из папки ловим и в закодированном виде (%2e%2e, %5c): браузер раскодирует путь сам.
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(src);
+  } catch {
+    return false;
+  }
+  if (decoded.includes('..') || decoded.includes('\\')) return false;
+  return prefixes.some((prefix) => src.startsWith(prefix));
 }
 
 /** id заголовка для якоря: буквы и цифры (в т.ч. кириллица) через дефис; повторы — с номером. */

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  CircleHelpIcon,
   FileIcon,
   FileTextIcon,
   FolderOpenIcon,
@@ -16,6 +17,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { EntityIconTile } from '@/components/entity-icon/entity-icon';
+import { HELP_HREF } from '@/components/help/help-href';
 import { NEW_WORKSPACE_HREF } from '@/components/layout/create-panel-href';
 import { currentWorkspaceSlug } from '@/components/layout/nav-items';
 import {
@@ -132,9 +134,11 @@ export function CommandPalette({ workspaces }: { workspaces: WorkspaceListItemDt
   }, []);
 
   // Хоткей работает и в полях ввода: Ctrl+K в браузере ничего полезного не делает.
-  // e.code, а не e.key: в русской раскладке key — «л».
+  // e.code, а не e.key: в русской раскладке key — «л». Если поле уже обработало Ctrl+K
+  // (ссылка в редакторе заметки — defaultPrevented), палитру не открываем.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) return;
       if (event.code !== 'KeyK' || !(event.metaKey || event.ctrlKey) || event.altKey) return;
       event.preventDefault();
       handleOpenChange(!openRef.current);
@@ -185,6 +189,12 @@ export function CommandPalette({ workspaces }: { workspaces: WorkspaceListItemDt
     icon: UserCheckIcon,
     href: '/my-tasks',
   };
+  const help: PaletteCommand = {
+    id: 'help',
+    label: 'Справка',
+    icon: CircleHelpIcon,
+    href: HELP_HREF,
+  };
   const commands: PaletteCommand[] = workspace
     ? [
         {
@@ -222,6 +232,7 @@ export function CommandPalette({ workspaces }: { workspaces: WorkspaceListItemDt
               },
             ]
           : []),
+        help,
       ]
     : [
         {
@@ -231,6 +242,7 @@ export function CommandPalette({ workspaces }: { workspaces: WorkspaceListItemDt
           href: NEW_WORKSPACE_HREF,
         },
         myTasks,
+        help,
       ];
 
   const folded = q.toLocaleLowerCase('ru');
