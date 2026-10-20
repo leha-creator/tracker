@@ -30,9 +30,10 @@ export async function getHelpArticle(slug: string): Promise<HelpArticle | null> 
   const meta = findHelpArticle(slug);
   if (!meta) return null;
 
+  // Статьи пререндерятся при сборке, где переменных окружения нет (CI), а логгер требует env —
+  // поэтому успешное чтение не логируем, пишем только отсутствие файла.
   try {
     const markdown = await readFile(path.join(HELP_CONTENT_DIR, `${meta.slug}.md`), 'utf8');
-    log.debug({ slug: meta.slug, length: markdown.length }, '[help.article] read');
     return { meta, markdown };
   } catch (error) {
     log.warn({ slug: meta.slug, err: error }, '[help.article] file is missing');
