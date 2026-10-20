@@ -19,6 +19,7 @@
 | `pnpm db:migrate` | Создать и применить миграцию (dev) |
 | `pnpm db:deploy` | Применить миграции (CI / production) |
 | `pnpm db:studio` | Prisma Studio |
+| `pnpm help:screenshots` | Засеять демо-данные и переснять скриншоты справки ([подробнее](#как-переснять-скриншоты)) |
 
 ## Линтеры и форматирование
 
@@ -55,6 +56,51 @@ import { prisma, type TransactionClient } from '@/shared/db';
 - Версии фиксируются точно (`saveExact: true` в `pnpm-workspace.yaml`).
 - Пакетам с install-скриптами нужно явное разрешение в `allowBuilds` (`pnpm-workspace.yaml`).
 - shadcn-компоненты: `pnpm dlx shadcn@latest add <component>`.
+
+## Справка и скриншоты
+
+Справка — раздел `/help` в приложении (только после входа).
+
+- **Статьи** лежат в `content/help/<slug>.md`: только тело, без заголовка `#` и frontmatter. Заголовок, раздел, порядок, описание и аудиторию задаёт каталог `src/modules/help/models/help-catalog.ts`.
+- **Новая статья:** запись в `HELP_ARTICLES` → файл `content/help/<slug>.md` → `pnpm test`. Тест `src/modules/help/help-content-integrity.test.ts` проверяет, что файл есть, картинки лежат в `public/help-media/`, а ссылки `/help/<slug>#<якорь>` ведут на существующие статьи и заголовки.
+- **Картинки:** `![Описание](/help-media/<article>/<name>.png "Подпись")`. Другие адреса картинок в справке не отображаются.
+- **Тексты** пишутся на «вы», подписи интерфейса — дословно в «ёлочках». Новые и переписанные тексты проходят скилл `humanizer:humanizer`. После правки сверьте по `git diff content/help/`, что подписи, клавиши, лимиты и ссылки остались прежними.
+
+### Как переснять скриншоты
+
+Скрипт `scripts/help-screenshots/` (Playwright) засевает демо-данные через интерфейс и HTTP API и снимает экраны в `public/help-media/`. Ему нужен отдельный сервер с чистой базой: демо-пользователи регистрируются заново.
+
+1. Один раз установите браузер: `pnpm exec playwright install chromium`.
+2. Создайте пустую базу и примените миграции:
+
+   ```bash
+   docker exec tasker-postgres-1 psql -U tasker -d tasker -c "CREATE DATABASE tasker_help"
+   DATABASE_URL="postgresql://tasker:tasker@localhost:5433/tasker_help?schema=public" pnpm db:deploy
+   ```
+
+3. Соберите приложение (`pnpm build`), скопируйте `public` и `.next/static` в `.next/standalone` и запустите сервер на порту 3001 без подтверждения почты:
+
+   ```bash
+   cd .next/standalone
+   DATABASE_URL="postgresql://tasker:tasker@localhost:5433/tasker_help?schema=public" \
+   BETTER_AUTH_URL=http://localhost:3001 AUTH_REQUIRE_EMAIL_VERIFICATION=false PORT=3001 \
+   node --env-file=../../.env server.js
+   ```
+
+   Порт 3001 выбран потому, что локальный MinIO разрешает CORS только для `http://localhost:3000` и `http://localhost:3001` (`MINIO_CORS_ALLOW_ORIGIN`). На другом порту загрузка вложений из браузера не пройдёт. Адрес сервера можно поменять переменной `HELP_APP_URL`.
+4. `pnpm help:screenshots` — засев и съёмка, около трёх минут.
+
+| Флаг | Что делает |
+|------|------------|
+| `--shots-only` | Только съёмка по уже засеянной базе |
+| `--seed-only` | Только засев |
+| `--only=<article>` | Снять одну статью (например, `--only=board`) |
+| `--seed-step=<name>` | Выполнить один шаг засева |
+| `--allow-remote` | Разрешить нелокальный `HELP_APP_URL`. Без флага скрипт работает только с `localhost`, чтобы случайно не засеять боевой сервер |
+
+Засев можно продолжить после сбоя: выполненные шаги, пароли демо-пользователей и id созданных данных записываются в `scripts/help-screenshots/.state/` (в `.gitignore`). Там же в `errors/` лежит снимок экрана, на котором скрипт упал. Чтобы начать заново, пересоздайте базу и удалите `.state/`. `HELP_HEADED=1` показывает окно браузера.
+
+Кадр `claude-code-mcp/connect.png` снимается при засеве: окно с токеном показывается один раз. Токен на кадре заменён заглушкой. Если засев падает, скорее всего, поменялся интерфейс и справку нужно обновить.
 
 ## Коммиты
 
