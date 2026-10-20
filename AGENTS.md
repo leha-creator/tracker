@@ -133,10 +133,8 @@ tasker/
 │   │   ├── resource-settings/ # Настройки ресурса: группы «Регистрация» (политика, evaluateSignup для хука Better Auth) и «Хранилище» (квота по умолчанию), кеш процесса
 │   │   └── health/           # checkHealth() — агрегирует проверки
 │   └── test/                 # Вспомогательное для Vitest
-├── deploy/                   # Сервер (https://tracker.plwedding.ru), см. docs/production.md
-│   ├── bootstrap-server.sh   # Разовая подготовка сервера: /opt/edge, /opt/tasker, сеть edge, ключ деплоя, .env, таймеры бэкапов
-│   ├── host/                 # Настройки хоста: docker-mss-clamp.service (MSS clamping, MTU сервера 1450)
-│   ├── edge/                 # Общий edge-прокси (Caddy на 80/443 для всех проектов сервера), применяется вручную
+├── deploy/                   # Сервер (https://tracker.plwedding.ru), см. docs/production.md; общая часть сервера (хост, edge-прокси, вывоз дампов) — leha-creator/infra
+│   ├── bootstrap-app-server.sh # Разовая подготовка под Tasker: /opt/tasker, ключ деплоя, .env, таймеры; без сети edge и /opt/edge/sites (их готовит infra) останавливается
 │   └── tasker/               # Прод-стек: compose.yml, tracker.caddy (сайт), .env.example, backup.sh, reminders.sh (запуск напоминаний через docker exec), cleanup.sh (очистка журнала), systemd/ (в т.ч. tasker-reminders.timer, tasker-cleanup.timer)
 ├── scripts/help-screenshots/ # pnpm help:screenshots — Playwright: засев демо-данных через UI и API, съёмка в public/help-media/ (.state/ — в .gitignore)
 ├── public/help-media/        # Скриншоты справки: <article>/<name>.png

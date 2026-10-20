@@ -78,7 +78,7 @@ Rationale: План закрывает пункт «`deploy/edge` и bootstrap �
 
 ### Phase 2: Документация и проверка
 
-- [ ] **Task 5: документация**
+- [x] **Task 5: документация**
   - `docs/production.md`:
     - вступление: рядом со стендом maxim упомянуть meet; добавить фразу, что общие сервисы сервера (edge-прокси, подготовка хоста, вывоз дампов) живут в [`leha-creator/infra`](https://github.com/leha-creator/infra);
     - таблица «Что где лежит»: `/opt/edge/` — «из `infra/edge`, контракты — `edge/README.md` infra», «кто меняет» — «infra вручную, сайты — CI проектов»; строки `.env` и таймеров — `bootstrap-app-server.sh`; `docker-mss-clamp.service` — «`infra/host/bootstrap-server.sh`»;
@@ -93,7 +93,7 @@ Rationale: План закрывает пункт «`deploy/edge` и bootstrap �
   Зависит от: задач 1–4.
   Логирование: не требуется.
 
-- [ ] **Task 6: проверка**
+- [x] **Task 6: проверка**
   Только локально, на сервере ничего не запускать.
   - `sh -n deploy/bootstrap-app-server.sh`; shellcheck — `docker run --rm -v "$PWD/deploy:/mnt:ro" koalaman/shellcheck:stable -s sh /mnt/bootstrap-app-server.sh /mnt/tasker/*.sh`. Новых предупреждений быть не должно.
   - Прогон в одноразовом контейнере (`alpine` с `docker-cli` и `openssl`, каталог `deploy` смонтирован только на чтение, без сокета Docker):

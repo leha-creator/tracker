@@ -2,7 +2,7 @@
 
 # Продакшен
 
-Tasker работает на `https://tracker.plwedding.ru`, сервер `95.163.229.132` (Ubuntu 26.04, 1 vCPU, 2 GB RAM + 2 GB swap). На том же сервере работает стенд maxim (`dev.plwedding.ru`). Каждый пуш в `main` после зелёных проверок публикует образы в GHCR и деплоит их на сервер.
+Tasker работает на `https://tracker.plwedding.ru`, сервер `95.163.229.132` (Ubuntu 26.04, 1 vCPU, 2 GB RAM + 2 GB swap). На том же сервере работают meet и стенд maxim (`dev.plwedding.ru`). Общие сервисы сервера — подготовка хоста, edge-прокси и вывоз дампов БД за пределы сервера — живут в [`leha-creator/infra`](https://github.com/leha-creator/infra), здесь только стек Tasker. Каждый пуш в `main` после зелёных проверок публикует образы в GHCR и деплоит их на сервер.
 
 ```
 push в main ──► CI: check, migrations, docker ──► publish (GHCR) ──► deploy (SSH → docker compose)
@@ -17,20 +17,30 @@ push в main ──► CI: check, migrations, docker ──► publish (GHCR) �
 
 | Путь на сервере | Что это | Кто меняет |
 |-----------------|---------|------------|
-| `/opt/edge/` | Общий edge-прокси: `compose.yml`, `Caddyfile`, `sites/` — см. [`deploy/edge/README.md`](../deploy/edge/README.md) | Вручную (`deploy/edge/`), сайты — CI проектов |
+| `/opt/edge/` | Общий edge-прокси: `compose.yml`, `Caddyfile`, `sites/` — см. [`infra/edge/README.md`](https://github.com/leha-creator/infra/blob/main/edge/README.md) | Вручную из infra (`edge/`), сайты — CI проектов |
 | `/opt/edge/sites/tracker.caddy` | Сайт Tasker (из `deploy/tasker/tracker.caddy`, домен подставлен) | CI при каждом деплое |
 | `/opt/tasker/compose.yml` | Прод-стек (из `deploy/tasker/compose.yml`) | CI при каждом деплое |
-| `/opt/tasker/.env` | Секреты и настройки стека (`600`, владелец `deploy`) | Один раз `bootstrap-server.sh`, дальше вручную |
+| `/opt/tasker/.env` | Секреты и настройки стека (`600`, владелец `deploy`) | Один раз `bootstrap-app-server.sh`, дальше вручную |
 | `/opt/tasker/release.env` | `TASKER_TAG=sha-xxxxxxx` — текущий релиз | CI при каждом деплое |
 | `/opt/tasker/backup.sh`, `/opt/tasker/backups/` | Скрипт и резервные копии | CI (скрипт), таймеры (копии) |
 | `/opt/tasker/reminders.sh` | Запуск напоминаний о сроке | CI при каждом деплое |
 | `/opt/tasker/cleanup.sh` | Очистка журнала действий и счётчиков лимитов | CI при каждом деплое |
-| `/etc/systemd/system/tasker-backup*` | Таймеры резервных копий | `bootstrap-server.sh` |
-| `/etc/systemd/system/tasker-reminders.*` | Таймер напоминаний о сроке | `bootstrap-server.sh` |
-| `/etc/systemd/system/tasker-cleanup.*` | Таймер очистки журнала | `bootstrap-server.sh` |
-| `/etc/systemd/system/docker-mss-clamp.service` | MSS clamping для контейнеров (см. «Почта») | `bootstrap-server.sh` |
+| `/etc/systemd/system/tasker-backup*` | Таймеры резервных копий | `bootstrap-app-server.sh` |
+| `/etc/systemd/system/tasker-reminders.*` | Таймер напоминаний о сроке | `bootstrap-app-server.sh` |
+| `/etc/systemd/system/tasker-cleanup.*` | Таймер очистки журнала | `bootstrap-app-server.sh` |
+| `/etc/systemd/system/docker-mss-clamp.service` | MSS clamping для контейнеров (см. «Почта») | `host/bootstrap-server.sh` из infra |
 
 Файлы, которые копирует CI, руками не правятся: следующий деплой их перезапишет.
+
+### Что CI Tasker ждёт от infra
+
+Деплой опирается на контракты общего edge-прокси (раздел «Неизменяемые контракты» в [`infra/edge/README.md`](https://github.com/leha-creator/infra/blob/main/edge/README.md)). Меняются они только вместе с CI проектов:
+
+- файл сайта `/opt/edge/sites/tracker.caddy` пишет пользователь `deploy` (каталог `root:deploy`, `2775`);
+- `cd /opt/edge && docker compose exec -T caddy caddy validate|reload --config /etc/caddy/Caddyfile --adapter caddyfile` — проект `edge`, сервис `caddy`;
+- внешняя docker-сеть `edge`, алиасы `tasker-app` и `tasker-minio`;
+- сниппет `(access_log)` в `/opt/edge/Caddyfile`: `tracker.caddy` делает `import access_log`, и деплой останавливается до загрузки файлов, если сниппета нет;
+- дампы `tasker-*.dump` в `/opt/tasker/backups/db` (владелец `deploy`) — их забирает вывоз бэкапов infra.
 
 ## Прод-стек
 
@@ -50,7 +60,7 @@ push в main ──► CI: check, migrations, docker ──► publish (GHCR) �
 
 Браузер загружает и скачивает файлы напрямую из MinIO по presigned-ссылкам. Ссылки подписываются на `S3_PUBLIC_ENDPOINT=https://tracker.plwedding.ru` в path-style: `https://tracker.plwedding.ru/tasker-attachments/<key>?X-Amz-...`. Caddy отправляет путь `/tasker-attachments` и всё под ним в MinIO, не меняя `Host` и путь, поэтому подпись сходится. Остальной API MinIO снаружи недоступен. Запросы идут с того же origin, поэтому CORS не нужен.
 
-Имя бакета (`S3_BUCKET` в `.env`) должно совпадать с путём в `deploy/tasker/tracker.caddy`. Подпись и учётка ключа (`X-Amz-Signature`, `X-Amz-Credential`) вырезаются из access-лога Caddy.
+Имя бакета (`S3_BUCKET` в `.env`) должно совпадать с путём в `deploy/tasker/tracker.caddy`. Подпись и учётка ключа (`X-Amz-Signature`, `X-Amz-Credential`) вырезаются из access-лога Caddy сниппетом `access_log` edge-прокси.
 
 ## CD
 
@@ -122,7 +132,7 @@ docker image prune -af --filter "until=1h"    # удалить образы бе
 
 Кроме того, деплой делает копию БД перед каждой миграцией. Вручную: `sh /opt/tasker/backup.sh db` или `files`. Журнал: `journalctl -u 'tasker-backup@*'`, проверка расписания: `systemctl list-timers 'tasker-*'`.
 
-Копии лежат на том же диске. Они защищают от ошибок и неудачных миграций, но не от потери сервера. Их стоит периодически выгружать с сервера (`scp`).
+Копии лежат на том же диске. Они защищают от ошибок и неудачных миграций, но не от потери сервера. Дампы БД каждый день вывозит в Object Storage infra (`backups/`, там же еженедельная проверка восстановления). Копии файлов MinIO не вывозятся: их стоит периодически выгружать с сервера (`scp`).
 
 Восстановление БД:
 
@@ -161,12 +171,12 @@ systemctl list-timers 'tasker-*'       # расписание
 
 `404` — в `/opt/tasker/.env` нет `CRON_SECRET`. `failedBatches > 0` — часть задач не обработана из-за ошибки БД (подробности в логах приложения, `[reminders] batch failed`); следующий запуск их догонит.
 
-**Сервер, настроенный до появления напоминаний.** `bootstrap-server.sh` генерирует `CRON_SECRET` только для нового `.env`, а CI не ставит таймеры. Один раз под root:
+**Сервер, настроенный до появления напоминаний.** `bootstrap-app-server.sh` генерирует `CRON_SECRET` только для нового `.env`, а CI не ставит таймеры. Один раз под root:
 
 ```bash
 echo "CRON_SECRET=$(openssl rand -hex 32)" >> /opt/tasker/.env
 sudo -u deploy sh -c 'cd /opt/tasker && docker compose --env-file .env --env-file release.env up -d --wait app'
-# с копией каталога deploy/ на сервере — или просто повторный запуск bootstrap-server.sh:
+# с копией каталога deploy/ на сервере — или просто повторный запуск bootstrap-app-server.sh:
 install -m 644 /tmp/tasker-deploy/tasker/systemd/tasker-reminders.* /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now tasker-reminders.timer
@@ -181,7 +191,7 @@ sh /opt/tasker/cleanup.sh              # 200 {"result":{"auditDeleted":…,"audi
 journalctl -u tasker-cleanup           # журнал запусков
 ```
 
-**Сервер, настроенный до появления очистки.** CI копирует `cleanup.sh`, но таймеры не ставит. Один раз под root (или повторный запуск `bootstrap-server.sh`):
+**Сервер, настроенный до появления очистки.** CI копирует `cleanup.sh`, но таймеры не ставит. Один раз под root (или повторный запуск `bootstrap-app-server.sh`):
 
 ```bash
 install -m 644 /tmp/tasker-deploy/tasker/systemd/tasker-cleanup.* /etc/systemd/system/
@@ -214,22 +224,23 @@ MAIL_FROM="Tasker <no-reply@plwedding.ru>"
 
 У внешнего интерфейса сервера MTU 1450 (облако OpenStack), у сетей Docker — 1500. Без MSS clamping удалённый сервер шлёт контейнеру слишком большие TCP-сегменты, и TLS-рукопожатие зависает. Симптом: первое подключение к SMTP после паузы падает с `Connection timeout` (в UI — «Письмо отправить не удалось»), следующие проходят. С самого сервера (`openssl s_client`) всё работает, потому что его MSS уже правильный.
 
-Лечится правилом `iptables -t mangle ... -j TCPMSS --clamp-mss-to-pmtu` для трафика контейнеров. Его ставит `bootstrap-server.sh` как юнит `docker-mss-clamp.service` (`deploy/host/`). Проверка: `iptables -t mangle -S FORWARD | grep TCPMSS`.
+Лечится правилом `iptables -t mangle ... -j TCPMSS --clamp-mss-to-pmtu` для трафика контейнеров. Его ставит подготовка хоста из infra (`host/bootstrap-server.sh`) как юнит `docker-mss-clamp.service`, подробнее — раздел «MSS clamping» в [`infra/host/README.md`](https://github.com/leha-creator/infra/blob/main/host/README.md). Проверка: `iptables -t mangle -S FORWARD | grep TCPMSS`.
 
 ## Новый сервер
 
-1. Docker с плагином compose, пользователь `deploy` в группе `docker`, ufw с открытыми 22/80/443, вход по SSH только по ключам. На текущем сервере это сделал `bootstrap.sh` из репозитория maxim.
+Сначала bootstrap infra, потом bootstrap Tasker: скрипт Tasker общий edge-прокси не создаёт и без него останавливается.
+
+1. Подготовка хоста из [`leha-creator/infra`](https://github.com/leha-creator/infra): Docker с плагином compose, пользователь `deploy` в группе `docker`, ufw (22/80/443), swap, `/opt/edge` и `sites/`, сеть `edge`, MSS clamping, проверки sshd — `host/bootstrap-server.sh` (см. [`infra/host/README.md`](https://github.com/leha-creator/infra/blob/main/host/README.md)). Затем запустить edge-прокси по [`infra/edge/README.md`](https://github.com/leha-creator/infra/blob/main/edge/README.md).
 2. Подготовка под Tasker (повторный запуск безопасен, существующий `.env` не меняется):
 
    ```bash
    scp -r deploy root@<host>:/tmp/tasker-deploy
    ssh root@<host> "TASKER_DEPLOY_PUBKEY='$(cat ~/.ssh/tasker_deploy.pub)' ADMIN_EMAILS='<email>' \
-     sh /tmp/tasker-deploy/bootstrap-server.sh"
+     sh /tmp/tasker-deploy/bootstrap-app-server.sh"
    ```
 
-   Скрипт создаёт `/opt/edge` и `/opt/tasker`, сеть `edge`, добавляет ключ деплоя, генерирует секреты в `/opt/tasker/.env` (включая `CRON_SECRET`) и ставит таймеры бэкапов и напоминаний. Edge-прокси он не запускает.
-3. `cd /opt/edge && docker compose up -d` (под `deploy`).
-4. Обновить `DEPLOY_HOST` и `DEPLOY_KNOWN_HOSTS` в GitHub и запустить workflow.
+   Скрипт проверяет пользователя `deploy`, Docker, сеть `edge` и `/opt/edge/sites` и при их отсутствии останавливается с `fail: …` до любых изменений. Затем создаёт `/opt/tasker`, добавляет ключ деплоя, генерирует секреты в `/opt/tasker/.env` (включая `CRON_SECRET`) и ставит таймеры бэкапов, напоминаний и очистки. В `/opt/edge` он ничего не пишет.
+3. Обновить `DEPLOY_HOST` и `DEPLOY_KNOWN_HOSTS` в GitHub и запустить workflow.
 
 Перенос данных: `backup.sh db` и `files` на старом сервере, файлы — на новый, восстановление командами выше.
 
@@ -266,7 +277,7 @@ Edge-прокси пропускает `/api/webhooks/github` как обычн�
 Claude Code подключается к `https://tracker.plwedding.ru/api/mcp` с личным токеном из **Профиль → Токены доступа** (см. [Claude Code и MCP](agents.md)). Отдельной настройки сервера не нужно:
 
 - сервер работает без сессий и отвечает JSON, без SSE, поэтому длинные соединения и таймауты Caddy его не касаются;
-- заголовок `Authorization` проходит до приложения, а в access-логе Caddy вырезается (`request>headers>Authorization delete` в `tracker.caddy`);
+- заголовок `Authorization` проходит до приложения, а в access-логе Caddy вырезается (`request>headers>Authorization delete` в сниппете `access_log` edge-прокси);
 - переменные окружения не нужны, ссылки на задачи строятся от `BETTER_AUTH_URL`.
 
 Проверка без токена — ожидается `401` с `WWW-Authenticate: Bearer`:
@@ -314,4 +325,5 @@ curl -sN https://tracker.plwedding.ru/api/realtime/w/<slug> -H 'cookie: __Secure
 - [Конфигурация](configuration.md): переменные приложения
 - [Интеграция с GitHub](github.md): создание GitHub App и что делает интеграция
 - [Claude Code и MCP](agents.md): токены доступа и подключение агентов
-- [`deploy/edge/README.md`](../deploy/edge/README.md): edge-прокси и подключение проектов
+- [`infra/edge/README.md`](https://github.com/leha-creator/infra/blob/main/edge/README.md): edge-прокси, контракты и подключение проектов
+- [`infra/host/README.md`](https://github.com/leha-creator/infra/blob/main/host/README.md): подготовка хоста
