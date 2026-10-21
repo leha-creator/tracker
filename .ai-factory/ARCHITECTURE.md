@@ -42,7 +42,9 @@ tasker/
 │   ├── proxy.ts                      # Оптимистичный редирект на /login по cookie (не авторизация)
 │   ├── modules/                      # ── ДОМЕННЫЕ МОДУЛИ ──
 │   │   ├── auth/
-│   │   │   ├── slices/credentials/   # вход, регистрация, выход (Server Actions поверх Better Auth)
+│   │   │   ├── slices/sso/           # вход через IdP plwedding ID (genericOAuth), тексты ошибок входа
+│   │   │   ├── slices/session/       # сеансы в Tasker, выход (и из IdP)
+│   │   │   ├── slices/account/       # системные операции над учётной записью для admin, метрики
 │   │   │   └── index.ts
 │   │   │
 │   │   ├── workspaces/
@@ -82,10 +84,8 @@ tasker/
 │   │   │
 │   │   ├── profiles/                 # Профиль пользователя
 │   │   │   ├── slices/
-│   │   │   │   ├── profile/          # должность, описание (UserProfile); имя — через auth.api.updateUser
-│   │   │   │   └── avatar/           # фото: presigned POST, проверка сигнатуры, выдача ссылки участникам общих пространств
-│   │   │   ├── models/               # лимиты полей, типы и ключи фото, isAvatarUrl
-│   │   │   ├── auth-api.ts           # updateAuthUser: имя и User.image через Better Auth (обновляет cookie-кеш)
+│   │   │   │   └── profile/          # должность, описание (UserProfile); имя и фото — из IdP, только чтение
+│   │   │   ├── models/               # лимиты полей, isAvatarUrl (/api/idp-avatar/… и /agent-avatar.svg)
 │   │   │   ├── client.ts
 │   │   │   └── index.ts
 │   │   │
@@ -105,10 +105,10 @@ tasker/
 │   │   │
 │   │   ├── admin/                    # Администрирование ресурса (роль ADMIN)
 │   │   │   ├── slices/
-│   │   │   │   ├── user/             # список и карточка; блокировка, роль, сессии, токены, письма, удаление через плагин admin и порт auth
+│   │   │   │   ├── user/             # список и карточка; блокировка, роль, сессии, токены, удаление через плагин admin и порт auth
 │   │   │   │   ├── impersonation/    # вход от имени пользователя (плагин admin), баннер, возврат
 │   │   │   │   ├── workspace/        # все пространства: архив, удаление, смена владельца, квота (системные функции workspaces)
-│   │   │   │   ├── settings/         # настройки ресурса: группы «Регистрация» и «Хранилище» независимо
+│   │   │   │   ├── settings/         # настройки ресурса: группа «Хранилище» (квота по умолчанию)
 │   │   │   │   └── overview/         # обзор ресурса, тестовое письмо
 │   │   │   ├── models/               # правила над пользователями (не над собой, администратора — сначала снять роль, единственный владелец), запросы списков, имперсонация, ряд по дням
 │   │   │   ├── admin-api.ts          # callAdminApi: вызов API плагина admin + маппинг ошибок
@@ -175,14 +175,14 @@ tasker/
 │   │
 │   └── shared/                       # ── СКВОЗНОЕ (минимально) ──
 │       ├── db/                       # Prisma client (singleton)
-│       ├── auth/                     # Better Auth config, getSession()
+│       ├── auth/                     # Better Auth config (OIDC-клиент IdP plwedding ID), getSession()
 │       ├── access/                   # requireWorkspaceAccess(), requireWorkspacePermission(), requireAdmin()
 │       ├── errors/                   # AppError, NotFoundError, ForbiddenError, toActionError()
 │       ├── storage/                  # S3-клиенты (S3_ENDPOINT и S3_PUBLIC_ENDPOINT для подписи), presigned POST/GET, удаление объектов
 │       ├── mail/                     # SMTP (nodemailer): sendMail(), sendMailInBackground(), escapeHtml()
 │       ├── rate-limit/               # Лимиты попыток Server Actions (ActionRateLimit), getClientIp()
 │       ├── audit/                    # Каталог событий журнала (категория, видимость, владелец), recordAuditEvent()
-│       ├── resource-settings/        # Настройки ресурса: «Регистрация» и «Хранилище», кеш процесса
+│       ├── resource-settings/        # Настройки ресурса: «Хранилище», кеш процесса
 │       ├── logger/                   # pino, LOG_LEVEL
 │       ├── env/                      # Zod-валидация переменных окружения (ленивая)
 │       ├── health/                   # checkHealth(): агрегирует checkDatabase/checkStorage для /api/health
@@ -210,9 +210,9 @@ tasker/
 - ✅ `documents` зависит от `tasks` (краткие данные и поиск задач для связей), но `tasks` не зависит от `documents`: раздел «Документы» в задаче собирает компонент слоя UI (`components/documents/task-documents`)
 - ✅ `search` зависит от `tasks`, `documents` и `workspaces` (их функции поиска и списки), от него не зависит никто
 - ✅ `admin` зависит от `workspaces`, `profiles`, `api-tokens`, `audit`, `auth`, `documents`, `tasks` и `integrations/github` (системные функции без сессии — только после `requireAdmin()`), но не наоборот. Проверки администратора (`requireAdmin`) читают сессию в обход cookie-кеша (`getFreshSession`)
-- ✅ Операции над чужой учётной записью и метрики учётных записей — только через `callAdminApi` и системные функции `auth` (`slices/account`): единый порт под будущий IdP. `admin` не читает `User` и `Session` для метрик напрямую
-- ✅ Журнал пишет `recordAuditEvent` из `shared/audit` (его зовут модули и хуки Better Auth); модуль `audit` только читает. `audit` зависит лишь от `auth/client` (подпись устройства), `auth` читает `AuditEvent` своим репозиторием для метрик
-- ✅ Настройки ресурса — `shared/resource-settings` (нужны `shared/auth` и `documents`), две независимые группы: «Регистрация» удаляется без правок в «Хранилище»
+- ✅ Операции над чужой учётной записью и метрики учётных записей — только через `callAdminApi` и системные функции `auth` (`slices/account`). `admin` не читает `User` и `Session` для метрик напрямую
+- ✅ Журнал пишет `recordAuditEvent` из `shared/audit` (его зовут модули и хуки Better Auth); модуль `audit` только читает. `audit` зависит лишь от `auth/client` (подпись устройства)
+- ✅ Настройки ресурса — `shared/resource-settings` (нужны `documents`), одна группа «Хранилище»; регистрацию решает IdP
 - ❌ Компоненты и страницы не импортируют `prisma` и репозитории
 - ❌ Actions не вызывают репозитории в обход сервиса
 - ❌ Модели не импортируют сервисы, репозитории и `@prisma/client`
@@ -234,7 +234,7 @@ tasker/
 - **Документы.** Хранилище пространства — префикс `ws/<workspaceId>/docs/` в общем бакете и квота, проверяемая при выдаче слота под `pg_advisory_xact_lock`. Загрузка — как у вложений (presigned POST → подтверждение с сигнатурой). Заметки хранятся в БД (Markdown), правка защищена версией (`CONFLICT` при расхождении). Рендер Markdown без сырого HTML, адреса через allowlist протоколов, картинки только из своих эндпоинтов. Таблица связей `TaskDocumentLink` принадлежит `documents`, FK на задачу с каскадом — удаление задачи снимает связи без участия `documents`.
 - **Снятие ответственного при выходе из пространства** — триггер БД на `WorkspaceMember` (миграция `add_tasks`): участника удаляет плагин Better Auth вне транзакций приложения, а модуль `workspaces` не знает о задачах.
 - **Уведомления.** `tasks` и `workspaces` вызывают `notify(events)` / `notifyByEmail(email, event)` из `notifications` после сохранения изменения. Модуль `notifications` не знает о задачах: данные события приходят снимком (`payload`), поэтому зависимость односторонняя. Функции никогда не бросают — сбой уведомлений не отменяет действие. Письма отправляются через `after()`. Уведомления пространства у вышедшего участника удаляет триггер БД на `WorkspaceMember` (миграция `add_profiles_and_notifications`).
-- **Профили.** Поля Better Auth (`User`) не расширяются: `UserProfile` — отдельная таблица модуля `profiles`. Фото — по тому же пути, что вложения (presigned POST → подтверждение с проверкой сигнатуры). Публичный профиль и карточка участника доступны только внутри общего пространства.
+- **Профили.** Поля Better Auth (`User`) не расширяются: `UserProfile` — отдельная таблица модуля `profiles`. Имя и фото приходят из IdP при каждом входе; фото отдаёт IdP через `GET /api/idp-avatar/[sub]` (302), своей загрузки нет. Публичный профиль и карточка участника доступны только внутри общего пространства.
 - **Пространства — плагин Better Auth `organization`** под доменными именами (`Workspace`, `WorkspaceMember`, `WorkspaceInvitation`, `workspaceId`). Мутации идут через `auth.api.*` плагина (`callOrganizationApi`), чтение — через репозитории модуля. Текущее пространство берётся из URL, а не из `session.activeWorkspaceId`.
 
 ## Ключевые принципы

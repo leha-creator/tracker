@@ -41,13 +41,13 @@ push в main ──► CI: check, migrations, docker ──► publish (GHCR) �
 
 - файл сайта `/opt/edge/sites/tracker.caddy` пишет пользователь `deploy` (каталог `root:deploy`, `2775`);
 - `cd /opt/edge && docker compose exec -T caddy caddy validate|reload --config /etc/caddy/Caddyfile --adapter caddyfile` — проект `edge`, сервис `caddy`;
-- внешняя docker-сеть `edge`, алиас `tasker-app`; через неё же приложение выходит в интернет (Object Storage, SMTP, GitHub);
+- внешняя docker-сеть `edge`, алиас `tasker-app`; через неё же приложение выходит в интернет (Object Storage, SMTP, GitHub, IdP `auth.plwedding.ru`);
 - сниппет `(access_log)` в `/opt/edge/Caddyfile`: `tracker.caddy` делает `import access_log`, и деплой останавливается до загрузки файлов, если сниппета нет;
 - внешняя docker-сеть `db` (internal), хост `postgres:5432`, роль и база `tasker`, пароль роли — ключ `TASKER_DB_PASSWORD` в `/opt/postgres/.env` (переносится в `/opt/tasker/.env`);
 - бакет `tasker-attachments` в Yandex Object Storage (`ru-central1`, path-style), сервисный аккаунт `tasker-attachments` с ACL бакета, CORS только для `https://tracker.plwedding.ru` — см. [`infra/storage/tasker-attachments.md`](https://github.com/leha-creator/infra/blob/main/storage/tasker-attachments.md). Смена домена — через infra (правило CORS);
 - дампы `tasker-*.dump` в `/opt/tasker/backups/db` (владелец `deploy`) — их забирает вывоз бэкапов infra, пока его источник не переключён на `/opt/backups/dumps/tasker` (после переезда на общий Postgres).
 
-Шаг `Preflight` деплоя проверяет это до любых изменений на сервере: сеть `db`, непустой `TASKER_DB_PASSWORD` в `.env` и — пока на сервере есть старый том `tasker_postgres-data` — что в общей базе уже есть схема (`_prisma_migrations`); непустой `S3_ACCESS_KEY_ID` и `S3_ENDPOINT=https://…` в `.env`. Так коммит переключения, запушенный раньше переноса данных, не поднимет приложение на пустой базе или без ключа хранилища.
+Шаг `Preflight` деплоя проверяет это до любых изменений на сервере: сеть `db`, непустой `TASKER_DB_PASSWORD` в `.env` и — пока на сервере есть старый том `tasker_postgres-data` — что в общей базе уже есть схема (`_prisma_migrations`); непустой `S3_ACCESS_KEY_ID` и `S3_ENDPOINT=https://…` в `.env`; непустой `OIDC_CLIENT_SECRET` в `.env` (см. [«Вход через plwedding ID»](#вход-через-plwedding-id)). Так коммит переключения, запушенный раньше переноса данных, не поднимет приложение на пустой базе или без ключа хранилища.
 
 ## Прод-стек
 
@@ -286,11 +286,34 @@ systemctl daemon-reload
 systemctl enable --now tasker-cleanup.timer
 ```
 
+## Вход через plwedding ID
+
+Вход в Tasker — только через IdP «plwedding ID» (`https://auth.plwedding.ru`, репозиторий [`leha-creator/auth`](https://github.com/leha-creator/auth)). Регистрация, подтверждение email, пароли и 2FA — там; письма о них отправляет IdP. Без секрета клиента приложение не стартует (`OIDC_CLIENT_SECRET` обязателен в `deploy/tasker/compose.yml`), а `Preflight` деплоя останавливается с ошибкой `OIDC_CLIENT_SECRET is not set`.
+
+Настройка (один раз, затем — при смене домена или ротации секрета):
+
+1. **Клиент `tasker` в IdP.** В env IdP (`/opt/auth/.env`, см. `docs/configuration.md` в `leha-creator/auth`; в шаблоне origin уже заполнен) задать `OIDC_TASKER_ORIGIN=https://<DOMAIN>` (сейчас `https://tracker.plwedding.ru`) и `OIDC_TASKER_CLIENT_SECRET` — новый секрет не короче 32 символов (`openssl rand -base64 32`). Перезапустить IdP. Клиент разрешает:
+   - callback `https://<DOMAIN>/api/auth/callback/plwedding`;
+   - возврат после выхода `https://<DOMAIN>/login`.
+2. **Tasker.** В `/opt/tasker/.env`:
+
+   ```
+   OIDC_ISSUER=https://auth.plwedding.ru
+   OIDC_CLIENT_SECRET='<тот же секрет>'
+   ```
+
+   `OIDC_ISSUER` — origin IdP без пути (по умолчанию в `compose.yml` — `https://auth.plwedding.ru`), `OIDC_CLIENT_ID` — `tasker` по умолчанию. Затем `$C up -d app`.
+3. **Проверка.** Открыть `https://<DOMAIN>/login` → «Войти через plwedding ID» → войти в IdP → вернуться в Tasker. «Выйти» в меню пользователя выходит и из IdP и возвращает на `/login`.
+
+Если IdP недоступен, Tasker работает, но `/login` показывает «Вход через plwedding ID временно недоступен»: приложение повторяет discovery (`<OIDC_ISSUER>/.well-known/openid-configuration`) каждые 30 секунд и подключает вход без перезапуска. Уже вошедшие пользователи продолжают работать. В логах — `WARN` `[oidc.discovery]` о недоступности и `[oidc.discovery] ready`, когда IdP ответил.
+
+**Существующие пользователи.** Учётная запись Tasker, созданная до IdP, связывается с IdP при первом входе по совпадению email, если email подтверждён и в IdP, и в Tasker. Иначе вход отклоняется с `account_not_linked`; тогда администратор проверяет адрес и ставит `User.emailVerified = true` в БД. Миграция `drop_local_auth` удаляет пароли (`credential`-аккаунты), 2FA и загруженные фото: пароль и фото пользователь заводит в IdP. `ADMIN_EMAILS` даёт роль `admin` при первом входе нового пользователя.
+
+Back-channel logout пока не реализован: блокировка пользователя в IdP не завершает уже открытую сессию Tasker — при необходимости заблокируйте его и в админке Tasker.
+
 ## Почта
 
-Письма нужны для подтверждения email при регистрации, сброса пароля, приглашений и уведомлений. **Без настроенного SMTP новые пользователи не смогут подтвердить email и войти**, а сброс пароля не работает. Временно (только если почты на сервере нет) можно задать `AUTH_REQUIRE_EMAIL_VERIFICATION=false` в `/opt/tasker/.env`. Приглашение без SMTP всё равно создаётся: письмо не уходит (в логах `[invitation] email failed`), а владелец получает ссылку и передаёт её вручную.
-
-Миграция `auth_security` помечает подтверждёнными всех пользователей, зарегистрированных до включения подтверждения email, — их вход не меняется. Проверка после деплоя: зарегистрироваться с тестовым адресом, получить письмо «Подтвердите email — Tasker», перейти по ссылке; запросить «Забыли пароль?» и получить письмо «Сброс пароля — Tasker». Сбои отправки — в логах `[mail.background] send failed`.
+Письма Tasker — это приглашения в пространства, уведомления и тестовое письмо из админки. Письма регистрации, подтверждения email и сброса пароля отправляет IdP. Без настроенного SMTP Tasker работает: приглашение всё равно создаётся, письмо не уходит (в логах `[invitation] email failed`), а владелец получает ссылку и передаёт её вручную. Сбои фоновой отправки — в логах `[mail.background] send failed`.
 
 Почта домена — у reg.ru (ящик `no-reply@plwedding.ru`). DNS уже настроен через reg.ru: MX `mxs1.reg.ru` / `mxs2.reg.ru`, SPF (`include:_spf.hosting.reg.ru`), DKIM (селектор `dkim`), DMARC `p=none`. A-запись `plwedding.ru` не трогать.
 
@@ -328,7 +351,8 @@ MAIL_FROM="Tasker <no-reply@plwedding.ru>"
 
    Скрипт проверяет пользователя `deploy`, Docker, сети `edge` и `db` и `/opt/edge/sites` и при их отсутствии останавливается с `fail: …` до любых изменений. Затем создаёт `/opt/tasker`, добавляет ключ деплоя, генерирует секреты в `/opt/tasker/.env` (включая `CRON_SECRET`), подставляет `TASKER_DB_PASSWORD` из `/opt/postgres/.env` и ставит таймеры напоминаний и очистки. В `/opt/edge` и `/opt/postgres` он ничего не пишет.
 3. С рабочей машины записать ключ хранилища: `APP_HOST=deploy@<host> sh deploy/rotate-storage-key.sh` (бакет и сервисный аккаунт к серверу не привязаны).
-4. Обновить `DEPLOY_HOST` и `DEPLOY_KNOWN_HOSTS` в GitHub и запустить workflow. На пустой общей базе `backup.sh db` пропускает копию, `migrate` создаёт схему с нуля.
+4. Задать `OIDC_CLIENT_SECRET` (и при другом IdP — `OIDC_ISSUER`) в `/opt/tasker/.env` по разделу [«Вход через plwedding ID»](#вход-через-plwedding-id): bootstrap его не генерирует, он общий с IdP.
+5. Обновить `DEPLOY_HOST` и `DEPLOY_KNOWN_HOSTS` в GitHub и запустить workflow. На пустой общей базе `backup.sh db` пропускает копию, `migrate` создаёт схему с нуля.
 
 Перенос данных: `backup.sh db` на старом сервере, дамп — на новый, восстановление командой из «Резервных копий». Файлы переносить не нужно — они в Object Storage.
 
@@ -402,9 +426,9 @@ curl -sN https://tracker.plwedding.ru/api/realtime/w/<slug> -H 'cookie: __Secure
 - Снаружи открыты только 22, 80 и 443. Postgres наружу не публикуется. Бакет приватный (анонимный доступ закрыт, в ACL — только сервисный аккаунт `tasker-attachments`), файлы отдаются по presigned-ссылкам только после проверки доступа в приложении. Общий Postgres доступен только из сети `db` (internal); роль `tasker` подключается только к своей базе (`pg_hba.conf` infra).
 - Ответы содержат `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`; заголовок `Server` убран. Куки сессии в production — `__Secure-`.
 - Пользователь `deploy` в группе `docker` фактически равен root. Ключ `tasker_deploy` используется только для Tasker и отзывается независимо от ключа maxim (удалить строку `tasker-ci` из `/home/deploy/.ssh/authorized_keys`).
-- По умолчанию регистрация открыта для всех, у кого есть ссылка, но войти можно только после подтверждения email. Закрыть её, оставить только по приглашению или ограничить доменами email можно в админке (`/admin/settings`). Роль admin получают только адреса из `ADMIN_EMAILS` в момент регистрации; они регистрируются при любом режиме.
-- Действия пользователей и администраторов пишутся в журнал (`/admin/activity`), срок хранения — `AUDIT_RETENTION_DAYS`. Вход «от имени пользователя» длится час, помечается в журнале и не даёт менять пароль, 2FA, сессии и токены.
-- Попытки входа, регистрации, сброса пароля и ввода кода 2FA ограничены лимитами в БД (таблицы `RateLimit` и `ActionRateLimit`), IP клиента — из `X-Forwarded-For`, который выставляет edge-Caddy. Администратору стоит включить 2FA в профиле («Безопасность»).
+- Вход — только через IdP plwedding ID: кто может зарегистрироваться, требования к паролю и 2FA задаёт IdP. В Tasker попадают только пользователи с подтверждённым в IdP email. Роль admin получают только адреса из `ADMIN_EMAILS` при первом входе.
+- Действия пользователей и администраторов пишутся в журнал (`/admin/activity`), срок хранения — `AUDIT_RETENTION_DAYS`. Вход «от имени пользователя» длится час, помечается в журнале и не даёт менять сессии, токены и привязку GitHub.
+- Начало входа, привязка GitHub и колбэки OAuth (`/api/auth/*`) ограничены лимитами в БД (таблица `RateLimit`; лимиты Server Actions — `ActionRateLimit`), IP клиента — из `X-Forwarded-For`, который выставляет edge-Caddy. Администратору стоит включить 2FA в своей учётной записи plwedding ID.
 - Токены доступа агентов (`/api/mcp`) действуют в одном пространстве с правами владельца и не дают админских прав. В БД хранится только их SHA-256. Отзыв действует сразу.
 
 ## See Also

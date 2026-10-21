@@ -1,9 +1,9 @@
 // Список снимков справки: статья, имя файла, пользователь, адрес и подготовка экрана.
 // Снимки ложатся в public/help-media/<article>/<name>.png, статьи ссылаются на них по этим путям.
-import { randomBytes } from 'node:crypto';
 
 import { goto, newUserContext, saveErrorShot, saveUserState, shoot } from './browser.mjs';
 import { BASE_URL, log, PENDING_INVITE_EMAIL, WORKSPACE } from './config.mjs';
+import { signUpThroughIdp } from './idp.mjs';
 
 const W = `/w/${WORKSPACE.slug}`;
 
@@ -30,14 +30,7 @@ export const SHOTS = [
     name: 'login',
     user: 'guest',
     url: '/login',
-    ready: (page) => page.getByLabel('Пароль', { exact: true }),
-  },
-  {
-    article: 'getting-started',
-    name: 'register',
-    user: 'guest',
-    url: '/register',
-    ready: (page) => page.getByLabel('Повторите пароль'),
+    ready: (page) => page.getByRole('button', { name: 'Войти через plwedding ID' }),
   },
   {
     article: 'getting-started',
@@ -60,27 +53,8 @@ export const SHOTS = [
     name: 'security',
     user: 'anna',
     url: '/profile/security',
-    ready: (page) => page.getByRole('button', { name: 'Включить' }),
+    ready: (page) => page.getByRole('link', { name: 'Пароль, 2FA и сессии в plwedding ID' }),
     fullPage: true,
-  },
-  {
-    article: 'account-security',
-    name: 'two-factor-qr',
-    user: 'anna',
-    url: '/profile/security',
-    ready: (page) => page.getByRole('button', { name: 'Включить' }),
-    prepare: async (page, { users }) => {
-      await page.getByRole('button', { name: 'Включить' }).click();
-      const dialog = page.getByRole('dialog');
-      await dialog.getByLabel('Пароль', { exact: true }).fill(users.anna.password);
-      await dialog.getByRole('button', { name: 'Продолжить' }).click();
-      await dialog.getByLabel('QR-код для приложения-аутентификатора').waitFor();
-    },
-    shot: (page) => page.getByRole('dialog'),
-    mask: (page) => [
-      page.getByLabel('QR-код для приложения-аутентификатора'),
-      page.getByRole('dialog').locator('code'),
-    ],
   },
 
   // --- Профиль и уведомления ---
@@ -470,13 +444,10 @@ async function prepareGleb(browser, state, contexts) {
   state.inviteUrl = new URL(await anna.evaluate(() => navigator.clipboard.readText())).pathname;
 
   const gleb = await contextPage(browser, contexts, 'gleb');
-  const password = `Help-${randomBytes(9).toString('base64url')}`;
-  const response = await gleb.request.post('/api/auth/sign-up/email', {
-    headers: { origin: BASE_URL },
-    data: { name: 'Глеб Орлов', email: PENDING_INVITE_EMAIL, password },
+  state.users.gleb = await signUpThroughIdp(gleb, {
+    name: 'Глеб Орлов',
+    email: PENDING_INVITE_EMAIL,
   });
-  if (!response.ok()) throw new Error(`регистрация Глеба: ${response.status()}`);
-  state.users.gleb = { email: PENDING_INVITE_EMAIL, password };
 }
 
 async function contextPage(browser, contexts, user) {

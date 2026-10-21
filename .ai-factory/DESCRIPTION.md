@@ -11,6 +11,7 @@ Tasker — веб-приложение для управления задача�
 - **Владелец пространства (workspace owner)** — создаёт пространство, приглашает пользователей и выдаёт/отзывает им доступ.
 - **Обычный пользователь (member)** — работает с задачами в пространствах, к которым ему выдан доступ.
 - Приглашения в пространство (по email/ссылке), управление участниками.
+- Вход — только через IdP «plwedding ID» (единый вход для приложений plwedding): регистрация, подтверждение email, пароли и 2FA — в IdP, Tasker хранит свои сессии и роль `admin`. Выход из Tasker выходит и из IdP.
 
 ### Проекты и задачи
 - Пространство содержит проекты; у каждого проекта свой упорядоченный набор статусов (колонок) с категорией (к выполнению / в работе / готово) и цветом. Новый проект получает три статуса по умолчанию.
@@ -22,7 +23,7 @@ Tasker — веб-приложение для управления задача�
 - Комментарии к задачам с @упоминаниями участников (подсказка после `@`).
 
 ### Профили и уведомления
-- Профиль пользователя: фото, имя, должность, описание; страница аккаунта (email, дата регистрации, роль, пространства).
+- Профиль пользователя: имя и фото (из IdP, меняются там), должность, описание; страница аккаунта (email, дата регистрации, роль, пространства, привязка GitHub); безопасность — ссылка на пароль и 2FA в IdP, сеансы в Tasker, журнал безопасности.
 - Публичный профиль участника внутри пространства (роль, дата вступления, статистика и открытые задачи) и карточка при наведении на ответственного, автора комментария или упоминание.
 - Уведомления в приложении (колокольчик, страница `/notifications`) и по email: упоминание, назначение ответственным, комментарий к моей задаче, приглашение в пространство. Каналы настраиваются по каждому типу события в профиле.
 
@@ -53,12 +54,12 @@ Tasker — веб-приложение для управления задача�
 - **Фреймворк:** Next.js (App Router) — full-stack монолит: React UI, Server Components, Server Actions / Route Handlers
 - **База данных:** PostgreSQL
 - **ORM:** Prisma
-- **Аутентификация:** Better Auth (1.7) с Prisma-адаптером; вход по email + паролю, сессии в БД (cookie); плагин `admin` — глобальная роль (`user` / `admin` в поле `User.role`), первый администратор назначается через `ADMIN_EMAILS`; плагин `organization` — пространства, участники, роли и приглашения (этап «Рабочие пространства»); GitHub OAuth — вместе с интеграцией GitHub; подтверждение email по письму (`AUTH_REQUIRE_EMAIL_VERIFICATION`), сброс и смена пароля, плагин `twoFactor` (TOTP + резервные коды, QR — пакет `qrcode` в браузере), список активных сессий в профиле; rate limit Better Auth в БД (`RateLimit`) и свой лимитер Server Actions (`src/shared/rate-limit`, `ActionRateLimit`), IP — из `X-Forwarded-For`
+- **Аутентификация:** Better Auth (1.7) с Prisma-адаптером как OIDC-клиент IdP «plwedding ID» (`leha-creator/auth`): плагин `genericOAuth`, провайдер `plwedding` (discovery `<OIDC_ISSUER>/.well-known/openid-configuration`, PKCE, `client_secret_basic`, проверка ID-токена, обязательный `email_verified`, имя/email/фото обновляются при каждом входе), колбэк `/api/auth/callback/plwedding`, выход через `end_session_endpoint` IdP; переменные `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`. Своих паролей, подтверждения email, 2FA и политики регистрации нет. Сессии в БД (cookie), список сессий в профиле; плагин `admin` — глобальная роль (`user` / `admin` в поле `User.role`), первый администратор назначается через `ADMIN_EMAILS` при первом входе; плагин `organization` — пространства, участники, роли и приглашения; провайдер GitHub — только привязка аккаунта для интеграции (вход через него запрещён); rate limit Better Auth в БД (`RateLimit`) и свой лимитер Server Actions (`src/shared/rate-limit`, `ActionRateLimit`), IP — из `X-Forwarded-For`
 - **UI:** Tailwind CSS + shadcn/ui; канбан — `@dnd-kit/core` + `@dnd-kit/sortable` (перетаскивание указателем, касанием и с клавиатуры); документы — Markdown (`react-markdown` + `remark-gfm`, сырой HTML не рендерится), редактор — текстовое поле с панелью форматирования; описание задачи — простой текст
 - **Порядок карточек:** `fractional-indexing` (дробные ключи, колонка `TaskPlacement.position` с `COLLATE "C"`)
 - **Валидация:** Zod (общие схемы для форм и серверных обработчиков)
 - **Хранение файлов:** S3-совместимое хранилище через `@aws-sdk/client-s3`. Локально — MinIO (образ `pgsty/minio`, официальные образы больше не публикуются), в продакшене — Yandex Object Storage (бакет `tasker-attachments`, создаёт infra). Загрузка из браузера напрямую в хранилище по presigned POST (`@aws-sdk/s3-presigned-post`), скачивание — по presigned GET (`@aws-sdk/s3-request-presigner`) через проверку доступа; `S3_PUBLIC_ENDPOINT` — адрес хранилища для браузера, CORS MinIO — `MINIO_API_CORS_ALLOW_ORIGIN`, CORS бакета в продакшене — infra. Вложения: до 25 МБ, типы по allowlist расширений, до 20 файлов на задачу и 10 на комментарий. Документы: до 50 МБ, квота пространства, ключи `ws/<workspaceId>/docs/<uuid>`
-- **Почта:** SMTP через nodemailer (`src/shared/mail`); локально — Mailpit (SMTP 1025, UI 8025) в docker-compose. Используется для приглашений в пространство
+- **Почта:** SMTP через nodemailer (`src/shared/mail`); локально — Mailpit (SMTP 1025, UI 8025) в docker-compose. Используется для приглашений в пространство, уведомлений и тестового письма администратора (письма входа отправляет IdP)
 - **Инфраструктура разработки:** pnpm, docker-compose (Postgres 18 на порту 5433, MinIO, Mailpit), Prisma 7 с `@prisma/adapter-pg`, pino, Vitest, ESLint + Prettier, husky + lint-staged
 - **Развёртывание:** один VPS (`https://tracker.plwedding.ru`) с docker compose: общий PostgreSQL 18 и edge-прокси Caddy (HTTPS, Let's Encrypt) из `leha-creator/infra`, файлы — в Yandex Object Storage, образы в GHCR, CD из GitHub Actions по SSH; почта — SMTP ящика на домене (`docs/production.md`)
 - **Интеграции:** GitHub — пакет `octokit` (GitHub App: токены установок, пользовательские токены), webhooks; GitHub App создаёт администратор из админки по манифесту (ключи в БД, зашифрованы) или задаёт переменными `GITHUB_*` (все или ни одной), модуль `src/modules/integrations/github`; MCP — `@modelcontextprotocol/sdk` (Streamable HTTP без сессий, JSON-ответы), модули `agents`, `api-tokens` и `agent-mcp`

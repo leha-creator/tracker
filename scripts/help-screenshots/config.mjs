@@ -29,3 +29,13 @@ export const USERS = {
 export const PENDING_INVITE_EMAIL = 'gleb@help.example.com';
 
 export const log = (...parts) => console.log('[help-screenshots]', ...parts);
+
+/**
+ * Локальный IdP plwedding ID: вход в Tasker только через него. Клиент tasker в IdP должен
+ * разрешать origin сервера справки (OIDC_TASKER_ORIGIN=http://localhost:3001).
+ */
+export const IDP_URL = (process.env.HELP_IDP_URL ?? 'http://localhost:3005').replace(/\/$/, '');
+/** Mailpit IdP: письма подтверждения email. */
+export const IDP_MAILPIT_URL = (
+  process.env.HELP_IDP_MAILPIT_URL ?? 'http://localhost:8026'
+).replace(/\/$/, '');

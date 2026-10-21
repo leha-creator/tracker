@@ -93,27 +93,31 @@ pnpm exec prisma migrate status               # «Database schema is up to date!
 
 ### Как переснять скриншоты
 
-Скрипт `scripts/help-screenshots/` (Playwright) засевает демо-данные через интерфейс и HTTP API и снимает экраны в `public/help-media/`. Ему нужен отдельный сервер с чистой базой: демо-пользователи регистрируются заново.
+Скрипт `scripts/help-screenshots/` (Playwright) засевает демо-данные через интерфейс и HTTP API и снимает экраны в `public/help-media/`. Ему нужны отдельный сервер с чистой базой и локальный IdP plwedding ID тоже с чистой базой: демо-пользователи регистрируются заново в IdP (`HELP_IDP_URL`, по умолчанию `http://localhost:3005`; письмо подтверждения email скрипт берёт из Mailpit IdP — `HELP_IDP_MAILPIT_URL`, по умолчанию `http://localhost:8026`) и входят в Tasker кнопкой «Войти через plwedding ID». Перед засевом скрипт проверяет discovery IdP и без него останавливается.
 
 1. Один раз установите браузер: `pnpm exec playwright install chromium`.
-2. Создайте пустую базу и примените миграции:
+2. Запустите IdP с чистой базой (как в [«Начале работы»](getting-started.md#вход-через-plwedding-id)), но с origin сервера справки: `OIDC_TASKER_ORIGIN=http://localhost:3001` в env IdP. Секрет — тот же, что `OIDC_CLIENT_SECRET` сервера справки.
+3. Создайте пустую базу Tasker и примените миграции:
 
    ```bash
    docker exec tasker-postgres-1 psql -U tasker -d tasker -c "CREATE DATABASE tasker_help"
    DATABASE_URL="postgresql://tasker:tasker@localhost:5433/tasker_help?schema=public" pnpm db:deploy
    ```
 
-3. Соберите приложение (`pnpm build`), скопируйте `public` и `.next/static` в `.next/standalone` и запустите сервер на порту 3001 без подтверждения почты:
+4. Соберите приложение (`pnpm build`), скопируйте `public` и `.next/static` в `.next/standalone` и запустите сервер на порту 3001 с локальным IdP:
 
    ```bash
    cd .next/standalone
    DATABASE_URL="postgresql://tasker:tasker@localhost:5433/tasker_help?schema=public" \
-   BETTER_AUTH_URL=http://localhost:3001 AUTH_REQUIRE_EMAIL_VERIFICATION=false PORT=3001 \
+   BETTER_AUTH_URL=http://localhost:3001 PORT=3001 \
+   OIDC_ISSUER=http://localhost:3005 OIDC_CLIENT_SECRET=<секрет клиента tasker в IdP> \
    node --env-file=../../.env server.js
    ```
 
+   `OIDC_ISSUER` и `OIDC_CLIENT_SECRET` можно не указывать, если они уже в `.env` и совпадают с env IdP.
+
    Порт 3001 выбран потому, что локальный MinIO разрешает CORS только для `http://localhost:3000` и `http://localhost:3001` (`MINIO_CORS_ALLOW_ORIGIN`). На другом порту загрузка вложений из браузера не пройдёт. Адрес сервера можно поменять переменной `HELP_APP_URL`.
-4. `pnpm help:screenshots` — засев и съёмка, около трёх минут.
+5. `pnpm help:screenshots` — засев и съёмка, около трёх минут.
 
 | Флаг | Что делает |
 |------|------------|
@@ -123,7 +127,7 @@ pnpm exec prisma migrate status               # «Database schema is up to date!
 | `--seed-step=<name>` | Выполнить один шаг засева |
 | `--allow-remote` | Разрешить нелокальный `HELP_APP_URL`. Без флага скрипт работает только с `localhost`, чтобы случайно не засеять боевой сервер |
 
-Засев можно продолжить после сбоя: выполненные шаги, пароли демо-пользователей и id созданных данных записываются в `scripts/help-screenshots/.state/` (в `.gitignore`). Там же в `errors/` лежит снимок экрана, на котором скрипт упал. Чтобы начать заново, пересоздайте базу и удалите `.state/`. `HELP_HEADED=1` показывает окно браузера.
+Засев можно продолжить после сбоя: выполненные шаги, пароли демо-пользователей и id созданных данных записываются в `scripts/help-screenshots/.state/` (в `.gitignore`). Там же в `errors/` лежит снимок экрана, на котором скрипт упал. Чтобы начать заново, пересоздайте базы Tasker и IdP и удалите `.state/`. `HELP_HEADED=1` показывает окно браузера.
 
 Кадр `claude-code-mcp/connect.png` снимается при засеве: окно с токеном показывается один раз. Токен на кадре заменён заглушкой. Если засев падает, скорее всего, поменялся интерфейс и справку нужно обновить.
 

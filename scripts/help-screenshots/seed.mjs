@@ -1,12 +1,12 @@
 // Засев демо-данных через интерфейс и HTTP API — те же сценарии, что описаны в справке.
 // Шаги идут по порядку; выполненные отмечаются в .state/seed.json, поэтому после сбоя
 // повторный запуск продолжает с упавшего шага.
-import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { goto, newUserContext, saveErrorShot, saveUserState, shoot } from './browser.mjs';
 import { prepareFixtures } from './fixtures.mjs';
+import { signUpThroughIdp } from './idp.mjs';
 import { BASE_URL, log, PENDING_INVITE_EMAIL, STATE_DIR, USERS, WORKSPACE } from './config.mjs';
 import { isoDay, pickDueDate, pickSelect, waitForPath } from './ui.mjs';
 
@@ -57,32 +57,11 @@ class Session {
 
 // --- шаги ------------------------------------------------------------------------------
 
-/** Регистрация через POST /api/auth/sign-up/email; cookie сессии остаются в контексте. */
+/** Регистрация в IdP plwedding ID и первый вход в Tasker; cookie сессии остаются в контексте. */
 async function signUpUsers(session) {
   for (const [key, user] of Object.entries(USERS)) {
-    const password = `Help-${randomBytes(9).toString('base64url')}`;
     const page = await session.page(key);
-    const response = await page.request.post('/api/auth/sign-up/email', {
-      headers: { origin: BASE_URL },
-      data: { name: user.name, email: user.email, password },
-    });
-    if (!response.ok()) {
-      const body = await response.text();
-      if (body.includes('USER_ALREADY_EXISTS') || body.includes('already exists')) {
-        throw new Error(
-          `${user.email} уже зарегистрирован: база не чистая. Сбросьте базу справки или запустите с --shots-only`,
-        );
-      }
-      throw new Error(`регистрация ${user.email}: ${response.status()} ${body.slice(0, 200)}`);
-    }
-    session.state.users[key] = { email: user.email, password };
-    // Без подтверждения почты сессия выдаётся сразу; если нет — сервер требует подтверждение.
-    await goto(page, '/');
-    if (new URL(page.url()).pathname.startsWith('/login')) {
-      throw new Error(
-        'после регистрации нет сессии: на сервере включено подтверждение почты (AUTH_REQUIRE_EMAIL_VERIFICATION=false)',
-      );
-    }
+    session.state.users[key] = await signUpThroughIdp(page, user);
     log(`seed: users — ${user.email}`);
   }
 }

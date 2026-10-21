@@ -27,7 +27,7 @@ docker build --target migrate -t tasker-migrate:local .
 
 ### Переменные окружения
 
-В образе нет секретов. В `ENV` заданы только `NODE_ENV=production`, `PORT=3000`, `HOSTNAME=0.0.0.0` и `NEXT_TELEMETRY_DISABLED=1`. Остальные переменные (`DATABASE_URL`, `BETTER_AUTH_*`, `S3_*`, `SMTP_*`, `LOG_LEVEL`) передаются при запуске контейнера, их список есть в [Конфигурации](configuration.md#переменные-приложения). Переменные валидируются лениво, поэтому `next build` работает без них.
+В образе нет секретов. В `ENV` заданы только `NODE_ENV=production`, `PORT=3000`, `HOSTNAME=0.0.0.0` и `NEXT_TELEMETRY_DISABLED=1`. Остальные переменные (`DATABASE_URL`, `BETTER_AUTH_*`, `OIDC_*`, `S3_*`, `SMTP_*`, `LOG_LEVEL`) передаются при запуске контейнера, их список есть в [Конфигурации](configuration.md#переменные-приложения). Переменные валидируются лениво, поэтому `next build` работает без них.
 
 Логи пишутся в stdout в формате JSON (pino) с уровнем `info` по умолчанию.
 
@@ -66,9 +66,10 @@ pnpm app:down   # останавливает контейнерный стек (
 | `APP_LOG_LEVEL` | `info` | `LOG_LEVEL` контейнера (не берётся из `LOG_LEVEL` в `.env`, где для dev стоит `debug`) |
 | `APP_IMAGE` / `MIGRATE_IMAGE` | `tasker:local` / `tasker-migrate:local` | Теги образов |
 | `BETTER_AUTH_SECRET`, `ADMIN_EMAILS`, `MAIL_FROM`, `S3_REGION`, `S3_BUCKET` | как в `.env.example` | Берутся из окружения или `.env` |
+| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | `http://localhost:3005`, `tasker`, локальный фиктивный секрет | IdP plwedding ID. Для smoke-теста `/api/health` IdP не нужен; чтобы войти в контейнерный стек, запустите локальный IdP с `OIDC_TASKER_ORIGIN=http://localhost:3001` и тем же секретом |
 | `POSTGRES_*`, `MINIO_ROOT_*` | как в `compose.yml` | Из них собираются `DATABASE_URL` и S3-ключи |
 
-Значения по умолчанию подходят только для локального запуска. В окружении с реальными данными задайте `BETTER_AUTH_SECRET`, пароли и ключи явно.
+Значения по умолчанию подходят только для локального запуска. В окружении с реальными данными задайте `BETTER_AUTH_SECRET`, `OIDC_CLIENT_SECRET`, пароли и ключи явно.
 
 ### Несколько реплик
 

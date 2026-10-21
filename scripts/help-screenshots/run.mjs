@@ -4,9 +4,10 @@
 //   pnpm help:screenshots --only=board     — снять одну статью
 //   pnpm help:screenshots --seed-only      — только засев
 //   --allow-remote                         — разрешить нелокальный HELP_APP_URL
-// Нужен отдельный сервер с чистой базой и AUTH_REQUIRE_EMAIL_VERIFICATION=false
-// (HELP_APP_URL, по умолчанию http://localhost:3001 — этот порт MinIO разрешает в CORS) — см. docs/development.md.
-import { BASE_URL, log } from './config.mjs';
+// Нужны сервер справки с чистой базой (HELP_APP_URL, по умолчанию http://localhost:3001 — этот
+// порт MinIO разрешает в CORS) и локальный IdP plwedding ID с чистой базой (HELP_IDP_URL, по
+// умолчанию http://localhost:3005; письма — Mailpit IdP, HELP_IDP_MAILPIT_URL) — см. docs/development.md.
+import { BASE_URL, IDP_URL, log } from './config.mjs';
 import { launchBrowser } from './browser.mjs';
 import { loadSeedState, runSeed, saveSeedState } from './seed.mjs';
 import { runShots } from './shots.mjs';
@@ -27,6 +28,15 @@ if (!LOCAL_HOSTS.has(new URL(BASE_URL).hostname) && !flag('allow-remote')) {
 const health = await fetch(new URL('/api/health', BASE_URL)).catch(() => null);
 if (!health?.ok) {
   console.error(`[help-screenshots] ${BASE_URL}/api/health недоступен — запустите сервер справки`);
+  process.exit(2);
+}
+
+// Вход в Tasker — только через IdP: без него засев не зарегистрирует пользователей.
+const discovery = await fetch(new URL('/.well-known/openid-configuration', IDP_URL)).catch(
+  () => null,
+);
+if (!discovery?.ok) {
+  console.error(`[help-screenshots] IdP ${IDP_URL} недоступен — запустите локальный plwedding ID`);
   process.exit(2);
 }
 
