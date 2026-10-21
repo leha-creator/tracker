@@ -397,8 +397,9 @@ jobs:
           ssh target "grep -q '^(access_log)' ${EDGE_DIR}/Caddyfile" || {
             echo "::error::${EDGE_DIR}/Caddyfile has no (access_log) snippet: apply infra/edge first (leha-creator/infra)"; exit 1;
           }
-          echo "::group::compose.yml, backup.sh, reminders.sh, cleanup.sh, release.env -> ${APP_DIR}; tracker.caddy -> ${EDGE_DIR}/sites"
-          scp deploy/tasker/compose.yml deploy/tasker/backup.sh deploy/tasker/reminders.sh deploy/tasker/cleanup.sh "target:${APP_DIR}/"
+          echo "::group::compose.yml, backup.sh, reminders.sh, cleanup.sh, files-sync.sh, release.env -> ${APP_DIR}; tracker.caddy -> ${EDGE_DIR}/sites"
+          scp deploy/tasker/compose.yml deploy/tasker/backup.sh deploy/tasker/reminders.sh deploy/tasker/cleanup.sh \
+            deploy/tasker/files-sync.sh "target:${APP_DIR}/"
           printf 'TASKER_TAG=%s\n' "${TAG}" | ssh target "cat > ${APP_DIR}/release.env"
           # Edge-прокси не видит переменных окружения стека — домен подставляется в файл сайта.
           sed "s/__DOMAIN__/${DOMAIN}/" deploy/tasker/tracker.caddy | ssh target "cat > ${EDGE_DIR}/sites/tracker.caddy"

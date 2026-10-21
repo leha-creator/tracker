@@ -48,7 +48,7 @@ function precheck(file: File): string | null {
   return null;
 }
 
-/** Сообщение по XML-ответу S3/MinIO с ошибкой. */
+/** Сообщение по XML-ответу S3 с ошибкой (MinIO локально, Yandex Object Storage в проде). */
 function storageErrorMessage(status: number, body: string): string {
   const code = /<Code>([^<]+)<\/Code>/.exec(body)?.[1];
   if (code === 'EntityTooLarge' || code === 'EntityTooSmall') {

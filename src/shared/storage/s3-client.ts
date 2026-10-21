@@ -22,7 +22,10 @@ function createClient(endpoint: string): S3Client {
   });
 }
 
-/** S3-клиент (singleton). Для MinIO используется path-style адресация. */
+/**
+ * S3-клиент (singleton): локально MinIO, в проде Yandex Object Storage. Адресация path-style
+ * (`S3_FORCE_PATH_STYLE`), её принимают оба.
+ */
 export function getS3Client(): S3Client {
   if (!globalForS3.s3Client) {
     const env = getEnv();

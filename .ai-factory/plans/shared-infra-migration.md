@@ -99,7 +99,9 @@ Rationale: План закрывает два оставшихся пункта 
   Логирование: не требуется.
   Зависит от: задач 1–3.
 
-- [ ] **Task 5: окно 1 — переезд базы** (на сервере, только с подтверждения владельца)
+- [x] **Task 5: окно 1 — переезд базы** (на сервере, только с подтверждения владельца)
+  **Выполнено 2026-10-21.** Простой 03:50:48–04:15:26 UTC: GitHub был недоступен с рабочей машины, шаг 6 сделан вручную по ssh теми же шагами, что джоб `deploy` (с разрешения владельца), затем повторён штатным CI-деплоем `sha-65f1450` (run 39543082947, все шаги зелёные). Счётчики до/после совпали: User 5, Task 85, TaskComment 52, TaskAttachment 14, Document 52, миграций 27; 50 таблиц, владелец `tasker`; GIN-индексы `pg_trgm` (2) используются. `tasker-postgres-1` удалён, том `tasker_postgres-data` сохранён.
+  **Осталось у владельца:** шаг 8 — под root выключить `tasker-backup-db.timer` (у `deploy` нет sudo; пока таймер безвреден — новый `backup.sh` дампит общую базу); шаг 9 — infra: `BACKUP_SOURCES` → `/opt/backups/dumps/tasker` и `infra-backup-restore-check`.
   Перед окном: Commit 1 и Commit 2 запушены. CI зелёный до `deploy`, `deploy` остановился на защите `TASKER_DB_PASSWORD` (ожидаемо), образ нового тега опубликован. Желательно, чтобы meet уже переехал (рекомендация infra), но это не обязательно.
   Шаги (`postgres-handoff.md`, «Порядок переезда»):
   1. Общая база пуста: `select count(*) from information_schema.tables where table_schema='public'` → `0`.
@@ -119,7 +121,8 @@ Rationale: План закрывает два оставшихся пункта 
 
 Блокер: infra создала бакет `tasker-attachments` и сервисный аккаунт (запись в `infra/docs/apply-log.md`). До этого выполняются только задачи 6–8 на тестовом бакете.
 
-- [ ] **Task 6: совместимость S3-клиента с Yandex (тестовый бакет)**
+- [x] **Task 6: совместимость S3-клиента с Yandex (тестовый бакет)**
+  **Итог 2026-10-21** (бакет `tasker-attachments-test`, `@aws-sdk/client-s3` 3.1151 со стандартными настройками): `HeadBucket`, presigned POST (204) и GET, `HeadObject`, `GetObject` c `Range`, `PutObject`, `DeleteObjects` — работают, код клиента не менялся (CRC32 Yandex принимает). Задержки 40–130 мс. Браузер с origin приложения: preflight `OPTIONS` 200, прогресс XHR идёт; у presigned GET нет `X-Frame-Options` и CSP, объект встраивается во `<iframe>`. **Срок политики Yandex проверяет в начале запроса:** загрузка 120 с при политике 60 с — 204, поэтому 50 МБ на медленном канале при TTL 10 мин проходят. Неверный размер — 400 `EntityTooLarge`, истёкшая политика — 403 `AccessDenied`: хуки загрузки показывают свои сообщения. Через UI приложения (`next start` на 3002) — загрузка вложений и скачивание через `/api/attachments/*` (302 на Yandex). Комментарии про MinIO обобщены.
   Владелец создаёт временный бакет `tasker-attachments-test` с CORS для `http://localhost:3000` (и тем же lifecycle) и статический ключ к нему. Ключ — только в локальном `.env`, после задачи бакет и ключ удаляются. Локальный `pnpm dev` с `S3_ENDPOINT=S3_PUBLIC_ENDPOINT=https://storage.yandexcloud.net`, `S3_REGION=ru-central1`, `S3_FORCE_PATH_STYLE=true`.
   Проверить все операции `src/shared/storage/objects.ts` и `health.ts`:
   - `HeadBucket` (`/api/health`) с ключом, у которого только ACL бакета;
@@ -130,7 +133,7 @@ Rationale: План закрывает два оставшихся пункта 
   - Комментарии с «MinIO» в `s3-client.ts`, `env.ts`, хуках загрузки обобщить до «S3 (MinIO локально, Yandex Object Storage в проде)».
   Логирование: `info` при создании клиента — endpoint, region, forcePathStyle, режим checksum, без ключей. Ошибки операций — `error` с `bucket`, `key`, кодом S3 (уже так; проверить, что код ошибки Yandex попадает в лог).
 
-- [ ] **Task 7: скрипт ключа `deploy/rotate-storage-key.sh`**
+- [x] **Task 7: скрипт ключа `deploy/rotate-storage-key.sh`**
   По образцу `D:\work\meet\deploy\rotate-yc-keys.sh`, только статический ключ:
   - `yc --profile ${YC_PROFILE:-aandreev} iam access-key create --service-account-name tasker-attachments --description "tasker prod app <YYYY-MM-DD>" --format json`, с тем же повтором только при `error dialing endpoint`;
   - разбор JSON (`node -e`, как в meet), секрет — только в переменной, на сервер уходит через stdin `ssh` (`APP_HOST=${APP_HOST:-deploy@95.163.229.132}`, `SSH_KEY=${SSH_KEY:-$HOME/.ssh/tasker_deploy}`): `umask 077`, копия `.env.bak-<дата>` (`600`), слияние ключей `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` через `awk`, атомарный `mv`;
@@ -141,7 +144,8 @@ Rationale: План закрывает два оставшихся пункта 
   Проверка: `sh -n`, shellcheck, прогон с подставными `yc`/`ssh` (функции в PATH из scratchpad), которые проверяют, что секрет не встречается в argv и выводе.
   Логирование: `[keys] <шаг>: ok|fail (<причина>)`, секрет и полный `key_id` не печатаются.
 
-- [ ] **Task 8: перенос файлов `deploy/tasker/files-sync.sh`**
+- [x] **Task 8: перенос файлов `deploy/tasker/files-sync.sh`**
+  **Итог:** rclone `1.71.2`; `--checksum` не нужен — `rclone check` сравнивает MD5 (ETag одиночных загрузок у MinIO и Yandex совпадают). Обратное направление — `copy` (без удалений) и `check --one-way`. Проверено локально: MinIO → тестовый бакет (24 файла, 0 расхождений), расхождение ловится в обе стороны (код 1), `--reverse` докопировал новый объект.
   Запускается на сервере под `deploy` из `/opt/tasker` (CI копирует его вместе с `backup.sh` до задачи 12):
   - `files-sync.sh sync|check [--reverse]`: `rclone sync`/`rclone check` между MinIO (`http://minio:9000`, сеть `tasker`, учётка `MINIO_ROOT_*`) и Yandex (`https://storage.yandexcloud.net`, `ru-central1`, `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY`), бакет `S3_BUCKET` с обеих сторон, пути объектов не меняются. `--reverse` — обратное направление для отката;
   - rclone в контейнере (`rclone/rclone:<точная версия>`), конфиг — через переменные `RCLONE_CONFIG_SRC_*`/`RCLONE_CONFIG_DST_*` во временном `--env-file` (`umask 077`, `mktemp`, удаляется через `trap`), а не в argv;

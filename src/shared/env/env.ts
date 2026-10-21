@@ -43,7 +43,8 @@ const envSchema = z
     S3_FORCE_PATH_STYLE: z.stringbool().default(true),
     /**
      * Адрес хранилища, видимый браузеру: на него подписываются ссылки загрузки и скачивания.
-     * По умолчанию — S3_ENDPOINT (в Docker сервер ходит в minio:9000, а браузер — в localhost).
+     * По умолчанию — S3_ENDPOINT (в Docker сервер ходит в minio:9000, а браузер — в localhost;
+     * в проде оба адреса — https://storage.yandexcloud.net).
      */
     S3_PUBLIC_ENDPOINT: z.url().optional(),
     /** Квота файлового хранилища одного пространства (раздел «Документы»), МБ. */
