@@ -10,7 +10,7 @@ Tasker — простой таск-трекер с рабочими простр
 
 - **Язык программирования:** TypeScript (strict)
 - **Фреймворк:** Next.js 16 (App Router, Cache Components)
-- **База данных:** PostgreSQL 17
+- **База данных:** PostgreSQL 18 (в проде — общий экземпляр из `leha-creator/infra`)
 - **ORM:** Prisma 7 (генератор `prisma-client`, driver adapter `@prisma/adapter-pg`)
 - **Аутентификация:** Better Auth 1.7 — email + пароль с подтверждением email и сбросом по почте, плагин `admin` (глобальная роль `user` / `admin`), плагин `organization` (пространства: роли `owner` / `member`, приглашения), плагин `twoFactor` (TOTP + резервные коды; QR — пакет `qrcode`); rate limit в БД
 - **UI:** Tailwind CSS v4 + shadcn/ui (radix)
@@ -133,9 +133,9 @@ tasker/
 │   │   ├── resource-settings/ # Настройки ресурса: группы «Регистрация» (политика, evaluateSignup для хука Better Auth) и «Хранилище» (квота по умолчанию), кеш процесса
 │   │   └── health/           # checkHealth() — агрегирует проверки
 │   └── test/                 # Вспомогательное для Vitest
-├── deploy/                   # Сервер (https://tracker.plwedding.ru), см. docs/production.md; общая часть сервера (хост, edge-прокси, вывоз дампов) — leha-creator/infra
-│   ├── bootstrap-app-server.sh # Разовая подготовка под Tasker: /opt/tasker, ключ деплоя, .env, таймеры; без сети edge и /opt/edge/sites (их готовит infra) останавливается
-│   └── tasker/               # Прод-стек: compose.yml, tracker.caddy (сайт), .env.example, backup.sh, reminders.sh (запуск напоминаний через docker exec), cleanup.sh (очистка журнала), systemd/ (в т.ч. tasker-reminders.timer, tasker-cleanup.timer)
+├── deploy/                   # Сервер (https://tracker.plwedding.ru), см. docs/production.md; общая часть сервера (хост, edge-прокси, общий PostgreSQL 18, вывоз дампов) — leha-creator/infra
+│   ├── bootstrap-app-server.sh # Разовая подготовка под Tasker: /opt/tasker, ключ деплоя, .env (пароль БД из /opt/postgres/.env), таймеры; без сетей edge и db и /opt/edge/sites (их готовит infra) останавливается
+│   └── tasker/               # Прод-стек: compose.yml (своего Postgres нет — сеть db), tracker.caddy (сайт), .env.example, backup.sh (копия БД перед миграциями — клиент в сети db), reminders.sh (запуск напоминаний через docker exec), cleanup.sh (очистка журнала), systemd/ (в т.ч. tasker-reminders.timer, tasker-cleanup.timer)
 ├── scripts/help-screenshots/ # pnpm help:screenshots — Playwright: засев демо-данных через UI и API, съёмка в public/help-media/ (.state/ — в .gitignore)
 ├── public/help-media/        # Скриншоты справки: <article>/<name>.png
 ├── public/brand/             # Файлы знака: logo*.svg, icon-192/512.png, logo-mail.png (письма), og.png
@@ -196,7 +196,7 @@ tasker/
 | `compose.yml` | Локальная инфраструктура |
 | `Dockerfile` / `compose.app.yml` | Образ приложения и миграций, запуск стека в Docker |
 | `.github/workflows/ci.yml` | GitHub Actions: проверки, публикация образов, деплой и откат |
-| `deploy/tasker/compose.yml` | Прод-стек на сервере (без портов на хост, сеть `edge`) |
+| `deploy/tasker/compose.yml` | Прод-стек на сервере (без портов на хост, сети `edge` и `db`) |
 | `.mcp.json` | Конфигурация MCP-серверов |
 
 ## Команды

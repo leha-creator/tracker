@@ -1,4 +1,5 @@
-# Прод-стек Tasker на сервере: PostgreSQL, MinIO, миграции и приложение.
+# Прод-стек Tasker на сервере: MinIO, миграции и приложение. PostgreSQL — общий из
+# leha-creator/infra (postgres/; сеть `db`, хост postgres:5432, роль и база tasker).
 #
 # На сервере лежит в /opt/tasker; копируется workflow деплоя (.github/workflows/ci.yml, джоб deploy).
 # Секреты — в /opt/tasker/.env (создаётся один раз, см. .env.example рядом и
@@ -18,27 +19,6 @@ x-logging: &logging
     max-file: '3'
 
 services:
-  postgres:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    security_opt:
-      - no-new-privileges:true
-    mem_limit: 256m
-    logging: *logging
-    networks:
-      - tasker
-
   minio:
     image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     restart: unless-stopped
@@ -92,18 +72,15 @@ services:
   # Разово применяет миграции Prisma и завершается; app стартует только после успеха.
   migrate:
     image: ghcr.io/leha-creator/tracker-migrate:${TASKER_TAG:?TASKER_TAG is required}
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      DATABASE_URL: postgresql://tasker:${TASKER_DB_PASSWORD:?TASKER_DB_PASSWORD is required}@postgres:5432/tasker?schema=public
     restart: 'no'
     security_opt:
       - no-new-privileges:true
     mem_limit: 384m
     logging: *logging
     networks:
-      - tasker
+      - db
 
   app:
     image: ghcr.io/leha-creator/tracker:${TASKER_TAG:?TASKER_TAG is required}
@@ -117,7 +94,7 @@ services:
       NODE_ENV: production
       NODE_OPTIONS: --max-old-space-size=384
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      DATABASE_URL: postgresql://tasker:${TASKER_DB_PASSWORD:?TASKER_DB_PASSWORD is required}@postgres:5432/tasker?schema=public
       S3_ENDPOINT: http://minio:9000
       # Ссылки вложений подписываются на публичный домен: https://<домен>/<бакет>/<ключ>.
       S3_PUBLIC_ENDPOINT: https://${DOMAIN}
@@ -159,7 +136,9 @@ services:
     mem_limit: 512m
     logging: *logging
     networks:
+      # tasker — MinIO, db — общий Postgres, edge — входящий трафик через edge-прокси.
       tasker: {}
+      db: {}
       edge:
         aliases: [tasker-app]
 
@@ -169,7 +148,13 @@ networks:
   edge:
     external: true
     name: edge
+  # Общий Postgres (infra/postgres/compose.yml): сеть internal, создаёт infra/host/bootstrap-server.sh.
+  # Хост postgres:5432 есть только в ней — своего сервиса postgres в стеке нет, имя не двоится.
+  db:
+    external: true
+    name: db
 
+# Том tasker_postgres-data (свой PG 17 до переезда) compose больше не описывает и не удаляет:
+# он хранится неделю после переезда для отката (docs/production.md).
 volumes:
-  postgres-data: {}
   minio-data: {}

@@ -2,7 +2,7 @@
 
 # Продакшен
 
-Tasker работает на `https://tracker.plwedding.ru`, сервер `95.163.229.132` (Ubuntu 26.04, 1 vCPU, 2 GB RAM + 2 GB swap). На том же сервере работают meet и стенд maxim (`dev.plwedding.ru`). Общие сервисы сервера — подготовка хоста, edge-прокси и вывоз дампов БД за пределы сервера — живут в [`leha-creator/infra`](https://github.com/leha-creator/infra), здесь только стек Tasker. Каждый пуш в `main` после зелёных проверок публикует образы в GHCR и деплоит их на сервер.
+Tasker работает на `https://tracker.plwedding.ru`, сервер `95.163.229.132` (Ubuntu 26.04, 1 vCPU, 2 GB RAM + 2 GB swap). На том же сервере работают meet и стенд maxim (`dev.plwedding.ru`). Общие сервисы сервера — подготовка хоста, edge-прокси, общий PostgreSQL 18 и вывоз дампов БД за пределы сервера — живут в [`leha-creator/infra`](https://github.com/leha-creator/infra), здесь только стек Tasker. Каждый пуш в `main` после зелёных проверок публикует образы в GHCR и деплоит их на сервер.
 
 ```
 push в main ──► CI: check, migrations, docker ──► publish (GHCR) ──► deploy (SSH → docker compose)
@@ -10,7 +10,8 @@ push в main ──► CI: check, migrations, docker ──► publish (GHCR) �
 интернет ──► edge-caddy-1 :80/:443 ──► сеть edge ──► tasker-app:3000      (всё, кроме бакета)
                                                  ├─► tasker-minio:9000    (/tasker-attachments/*)
                                                  └─► maxim-mockapi:8080   (dev.plwedding.ru)
-                         tasker-app ──► сеть tasker ──► postgres:5432, minio:9000
+                         tasker-app ──► сеть tasker ──► minio:9000
+                         tasker-app ──► сеть db     ──► postgres:5432        (общий PostgreSQL 18, infra)
 ```
 
 ## Что где лежит
@@ -22,7 +23,9 @@ push в main ──► CI: check, migrations, docker ──► publish (GHCR) �
 | `/opt/tasker/compose.yml` | Прод-стек (из `deploy/tasker/compose.yml`) | CI при каждом деплое |
 | `/opt/tasker/.env` | Секреты и настройки стека (`600`, владелец `deploy`) | Один раз `bootstrap-app-server.sh`, дальше вручную |
 | `/opt/tasker/release.env` | `TASKER_TAG=sha-xxxxxxx` — текущий релиз | CI при каждом деплое |
-| `/opt/tasker/backup.sh`, `/opt/tasker/backups/` | Скрипт и резервные копии | CI (скрипт), таймеры (копии) |
+| `/opt/tasker/backup.sh`, `/opt/tasker/backups/` | Скрипт и резервные копии | CI (скрипт и копия БД перед миграциями), таймер (копии файлов) |
+| `/opt/postgres/` | Общий PostgreSQL 18: роль и база `tasker`, пароль — `TASKER_DB_PASSWORD` в `/opt/postgres/.env`, см. [`infra/postgres/README.md`](https://github.com/leha-creator/infra/blob/main/postgres/README.md) | infra (`postgres/install.sh`) |
+| `/opt/backups/dumps/tasker/` | Ежедневные дампы общей базы Tasker (7 копий), вывоз в Object Storage | infra (`backups/`) |
 | `/opt/tasker/reminders.sh` | Запуск напоминаний о сроке | CI при каждом деплое |
 | `/opt/tasker/cleanup.sh` | Очистка журнала действий и счётчиков лимитов | CI при каждом деплое |
 | `/etc/systemd/system/tasker-backup*` | Таймеры резервных копий | `bootstrap-app-server.sh` |
@@ -34,13 +37,16 @@ push в main ──► CI: check, migrations, docker ──► publish (GHCR) �
 
 ### Что CI Tasker ждёт от infra
 
-Деплой опирается на контракты общего edge-прокси (раздел «Неизменяемые контракты» в [`infra/edge/README.md`](https://github.com/leha-creator/infra/blob/main/edge/README.md)). Меняются они только вместе с CI проектов:
+Деплой опирается на контракты общего edge-прокси (раздел «Неизменяемые контракты» в [`infra/edge/README.md`](https://github.com/leha-creator/infra/blob/main/edge/README.md)) и общего Postgres (раздел «Контракты» в [`infra/docs/postgres-handoff.md`](https://github.com/leha-creator/infra/blob/main/docs/postgres-handoff.md)). Меняются они только вместе с CI проектов:
 
 - файл сайта `/opt/edge/sites/tracker.caddy` пишет пользователь `deploy` (каталог `root:deploy`, `2775`);
 - `cd /opt/edge && docker compose exec -T caddy caddy validate|reload --config /etc/caddy/Caddyfile --adapter caddyfile` — проект `edge`, сервис `caddy`;
 - внешняя docker-сеть `edge`, алиасы `tasker-app` и `tasker-minio`;
 - сниппет `(access_log)` в `/opt/edge/Caddyfile`: `tracker.caddy` делает `import access_log`, и деплой останавливается до загрузки файлов, если сниппета нет;
-- дампы `tasker-*.dump` в `/opt/tasker/backups/db` (владелец `deploy`) — их забирает вывоз бэкапов infra.
+- внешняя docker-сеть `db` (internal), хост `postgres:5432`, роль и база `tasker`, пароль роли — ключ `TASKER_DB_PASSWORD` в `/opt/postgres/.env` (переносится в `/opt/tasker/.env`);
+- дампы `tasker-*.dump` в `/opt/tasker/backups/db` (владелец `deploy`) — их забирает вывоз бэкапов infra, пока его источник не переключён на `/opt/backups/dumps/tasker` (после переезда на общий Postgres).
+
+Шаг `Preflight` деплоя проверяет это до любых изменений на сервере: сеть `db`, непустой `TASKER_DB_PASSWORD` в `.env` и — пока на сервере есть старый том `tasker_postgres-data` — что в общей базе уже есть схема (`_prisma_migrations`). Так коммит переключения, запушенный раньше переноса данных, не поднимет приложение на пустой базе.
 
 ## Прод-стек
 
@@ -48,13 +54,14 @@ push в main ──► CI: check, migrations, docker ──► publish (GHCR) �
 
 | Сервис | Образ | Лимит памяти | Назначение |
 |--------|-------|--------------|------------|
-| `postgres` | `postgres:17-alpine` | 256m | БД, том `tasker_postgres-data` |
 | `minio` | `pgsty/minio` | 320m | Вложения, том `tasker_minio-data`; консоль выключена (`MINIO_BROWSER=off`) |
 | `minio-init` | `pgsty/mc` | — | Разово создаёт приватный бакет |
 | `migrate` | `ghcr.io/leha-creator/tracker-migrate:<tag>` | 384m | Разово применяет миграции; `app` стартует только после успеха |
 | `app` | `ghcr.io/leha-creator/tracker:<tag>` | 512m | Next.js, `NODE_OPTIONS=--max-old-space-size=384` |
 
 Портов на хост стек не публикует. `app` и `minio` подключены к внешней сети `edge` с алиасами `tasker-app` и `tasker-minio`. Логи docker ротируются: 3 файла по 10 MB на контейнер.
+
+Своего Postgres в стеке нет: `migrate` и `app` подключены к внешней сети `db` и ходят в общий PostgreSQL 18 из infra (`postgres:5432`, роль и база `tasker`, `DATABASE_URL` собирается в `compose.yml` из `TASKER_DB_PASSWORD`). У роли `CONNECTION LIMIT 20`: пул `pg` приложения (до 10 соединений) и `migrate` в него укладываются. Расширения (`pg_trgm`) ставит infra, миграции делают только `CREATE EXTENSION IF NOT EXISTS`.
 
 ### Вложения через тот же домен
 
@@ -123,32 +130,88 @@ docker image prune -af --filter "until=1h"    # удалить образы бе
 
 ## Резервные копии
 
-`/opt/tasker/backup.sh` запускают таймеры systemd под `deploy`:
+| Что | Кто и когда | Где | Хранится |
+|-----|-------------|-----|----------|
+| Дамп общей базы | infra, ежедневно 04:30 UTC (`infra-backup-dump`), вывоз в Object Storage и еженедельная проверка восстановления | `/opt/backups/dumps/tasker/` | 7 последних |
+| Копия БД перед миграциями | CI, шаг `Backup database` (`backup.sh db`) | `/opt/tasker/backups/db/tasker-<UTC>.dump` | 7 последних |
+| Файлы MinIO | `tasker-backup-files.timer`, воскресенье 04:00 UTC (`backup.sh files`) | `/opt/tasker/backups/files/files-<UTC>.tar.gz` | 2 последних |
 
-| Таймер | Расписание (UTC) | Что | Хранится |
-|--------|------------------|-----|----------|
-| `tasker-backup-db.timer` | ежедневно 03:30 | `pg_dump -Fc` → `backups/db/tasker-<UTC>.dump` | 7 последних |
-| `tasker-backup-files.timer` | воскресенье 04:00 | tar тома MinIO → `backups/files/files-<UTC>.tar.gz` | 2 последних |
+`backup.sh db` снимает дамп временным клиентом `postgres:18.6-alpine` в сети `db` под ролью `tasker`; пароль берётся из `/opt/tasker/.env` и передаётся через окружение. Без пароля, сети `db` или соединения скрипт завершается ошибкой, и деплой не запускает миграции. Пустую базу (первый деплой на новом сервере) он пропускает. Вручную: `sh /opt/tasker/backup.sh db` или `files`. Журнал таймера: `journalctl -u 'tasker-backup@*'`, расписание: `systemctl list-timers 'tasker-*'`.
 
-Кроме того, деплой делает копию БД перед каждой миграцией. Вручную: `sh /opt/tasker/backup.sh db` или `files`. Журнал: `journalctl -u 'tasker-backup@*'`, проверка расписания: `systemctl list-timers 'tasker-*'`.
+Копии в `/opt/tasker/backups` лежат на том же диске: они защищают от ошибок и неудачных миграций, но не от потери сервера. За пределы сервера уходят только дампы БД (infra). Копии файлов MinIO не вывозятся: их стоит периодически выгружать с сервера (`scp`).
 
-Копии лежат на том же диске. Они защищают от ошибок и неудачных миграций, но не от потери сервера. Дампы БД каждый день вывозит в Object Storage infra (`backups/`, там же еженедельная проверка восстановления). Копии файлов MinIO не вывозятся: их стоит периодически выгружать с сервера (`scp`).
-
-Восстановление БД:
+Восстановление БД (поверх текущих данных; на время восстановления остановить `app`):
 
 ```bash
-docker exec -i tasker-postgres-1 sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' \
-  < /opt/tasker/backups/db/tasker-<UTC>.dump
+$C stop app
+PGPASSWORD="$(sed -n 's/^TASKER_DB_PASSWORD=//p' /opt/tasker/.env)" \
+  docker run --rm --network db -e PGPASSWORD -v /opt/tasker/backups/db:/backups:ro postgres:18.6-alpine \
+  sh -c 'pg_restore -l "/backups/$0" | grep -v " EXTENSION " > /tmp/restore.list &&
+    pg_restore -h postgres -U tasker -d tasker --no-owner --role=tasker --clean --if-exists \
+      --exit-on-error -L /tmp/restore.list "/backups/$0"' \
+  tasker-<UTC>.dump
+$C up -d --wait app
 ```
+
+Записи `EXTENSION` исключены списком (`-L`): `pg_trgm` принадлежит infra, и `DROP`/`COMMENT ON EXTENSION` от имени `tasker` падают с `must be owner of extension`. Ежедневный дамп infra восстанавливается так же — с `-v /opt/backups/dumps/tasker:/backups:ro`.
 
 Восстановление файлов (при остановленном `minio`):
 
 ```bash
 $C stop minio
-docker run --rm -v tasker_minio-data:/data -v /opt/tasker/backups/files:/backup postgres:17-alpine \
+docker run --rm -v tasker_minio-data:/data -v /opt/tasker/backups/files:/backup postgres:18.6-alpine \
   sh -c 'rm -rf /data/* /data/.[!.]* && tar xzf /backup/files-<UTC>.tar.gz -C /data'
 $C up -d minio
 ```
+
+## Переезд на общий Postgres
+
+Разовый переезд со своего `tasker-postgres-1` (PG 17, том `tasker_postgres-data`) в общий PostgreSQL 18 из infra. Источник — [`infra/docs/postgres-handoff.md`](https://github.com/leha-creator/infra/blob/main/docs/postgres-handoff.md). Простой — 10–15 минут. `pg_restore` 18 читает дампы 17.
+
+**До окна.** Коммит с новым `compose.yml` запушен, `publish` прошёл, а `deploy` остановился на шаге `Preflight` с `TASKER_DB_PASSWORD is not set` — так и задумано: на сервере ещё ничего не менялось, работает прежняя версия. Запомнить тег релиза `sha-xxxxxxx` (в выводе `publish`).
+
+**Окно** (под `deploy` на сервере, `C` — как в «Частых действиях»):
+
+```bash
+# 1. Общая база пуста → 0
+docker exec postgres-postgres-1 psql -U postgres -d tasker -tAc \
+  "select count(*) from information_schema.tables where table_schema='public'"
+# 2. Счётчики старой базы — для сверки в шаге 7
+docker exec tasker-postgres-1 sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
+  "select (select count(*) from \"User\"), (select count(*) from \"Task\"), (select count(*) from \"TaskComment\")"'
+# 3. Остановить приложение и снять свежий дамп. backup.sh на сервере ещё прежний
+#    (Preflight остановил деплой до загрузки файлов) — он дампит старый контейнер.
+$C stop app
+sh /opt/tasker/backup.sh db
+# 4. Восстановить в общий Postgres от имени роли tasker, без записей EXTENSION
+dump=$(ls -1t /opt/tasker/backups/db/tasker-*.dump | head -1)
+docker cp "$dump" postgres-postgres-1:/tmp/move.dump
+docker exec postgres-postgres-1 sh -c '
+  pg_restore -l /tmp/move.dump | grep -v " EXTENSION " > /tmp/move.list &&
+  pg_restore -U postgres -d tasker --no-owner --role=tasker --exit-on-error -L /tmp/move.list /tmp/move.dump'
+docker exec postgres-postgres-1 rm -f /tmp/move.dump /tmp/move.list
+# 5. Перенести пароль роли (значение не выводится)
+pw="$(sed -n 's/^TASKER_DB_PASSWORD=//p' /opt/postgres/.env)"
+grep -q '^TASKER_DB_PASSWORD=' /opt/tasker/.env \
+  && sed -i "s|^TASKER_DB_PASSWORD=.*|TASKER_DB_PASSWORD=$pw|" /opt/tasker/.env \
+  || echo "TASKER_DB_PASSWORD=$pw" >> /opt/tasker/.env
+unset pw
+```
+
+6. С рабочей машины — деплой того же тега: `gh workflow run CI --ref main -f tag=sha-xxxxxxx`. Ожидается: `Preflight` — `shared database: ok`, `backup.sh db` дампит уже общую базу, `migrate` — «No pending migrations», `app` healthy, smoke 200. Старый `tasker-postgres-1` удаляется (`--remove-orphans`), том `tasker_postgres-data` остаётся.
+7. Проверки: `https://tracker.plwedding.ru/api/health` — `status: ok`, `checks.db.ok: true`; вход, список задач, поиск (`pg_trgm`), создание задачи и комментария; счётчики из шага 2 совпадают:
+
+   ```bash
+   docker exec postgres-postgres-1 psql -U postgres -d tasker -tAc \
+     "select (select count(*) from \"User\"), (select count(*) from \"Task\"), (select count(*) from \"TaskComment\")"
+   ```
+
+8. Выключить прежний таймер дампа (теперь его делает infra) — под root: `systemctl disable --now tasker-backup-db.timer && rm /etc/systemd/system/tasker-backup-db.timer && systemctl daemon-reload` или повторный запуск `bootstrap-app-server.sh` из свежего `deploy/`.
+9. Владельцу infra: в `/opt/backups/.env` переключить источник `tasker` в `BACKUP_SOURCES` на `/opt/backups/dumps/tasker` и прогнать `infra-backup-restore-check` (ожидается `pg_restore source=tasker tables=<n>`). См. «После переезда — в infra» в handoff.
+
+**Откат** (пока жив том `tasker_postgres-data`, неделю): `git revert` коммита переключения и пуш — деплой вернёт свой `postgres` на старом томе. `Preflight` при этом не мешает: `TASKER_DB_PASSWORD` задан, схема в общей базе есть. Данные, записанные после переезда, переносятся дампом в обратную сторону. Деплой старого тега через `workflow_dispatch` не откатывает: он берёт `compose.yml` из текущего `main`.
+
+**Через неделю** после зелёной проверки восстановления: `docker volume rm tasker_postgres-data`, из `/opt/tasker/.env` убрать `POSTGRES_*`, `docker rmi postgres:17-alpine`.
 
 ## Напоминания о сроке
 
@@ -228,9 +291,9 @@ MAIL_FROM="Tasker <no-reply@plwedding.ru>"
 
 ## Новый сервер
 
-Сначала bootstrap infra, потом bootstrap Tasker: скрипт Tasker общий edge-прокси не создаёт и без него останавливается.
+Сначала bootstrap infra, потом bootstrap Tasker: скрипт Tasker общие edge-прокси и Postgres не создаёт и без них останавливается.
 
-1. Подготовка хоста из [`leha-creator/infra`](https://github.com/leha-creator/infra): Docker с плагином compose, пользователь `deploy` в группе `docker`, ufw (22/80/443), swap, `/opt/edge` и `sites/`, сеть `edge`, MSS clamping, проверки sshd — `host/bootstrap-server.sh` (см. [`infra/host/README.md`](https://github.com/leha-creator/infra/blob/main/host/README.md)). Затем запустить edge-прокси по [`infra/edge/README.md`](https://github.com/leha-creator/infra/blob/main/edge/README.md).
+1. Подготовка хоста из [`leha-creator/infra`](https://github.com/leha-creator/infra): Docker с плагином compose, пользователь `deploy` в группе `docker`, ufw (22/80/443), swap, `/opt/edge` и `sites/`, сети `edge` и `db`, MSS clamping, проверки sshd — `host/bootstrap-server.sh` (см. [`infra/host/README.md`](https://github.com/leha-creator/infra/blob/main/host/README.md)). Затем запустить edge-прокси по [`infra/edge/README.md`](https://github.com/leha-creator/infra/blob/main/edge/README.md) и общий Postgres — `postgres/install.sh` (роль и база `tasker` с `pg_trgm`, пароль в `/opt/postgres/.env`, см. [`infra/postgres/README.md`](https://github.com/leha-creator/infra/blob/main/postgres/README.md)).
 2. Подготовка под Tasker (повторный запуск безопасен, существующий `.env` не меняется):
 
    ```bash
@@ -239,10 +302,10 @@ MAIL_FROM="Tasker <no-reply@plwedding.ru>"
      sh /tmp/tasker-deploy/bootstrap-app-server.sh"
    ```
 
-   Скрипт проверяет пользователя `deploy`, Docker, сеть `edge` и `/opt/edge/sites` и при их отсутствии останавливается с `fail: …` до любых изменений. Затем создаёт `/opt/tasker`, добавляет ключ деплоя, генерирует секреты в `/opt/tasker/.env` (включая `CRON_SECRET`) и ставит таймеры бэкапов, напоминаний и очистки. В `/opt/edge` он ничего не пишет.
-3. Обновить `DEPLOY_HOST` и `DEPLOY_KNOWN_HOSTS` в GitHub и запустить workflow.
+   Скрипт проверяет пользователя `deploy`, Docker, сети `edge` и `db` и `/opt/edge/sites` и при их отсутствии останавливается с `fail: …` до любых изменений. Затем создаёт `/opt/tasker`, добавляет ключ деплоя, генерирует секреты в `/opt/tasker/.env` (включая `CRON_SECRET`), подставляет `TASKER_DB_PASSWORD` из `/opt/postgres/.env` и ставит таймеры копии файлов, напоминаний и очистки. В `/opt/edge` и `/opt/postgres` он ничего не пишет.
+3. Обновить `DEPLOY_HOST` и `DEPLOY_KNOWN_HOSTS` в GitHub и запустить workflow. На пустой общей базе `backup.sh db` пропускает копию, `migrate` создаёт схему с нуля.
 
-Перенос данных: `backup.sh db` и `files` на старом сервере, файлы — на новый, восстановление командами выше.
+Перенос данных: `backup.sh db` и `files` на старом сервере, файлы — на новый, восстановление командами из «Резервных копий».
 
 ## GitHub App
 
@@ -311,7 +374,7 @@ curl -sN https://tracker.plwedding.ru/api/realtime/w/<slug> -H 'cookie: __Secure
 
 ## Безопасность
 
-- Снаружи открыты только 22, 80 и 443. Postgres и MinIO наружу не публикуются, из MinIO через прокси доступен только путь бакета. Анонимный доступ к бакету закрыт.
+- Снаружи открыты только 22, 80 и 443. Postgres и MinIO наружу не публикуются, из MinIO через прокси доступен только путь бакета. Анонимный доступ к бакету закрыт. Общий Postgres доступен только из сети `db` (internal); роль `tasker` подключается только к своей базе (`pg_hba.conf` infra).
 - Ответы содержат `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`; заголовок `Server` убран. Куки сессии в production — `__Secure-`.
 - Пользователь `deploy` в группе `docker` фактически равен root. Ключ `tasker_deploy` используется только для Tasker и отзывается независимо от ключа maxim (удалить строку `tasker-ci` из `/home/deploy/.ssh/authorized_keys`).
 - По умолчанию регистрация открыта для всех, у кого есть ссылка, но войти можно только после подтверждения email. Закрыть её, оставить только по приглашению или ограничить доменами email можно в админке (`/admin/settings`). Роль admin получают только адреса из `ADMIN_EMAILS` в момент регистрации; они регистрируются при любом режиме.
@@ -327,3 +390,4 @@ curl -sN https://tracker.plwedding.ru/api/realtime/w/<slug> -H 'cookie: __Secure
 - [Claude Code и MCP](agents.md): токены доступа и подключение агентов
 - [`infra/edge/README.md`](https://github.com/leha-creator/infra/blob/main/edge/README.md): edge-прокси, контракты и подключение проектов
 - [`infra/host/README.md`](https://github.com/leha-creator/infra/blob/main/host/README.md): подготовка хоста
+- [`infra/postgres/README.md`](https://github.com/leha-creator/infra/blob/main/postgres/README.md): общий PostgreSQL 18, роли, базы и подключение приложений

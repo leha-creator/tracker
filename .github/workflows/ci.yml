@@ -359,6 +359,37 @@ jobs:
           ssh target 'echo "connected to $(hostname) as $(whoami)"'
           ssh target "test -f ${APP_DIR}/.env" || { echo "::error::${APP_DIR}/.env is missing: run infra/host/bootstrap-server.sh, then deploy/bootstrap-app-server.sh"; exit 1; }
 
+      # Проверки до любых изменений на сервере. Пуш коммита, переключающего стек на общую
+      # инфраструктуру, раньше ручного переноса данных останавливается здесь, а не поднимает
+      # приложение на пустой базе. Значения из .env не выводятся.
+      - name: Preflight
+        run: |
+          echo "::group::preflight"
+          ssh target "docker network inspect db > /dev/null" || {
+            echo "::error::docker network db is missing: apply infra/postgres first (leha-creator/infra)"; exit 1;
+          }
+          echo "db network: ok"
+          ssh target "grep -q '^TASKER_DB_PASSWORD=..*' ${APP_DIR}/.env" || {
+            echo "::error::TASKER_DB_PASSWORD is not set in ${APP_DIR}/.env: move data to shared Postgres first (docs/production.md, «Переезд на общий Postgres»)"; exit 1;
+          }
+          echo "TASKER_DB_PASSWORD: ok"
+          # Старый том своего Postgres есть, а в общей базе нет схемы — данные не перенесены.
+          # На новом сервере старого тома нет: схему с нуля создаст migrate.
+          if ssh target "docker volume inspect tasker_postgres-data > /dev/null 2>&1"; then
+            migrations=$(ssh target "PGPASSWORD=\"\$(sed -n 's/^TASKER_DB_PASSWORD=//p' ${APP_DIR}/.env)\" \
+              docker run --rm --network db -e PGPASSWORD postgres:18.6-alpine \
+              psql -h postgres -U tasker -d tasker -tAc \"select to_regclass('public._prisma_migrations') is not null\"") || {
+              echo "::error::cannot query shared Postgres as tasker (check TASKER_DB_PASSWORD in ${APP_DIR}/.env)"; exit 1;
+            }
+            if [ "${migrations}" != "t" ]; then
+              echo "::error::shared database is empty while the old tasker_postgres-data volume exists: restore the dump first (docs/production.md, «Переезд на общий Postgres»)"; exit 1;
+            fi
+            echo "shared database: ok (schema present, old volume kept)"
+          else
+            echo "shared database: skip (no old tasker_postgres-data volume)"
+          fi
+          echo "::endgroup::"
+
       - name: Upload stack files
         env:
           TAG: ${{ steps.tag.outputs.tag }}
@@ -376,7 +407,8 @@ jobs:
           ssh target "cat ${APP_DIR}/release.env"
           echo "::endgroup::"
 
-      # Копия БД перед миграциями нового релиза (на первом деплое Postgres ещё нет — пропуск).
+      # Копия общей базы перед миграциями нового релиза (на первом деплое база пустая — пропуск;
+      # без пароля или сети db — ошибка, миграции не запускаются).
       - name: Backup database
         run: ssh target "sh ${APP_DIR}/backup.sh db"
 
