@@ -16,6 +16,8 @@ export {
   requestDocumentUpload,
 } from './slices/file/file.service';
 export type { DocumentFileResponse } from './slices/file/file.dto';
+// Только для integrations/meet: заметка-конспект в транзакции вебхука, без проверки прав.
+export { createSystemTaskNote } from './slices/system/system-note.service';
 export { createFolder, listFolderTree } from './slices/folder/folder.service';
 export { listTags, setDocumentTags } from './slices/tag/tag.service';
 export {

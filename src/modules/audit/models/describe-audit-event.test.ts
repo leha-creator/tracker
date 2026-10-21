@@ -49,6 +49,28 @@ describe('describeAuditEvent', () => {
     });
   });
 
+  it('describes meet calls and summaries', () => {
+    const task = { taskKey: 'TSK-7', taskNumber: 7, title: 'Починить вход' };
+    expect(
+      describeAuditEvent('meeting.started', { ...task, meetingCode: 'abc-defg-hij' }, MEMBER),
+    ).toEqual({
+      text: 'Созвон в meet по задаче TSK-7 «Починить вход» (abc-defg-hij)',
+      details: null,
+      href: '/w/team/tasks/7',
+    });
+    expect(
+      describeAuditEvent(
+        'meeting.summary_added',
+        { ...task, documentId: 'doc-1', documentTitle: 'Встреча 21 октября — TSK-7' },
+        MEMBER,
+      ),
+    ).toEqual({
+      text: 'Конспект встречи по задаче TSK-7 «Починить вход»: «Встреча 21 октября — TSK-7»',
+      details: null,
+      href: '/w/team/docs/doc-1',
+    });
+  });
+
   it('gives no link to a deleted task or a deleted workspace', () => {
     const data = { taskKey: 'TSK-7', taskNumber: 7, title: 'A' };
     expect(describeAuditEvent('task.deleted', data, MEMBER).href).toBeNull();

@@ -11,6 +11,7 @@ export {
   listTaskAttachments,
   requestUpload as requestAttachmentUpload,
 } from './slices/attachment/attachment.service';
+export { assertTaskActive } from './slices/task/task-archive.guard';
 export { exportTasks } from './slices/views/task-export.service';
 export type { TaskExportResult } from './slices/views/task-export.service';
 export { getWorkspaceDashboard } from './slices/dashboard/dashboard.service';
@@ -27,7 +28,8 @@ export { searchTasks } from './slices/search/search.service';
 export { listSubtasks, setTaskParent } from './slices/subtask/subtask.service';
 export { sendDueReminders } from './slices/reminder/reminder.service';
 export type { DueRemindersResult } from './slices/reminder/reminder.service';
-export { listTaskWatchers } from './slices/watcher/watcher.service';
+export { listTaskWatchers, listWatcherIds } from './slices/watcher/watcher.service';
+export { emitTaskEvent } from './slices/realtime/task-events.service';
 export {
   archiveTask,
   createTask,

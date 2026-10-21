@@ -188,6 +188,14 @@ const DESCRIBERS: { [K in AuditEventKind]: Describer<K> } = {
   'document.deleted': (data) => ({
     text: `${data.kind === 'note' ? 'Удаление заметки' : 'Удаление файла'} ${quoted(data.title)}`,
   }),
+  'meeting.started': (data, context) => ({
+    text: `${taskText('Созвон в meet по задаче', data)} (${data.meetingCode})`,
+    href: inWorkspace(context, `/tasks/${data.taskNumber}`),
+  }),
+  'meeting.summary_added': (data, context) => ({
+    text: `${taskText('Конспект встречи по задаче', data)}: ${quoted(data.documentTitle)}`,
+    href: inWorkspace(context, `/docs/${data.documentId}`),
+  }),
 
   'admin.user_banned': (data, context) => ({
     text: `Блокировка пользователя ${data.userName} ${BAN_DURATION_TEXT[data.duration]}`,

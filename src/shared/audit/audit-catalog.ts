@@ -128,6 +128,12 @@ export const AUDIT_EVENTS = {
   'task.deleted': event('content', taskSnapshot),
   'document.created': event('content', documentSnapshot),
   'document.deleted': event('content', documentSnapshot),
+  // Созвон meet по задаче: встреча привязана (meeting.created) и конспект сохранён (recap.ready).
+  'meeting.started': event('content', taskSnapshot.extend({ meetingCode: text(20) })),
+  'meeting.summary_added': event(
+    'content',
+    taskSnapshot.extend({ documentId: z.string().max(64), documentTitle: text() }),
+  ),
 
   // ── Администрирование ──
   'admin.user_banned': event(
@@ -248,6 +254,8 @@ export const AUDIT_EVENT_OWNERS: Record<AuditEventKind, AuditOwner> = {
   'task.deleted': 'app',
   'document.created': 'app',
   'document.deleted': 'app',
+  'meeting.started': 'app',
+  'meeting.summary_added': 'app',
   'admin.user_banned': 'identity',
   'admin.user_unbanned': 'identity',
   // Глобальная роль admin и удаление пользователя остаются в tasker.

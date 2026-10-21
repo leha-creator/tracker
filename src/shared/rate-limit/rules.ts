@@ -47,6 +47,8 @@ export const RATE_LIMITS = {
   'admin-impersonate': { user: { windowSeconds: HOUR, max: 30 } },
   // Выгрузка CSV читает до 10 000 задач за запрос — тяжёлая операция для БД.
   'tasks.export': { user: { windowSeconds: MINUTE, max: 10 } },
+  // Старт созвона в meet: каждая попытка выпускает подписанный контекст задачи.
+  'meet.start': { user: { windowSeconds: MINUTE, max: 10 } },
 } as const satisfies Record<string, RateLimitRules>;
 
 export type RateLimitAction = keyof typeof RATE_LIMITS;

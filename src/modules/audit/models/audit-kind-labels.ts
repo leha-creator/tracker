@@ -42,6 +42,8 @@ export const AUDIT_KIND_LABELS: Record<AuditEventKind, string> = {
   'task.deleted': 'Удаление задачи',
   'document.created': 'Создание документа',
   'document.deleted': 'Удаление документа',
+  'meeting.started': 'Созвон по задаче',
+  'meeting.summary_added': 'Конспект встречи',
   'admin.user_banned': 'Блокировка пользователя',
   'admin.user_unbanned': 'Разблокировка пользователя',
   'admin.user_role_changed': 'Смена глобальной роли',

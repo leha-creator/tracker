@@ -12,6 +12,7 @@ export {
 export type { MentionCandidate, MentionRange } from './models/comment-mentions';
 export type { BoardColumns, BoardFocusDirection } from './models/board-move';
 export {
+  formatTaskKey,
   MEMBER_DONE_RECENT_DAYS,
   TASK_DESCRIPTION_MAX_LENGTH,
   TASK_PLACEMENT_LIMIT,
