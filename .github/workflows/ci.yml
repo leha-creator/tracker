@@ -182,9 +182,7 @@ jobs:
       - name: Validate production compose
         env:
           DOMAIN: tracker.example.com
-          POSTGRES_USER: ci
-          POSTGRES_PASSWORD: ci
-          POSTGRES_DB: ci
+          TASKER_DB_PASSWORD: ci
           MINIO_ROOT_USER: ci
           MINIO_ROOT_PASSWORD: ci-secret
           S3_BUCKET: tasker-attachments
