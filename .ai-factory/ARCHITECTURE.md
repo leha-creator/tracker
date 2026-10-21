@@ -37,6 +37,7 @@ tasker/
 │   │       ├── cron/cleanup/route.ts          # Очистка журнала по AUDIT_RETENTION_DAYS и истёкших лимитов (тот же секрет, cron-auth.ts)
 │   │       ├── documents/[documentId]/file/route.ts # файл документа (302) или Markdown заметки
 │   │       ├── mcp/route.ts                   # MCP-сервер для агентов (Bearer-токен)
+│   │       ├── integrations/meet/webhook/route.ts # вебхуки meet (подпись X-Meet-Signature)
 │   │       └── webhooks/github/route.ts       # GitHub webhooks
 │   │
 │   ├── proxy.ts                      # Оптимистичный редирект на /login по cookie (не авторизация)
@@ -134,6 +135,16 @@ tasker/
 │   │   │   └── index.ts
 │   │   │
 │   │   └── integrations/
+│   │       ├── meet/                 # Связка с meet (docs/meet.md)
+│   │       │   ├── slices/
+│   │       │   │   ├── start/        # подписанный контекст задачи → адрес <MEET_URL>/new?ctx=
+│   │       │   │   ├── webhook/      # подпись, идемпотентность (MeetWebhookDelivery), обработчики событий
+│   │       │   │   ├── meeting/      # TaskMeeting, TaskMeetingRecap, чтение для раздела «Созвоны»
+│   │       │   │   └── action-items/ # поручения конспекта → подзадачи (блокировка строки конспекта)
+│   │       │   ├── models/           # контекст-токен, подпись вебхука, схемы событий, Markdown конспекта
+│   │       │   ├── meet-config.ts    # MEET_* из env, isMeetEnabled()
+│   │       │   ├── client.ts
+│   │       │   └── index.ts
 │   │       └── github/
 │   │           ├── slices/
 │   │           │   ├── identity/     # GitHub-аккаунт пользователя (Account), токен пользователя
@@ -206,6 +217,7 @@ tasker/
 - ✅ Если модулю нужны клиентские компоненты, он дополнительно экспортирует `client.ts`: actions, Zod-схемы, чистые функции и типы без server-only кода. Клиентские компоненты импортируют `@/modules/<module>/client`, серверный код — `@/modules/<module>`
 - ✅ `tasks` зависит от `projects` и `workspaces` (через их `index.ts`), но не наоборот. Страница доски сама собирает колонки из `projects` и карточки из `tasks`
 - ✅ `integrations/github` зависит от `tasks`, `projects`, `workspaces` и `notifications`, но они не зависят от `integrations/github`; системные функции без сессии (`resolveTaskRefs`, `changePlacementStatusBySystem`, `findWorkspacesByTaskKeys`) вызываются только из обработчиков с проверенной подписью вебхука
+- ✅ `integrations/meet` зависит от `tasks`, `documents`, `workspaces` и `notifications`, но они не зависят от него. Системная `createSystemTaskNote` из `documents` (без проверки прав) вызывается только из обработчика вебхука с проверенной подписью; задача и пространство берутся из контекст-токена, подписанного tasker
 - ✅ `agent-mcp` зависит от `api-tokens`, `tasks`, `projects`, `workspaces`, `documents` и `integrations/github`; от него не зависит никто. Инструменты вызывают те же сервисы, что Server Actions, с сессией владельца токена; `workspaceId` берётся только из токена, области — из `session.via`
 - ✅ `agents` зависит от `api-tokens` (отзыв токенов отключённого агента), но не наоборот. `api-tokens`, `notifications`, `workspaces` и `profiles` читают `WorkspaceAgent` и `User.isAgent` своими репозиториями — задокументированное чтение чужой таблицы, чтобы не создавать цикл (`agents` → `api-tokens`, `notifications` ни от кого не зависит)
 - ✅ `documents` зависит от `tasks` (краткие данные и поиск задач для связей), но `tasks` не зависит от `documents`: раздел «Документы» в задаче собирает компонент слоя UI (`components/documents/task-documents`)

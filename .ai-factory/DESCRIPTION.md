@@ -62,7 +62,7 @@ Tasker — веб-приложение для управления задача�
 - **Почта:** SMTP через nodemailer (`src/shared/mail`); локально — Mailpit (SMTP 1025, UI 8025) в docker-compose. Используется для приглашений в пространство, уведомлений и тестового письма администратора (письма входа отправляет IdP)
 - **Инфраструктура разработки:** pnpm, docker-compose (Postgres 18 на порту 5433, MinIO, Mailpit), Prisma 7 с `@prisma/adapter-pg`, pino, Vitest, ESLint + Prettier, husky + lint-staged
 - **Развёртывание:** один VPS (`https://tracker.plwedding.ru`) с docker compose: общий PostgreSQL 18 и edge-прокси Caddy (HTTPS, Let's Encrypt) из `leha-creator/infra`, файлы — в Yandex Object Storage, образы в GHCR, CD из GitHub Actions по SSH; почта — SMTP ящика на домене (`docs/production.md`)
-- **Интеграции:** GitHub — пакет `octokit` (GitHub App: токены установок, пользовательские токены), webhooks; GitHub App создаёт администратор из админки по манифесту (ключи в БД, зашифрованы) или задаёт переменными `GITHUB_*` (все или ни одной), модуль `src/modules/integrations/github`; MCP — `@modelcontextprotocol/sdk` (Streamable HTTP без сессий, JSON-ответы), модули `agents`, `api-tokens` и `agent-mcp`
+- **Интеграции:** GitHub — пакет `octokit` (GitHub App: токены установок, пользовательские токены), webhooks; GitHub App создаёт администратор из админки по манифесту (ключи в БД, зашифрованы) или задаёт переменными `GITHUB_*` (все или ни одной), модуль `src/modules/integrations/github`; meet (`meet.plwedding.ru`) — созвоны и конспекты встреч без SDK: HMAC-контекст задачи и подписанные вебхуки, переменные `MEET_*` (все или ни одной), модуль `src/modules/integrations/meet`; MCP — `@modelcontextprotocol/sdk` (Streamable HTTP без сессий, JSON-ответы), модули `agents`, `api-tokens` и `agent-mcp`
 
 ## Архитектурные заметки
 
@@ -74,6 +74,7 @@ Tasker — веб-приложение для управления задача�
 - **Порядок карточек** — дробные/lexorank-позиции, чтобы перемещение карточки обновляло одну строку.
 - **Документы** — сущность пространства двух видов: заметка (Markdown в `Document.content`) и файл (объект S3 под префиксом `ws/<workspaceId>/docs/`); папки (дерево), теги и M:N-связь с задачами (`TaskDocumentLink`).
 - **GitHub** — изолированный модуль интеграции: webhook-эндпоинт с проверкой подписи, сущность связи `TaskPullRequest`; ядро задач не зависит от GitHub.
+- **meet** — изолированный модуль `integrations/meet` (контракт — `docs/meet.md`): созвон из задачи через подписанный HMAC контекст задачи (`MEET_CONTEXT_SECRET`, 10 минут), вебхуки meet с подписью и меткой времени (`MEET_WEBHOOK_SECRET`); встречи `TaskMeeting`, конспекты `TaskMeetingRecap` — Markdown-заметка в документах задачи, поручения → подзадачи. Ядро задач от meet не зависит.
 - **Агенты (MCP)** — bearer-токен превращается в сессию владельца (роль `user`) только в `/api/mcp`; инструменты вызывают те же сервисы, что Server Actions, пространство берётся из токена. Агент пространства — служебный `User` (`isAgent`, без `Account`, сессия запрещена хуком Better Auth) + `WorkspaceAgent`; членство агента модуль `agents` пишет в обход плагина `organization`. Сессия токена несёт `via` (токен, области, агент): по нему ставится пометка «через агента» (`createdViaTokenId`) и проверяются области; изменения пишутся в журнал `McpActivity`.
 - Бизнес-логика вынесена из React-компонентов и route-обработчиков в серверные сервисы/use-cases.
 
@@ -91,6 +92,6 @@ Tasker — веб-приложение для управления задача�
   - валидация всех входных данных (Zod);
   - безопасная загрузка файлов: ограничение размера и типа, приватные бакеты, presigned URL с коротким сроком жизни;
   - приглашения — одноразовые токены с истечением срока;
-  - проверка подписи GitHub webhook (`X-Hub-Signature-256`), секреты только в переменных окружения;
+  - проверка подписи GitHub webhook (`X-Hub-Signature-256`) и вебхуков meet (`X-Meet-Signature`, окно ±300 с), секреты только в переменных окружения;
   - санитизация rich-text контента при рендеринге (XSS).
 - **Производительность:** индексы по `workspaceId`, `projectId`, `assigneeId`, `dueDate`; пагинация списков.

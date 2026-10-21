@@ -384,6 +384,33 @@ GITHUB_WEBHOOK_SECRET='<openssl rand -hex 32>'
 
 Edge-прокси пропускает `/api/webhooks/github` как обычный запрос приложения, отдельной настройки Caddy не нужно.
 
+## Связка с meet
+
+Созвоны из задач и конспекты встреч (см. [Связка с meet](meet.md)). Секреты общие для двух приложений: сгенерировать два значения (`openssl rand -base64 32`, не выводить в общий лог) и записать в оба файла.
+
+`/opt/tasker/.env`:
+
+```
+MEET_URL=https://meet.plwedding.ru
+MEET_CONTEXT_SECRET='<секрет 1>'
+MEET_WEBHOOK_SECRET='<секрет 2>'
+```
+
+`/opt/meet/.env`: `TASKER_URL=https://tracker.plwedding.ru`, `TASKER_CONTEXT_SECRET` — секрет 1, `TASKER_WEBHOOK_SECRET` — секрет 2.
+
+Порядок включения: сначала tasker (`$C up -d app` — начинает принимать вебхуки), затем meet. Проверка:
+
+- в логах tasker при первом обращении к связке — `[meet] integration state` с `enabled: true` (секреты не логируются); `404` на вебхук значит, что переменные не дошли до контейнера (`$C exec app printenv MEET_URL`);
+- запрос без подписи — ожидается `401`:
+
+  ```bash
+  curl -si -X POST https://tracker.plwedding.ru/api/integrations/meet/webhook -d '{}' | head -1
+  ```
+
+- в задаче появился раздел «Созвоны»; «Начать созвон» открывает meet, после входа встреча видна в задаче как «Идёт».
+
+Ротация — новые секреты в обоих файлах в одно окно: перезапустить meet, затем tasker. Пока секреты расходятся, старт созвона и вебхуки отвечают ошибкой подписи; meet повторяет вебхуки до 24 часов. Edge-прокси отдельной настройки не требует.
+
 ## MCP-сервер для агентов
 
 Claude Code подключается к `https://tracker.plwedding.ru/api/mcp` с личным токеном из **Профиль → Токены доступа** (см. [Claude Code и MCP](agents.md)). Отдельной настройки сервера не нужно:

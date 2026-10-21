@@ -139,6 +139,13 @@ export const HELP_ARTICLES: readonly HelpArticleMeta[] = [
     audience: ['owner', 'member'],
   },
   {
+    slug: 'meetings',
+    title: 'Созвоны и конспекты',
+    summary: 'Созвон в meet из задачи, конспект встречи в документах, поручения в подзадачи.',
+    section: 'integrations',
+    audience: ['member'],
+  },
+  {
     slug: 'agents-and-tokens',
     title: 'Агенты и токены доступа',
     summary: 'Агенты пространства, личные токены, области доступа и журнал действий.',

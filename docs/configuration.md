@@ -61,6 +61,18 @@
 
 `compose.app.yml` и `deploy/tasker/compose.yml` передают эти переменные в контейнер приложения (`${GITHUB_*:-}`, по умолчанию пусто).
 
+### Связка с meet
+
+Необязательная группа: заданы все три переменные или ни одной (пустая строка — то же, что не задано), частичная настройка — `EnvValidationError`. Без них в задаче нет раздела «Созвоны» и пункта «Начать созвон», а вебхук `/api/integrations/meet/webhook` отвечает `404`. Контракт и переменные стороны meet — в [Связке с meet](meet.md#переменные).
+
+| Переменная | Описание |
+|------------|----------|
+| `MEET_URL` | Origin meet, `http(s)` без пути: `https://meet.plwedding.ru` |
+| `MEET_CONTEXT_SECRET` | Секрет подписи контекста задачи, не короче 32 символов; совпадает с `TASKER_CONTEXT_SECRET` в meet |
+| `MEET_WEBHOOK_SECRET` | Секрет подписи вебхуков meet, не короче 32 символов; совпадает с `TASKER_WEBHOOK_SECRET` в meet |
+
+Ссылка на задачу в контексте строится от `BETTER_AUTH_URL`. `compose.app.yml` и `deploy/tasker/compose.yml` передают переменные в контейнер (`${MEET_*:-}`, по умолчанию пусто).
+
 ### Напоминания о сроке
 
 Напоминания рассылает `POST /api/cron/reminders`. Его вызывает планировщик: на сервере это systemd-таймер `tasker-reminders.timer` (см. [Продакшен](production.md#напоминания-о-сроке)), локально — `pnpm reminders:run`.
