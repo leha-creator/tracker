@@ -11,9 +11,8 @@ export interface AccountSessionDto {
 
 /** Метрики учётных записей для обзора ресурса (без агентов пространств). */
 export interface AccountMetricsDto {
-  users: { total: number; admins: number; banned: number; unverified: number; twoFactor: number };
+  users: { total: number; admins: number; banned: number };
   sessions: { active: number; impersonated: number };
   /** Регистрации по дням (UTC) с начала периода; дни без регистраций не приходят. */
   signupsByDay: { day: string; count: number }[];
-  failedSignIns: number;
 }

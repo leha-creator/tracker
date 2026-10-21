@@ -40,8 +40,14 @@ const BAN_DURATION_TEXT = {
 const SIGN_IN_TEXT = {
   password: 'Вход по паролю',
   github: 'Вход через GitHub',
+  oidc: 'Вход через plwedding ID',
   two_factor: 'Вход с кодом двухфакторной аутентификации',
   other: 'Вход',
+} as const;
+const SIGN_UP_TEXT = {
+  email: 'Регистрация',
+  github: 'Регистрация через GitHub',
+  oidc: 'Регистрация через plwedding ID',
 } as const;
 /** Причины неудачного входа (коды Better Auth). */
 const SIGN_IN_FAILURE_REASONS: Record<string, string> = {
@@ -78,7 +84,7 @@ function taskText(prefix: string, data: { taskKey: string; title: string }): str
 
 const DESCRIBERS: { [K in AuditEventKind]: Describer<K> } = {
   'auth.signed_up': (data) => ({
-    text: data.method === 'github' ? 'Регистрация через GitHub' : 'Регистрация',
+    text: SIGN_UP_TEXT[data.method],
   }),
   'auth.sign_in': (data) => ({ text: SIGN_IN_TEXT[data.method] }),
   'auth.sign_in_failed': (data) => {

@@ -48,8 +48,10 @@ const documentSnapshot = z.object({
 });
 const projectSnapshot = z.object({ projectId: z.string().max(64), projectName: text() });
 
-export const SIGN_IN_METHODS = ['password', 'github', 'two_factor', 'other'] as const;
+export const SIGN_IN_METHODS = ['password', 'github', 'oidc', 'two_factor', 'other'] as const;
 export type SignInMethod = (typeof SIGN_IN_METHODS)[number];
+export const SIGN_UP_METHODS = ['email', 'github', 'oidc'] as const;
+export type SignUpMethod = (typeof SIGN_UP_METHODS)[number];
 
 const WORKSPACE_ROLE = z.enum(['owner', 'member']);
 
@@ -59,13 +61,15 @@ function event<const C extends AuditCategory, S extends z.ZodType>(category: C, 
 
 export const AUDIT_EVENTS = {
   // ── Безопасность ──
-  'auth.signed_up': event('security', z.object({ method: z.enum(['email', 'github']) })),
+  'auth.signed_up': event('security', z.object({ method: z.enum(SIGN_UP_METHODS) })),
   'auth.sign_in': event('security', z.object({ method: z.enum(SIGN_IN_METHODS) })),
+  // Только история: локального входа по паролю больше нет — Tasker такие события не пишет.
   'auth.sign_in_failed': event(
     'security',
     z.object({ method: z.enum(['password', 'two_factor']), reason: text(64) }),
   ),
   'auth.sign_out': event('security', nothing),
+  // Только история: пароль, подтверждение email и 2FA — в IdP plwedding ID.
   'auth.password_reset_requested': event('security', nothing),
   'auth.password_reset': event('security', nothing),
   'auth.password_changed': event('security', nothing),
@@ -140,8 +144,9 @@ export const AUDIT_EVENTS = {
   ),
   'admin.user_sessions_revoked': event('admin', userSnapshot),
   'admin.user_session_revoked': event('admin', userSnapshot),
-  'admin.user_two_factor_reset': event('admin', userSnapshot),
   'admin.user_deleted': event('admin', userSnapshot.extend({ email: text() })),
+  // Только история: 2FA, email и пароль меняются в IdP.
+  'admin.user_two_factor_reset': event('admin', userSnapshot),
   'admin.user_email_verified': event('admin', userSnapshot),
   'admin.password_reset_sent': event('admin', userSnapshot),
   'admin.verification_sent': event('admin', userSnapshot),

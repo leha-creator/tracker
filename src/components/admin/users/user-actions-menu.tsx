@@ -14,31 +14,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  resendVerificationEmailAction,
-  resetUserTwoFactorAction,
   revokeUserSessionsAction,
-  sendPasswordResetAction,
   setUserRoleAction,
   startImpersonationAction,
   unbanUserAction,
-  verifyUserEmailAction,
 } from '@/modules/admin/client';
 import type { GlobalRole } from '@/shared/access/global-role';
 
 import { BanUserDialog } from './ban-user-dialog';
 import { DeleteUserDialog } from './delete-user-dialog';
 
-type DialogKind =
-  | 'ban'
-  | 'unban'
-  | 'role'
-  | 'sessions'
-  | 'twoFactor'
-  | 'delete'
-  | 'passwordReset'
-  | 'verifyEmail'
-  | 'verificationMail'
-  | 'impersonate';
+type DialogKind = 'ban' | 'unban' | 'role' | 'sessions' | 'delete' | 'impersonate';
 
 interface UserActionsMenuProps {
   user: {
@@ -47,8 +33,6 @@ interface UserActionsMenuProps {
     email: string;
     role: GlobalRole;
     banned: boolean;
-    twoFactorEnabled: boolean;
-    emailVerified: boolean;
   };
   /** Куда уйти после удаления: со страницы карточки — к списку (сама карточка исчезнет). */
   afterDeleteHref?: string;
@@ -108,25 +92,6 @@ export function UserActionsMenu({ user, afterDeleteHref, variant = 'icon' }: Use
           <DropdownMenuItem onSelect={() => open('sessions')}>
             Завершить все сессии
           </DropdownMenuItem>
-          {user.twoFactorEnabled && (
-            <DropdownMenuItem onSelect={() => open('twoFactor')}>
-              Сбросить двухфакторную аутентификацию
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => open('passwordReset')}>
-            Отправить ссылку сброса пароля
-          </DropdownMenuItem>
-          {!user.emailVerified && (
-            <>
-              <DropdownMenuItem onSelect={() => open('verificationMail')}>
-                Отправить письмо подтверждения
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => open('verifyEmail')}>
-                Подтвердить email вручную
-              </DropdownMenuItem>
-            </>
-          )}
           <DropdownMenuSeparator />
           {isAdmin ? (
             <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
@@ -163,44 +128,8 @@ export function UserActionsMenu({ user, afterDeleteHref, variant = 'icon' }: Use
           action={startImpersonationAction}
           fields={{ userId: user.id }}
           title={`Войти от имени «${user.name}»?`}
-          description="На час вы увидите Tasker глазами пользователя и сможете действовать в его пространствах. Действия попадут в журнал с пометкой «через администратора». Смена пароля, 2FA, сессий и токенов будет недоступна. Админка в этом режиме закрыта — вернитесь кнопкой в полосе сверху."
+          description="На час вы увидите Tasker глазами пользователя и сможете действовать в его пространствах. Действия попадут в журнал с пометкой «через администратора». Управление сессиями и токенами будет недоступно. Админка в этом режиме закрыта — вернитесь кнопкой в полосе сверху."
           confirmLabel="Войти от имени"
-          confirmVariant="default"
-        />
-      )}
-      {dialog === 'passwordReset' && (
-        <ConfirmActionDialog
-          key={dialogKey}
-          {...dialogProps}
-          action={sendPasswordResetAction}
-          fields={{ userId: user.id }}
-          title={`Отправить «${user.name}» ссылку сброса пароля?`}
-          description={`Письмо уйдёт на ${user.email}. Текущий пароль действует, пока пользователь не задаст новый.`}
-          confirmLabel="Отправить"
-          confirmVariant="default"
-        />
-      )}
-      {dialog === 'verificationMail' && (
-        <ConfirmActionDialog
-          key={dialogKey}
-          {...dialogProps}
-          action={resendVerificationEmailAction}
-          fields={{ userId: user.id }}
-          title="Отправить письмо подтверждения ещё раз?"
-          description={`Письмо со ссылкой уйдёт на ${user.email}.`}
-          confirmLabel="Отправить"
-          confirmVariant="default"
-        />
-      )}
-      {dialog === 'verifyEmail' && (
-        <ConfirmActionDialog
-          key={dialogKey}
-          {...dialogProps}
-          action={verifyUserEmailAction}
-          fields={{ userId: user.id }}
-          title={`Подтвердить ${user.email} вручную?`}
-          description="Подтверждайте, только если убедились, что адрес принадлежит пользователю: например, письмо не доходит из-за фильтров почты."
-          confirmLabel="Подтвердить"
           confirmVariant="default"
         />
       )}
@@ -245,17 +174,6 @@ export function UserActionsMenu({ user, afterDeleteHref, variant = 'icon' }: Use
           title={`Завершить все сессии «${user.name}»?`}
           description="Пользователь выйдет на всех устройствах и сможет войти снова."
           confirmLabel="Завершить сессии"
-        />
-      )}
-      {dialog === 'twoFactor' && (
-        <ConfirmActionDialog
-          key={dialogKey}
-          {...dialogProps}
-          action={resetUserTwoFactorAction}
-          fields={{ userId: user.id }}
-          title={`Сбросить 2FA у «${user.name}»?`}
-          description="Для пользователя, который потерял телефон и резервные коды. Секрет и коды удалятся, все сессии завершатся — войти можно будет по одному паролю. Убедитесь, что просьба исходит от самого пользователя."
-          confirmLabel="Сбросить 2FA"
         />
       )}
     </>

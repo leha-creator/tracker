@@ -190,6 +190,7 @@ jobs:
           S3_SECRET_ACCESS_KEY: ci-secret
           S3_BUCKET: tasker-attachments
           BETTER_AUTH_SECRET: ci-secret-0123456789abcdef0123456789
+          OIDC_CLIENT_SECRET: ci-oidc-secret-0123456789abcdef0123
           TASKER_TAG: ci
         run: docker compose -f deploy/tasker/compose.yml config --quiet
 
@@ -398,6 +399,11 @@ jobs:
             echo "::error::S3_ENDPOINT in ${APP_DIR}/.env is not an https Object Storage endpoint (see deploy/tasker/.env.example)"; exit 1;
           }
           echo "object storage: ok"
+          # Вход — только через IdP plwedding ID: без секрета клиента приложение не поднимется.
+          ssh target "grep -q '^OIDC_CLIENT_SECRET=..*' ${APP_DIR}/.env" || {
+            echo "::error::OIDC_CLIENT_SECRET is not set in ${APP_DIR}/.env: register the tasker client in the IdP first (docs/production.md, «Вход через plwedding ID»)"; exit 1;
+          }
+          echo "oidc client: ok"
           echo "::endgroup::"
 
       - name: Upload stack files

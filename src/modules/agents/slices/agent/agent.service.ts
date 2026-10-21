@@ -9,7 +9,7 @@ import { agentEmail, type AuthSession } from '@/shared/auth';
 import { NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
-import { agentAvatarUrl, assertAgentLimit } from '../../models';
+import { AGENT_AVATAR_PATH, assertAgentLimit } from '../../models';
 import type { AgentDto } from './agent.dto';
 import { agentRepository, type AgentRow } from './agent.repository';
 import type { AgentRefInput, CreateAgentInput, UpdateAgentInput } from './agent.schema';
@@ -86,7 +86,7 @@ export async function createAgent(
     workspaceId,
     name: input.name,
     email: agentEmail(agentId),
-    image: agentAvatarUrl(agentId),
+    image: AGENT_AVATAR_PATH,
     description: input.description,
     responsibleUserId: input.responsibleUserId,
     createdById: session.user.id,

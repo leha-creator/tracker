@@ -36,14 +36,14 @@ export const HELP_ARTICLES: readonly HelpArticleMeta[] = [
   {
     slug: 'getting-started',
     title: 'Регистрация и вход',
-    summary: 'Аккаунт, подтверждение почты, вход через GitHub, сброс пароля и приглашения.',
+    summary: 'Вход через plwedding ID, выход, приглашения и первое пространство.',
     section: 'start',
     audience: ['member'],
   },
   {
     slug: 'account-security',
     title: 'Безопасность аккаунта',
-    summary: 'Смена пароля, двухфакторная аутентификация, активные сессии и журнал безопасности.',
+    summary: 'Пароль и 2FA в plwedding ID, сеансы в Tasker и журнал безопасности.',
     section: 'start',
     audience: ['member'],
   },

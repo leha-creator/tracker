@@ -11,7 +11,7 @@ interface UserRow {
   image: string | null;
   role: string;
   createdAt: Date;
-  profile: { position: string | null; bio: string | null; avatarKey: string | null } | null;
+  profile: { position: string | null; bio: string | null } | null;
 }
 
 const findUser = vi.fn<(userId: string) => Promise<UserRow | null>>();
@@ -20,11 +20,7 @@ const updateFields =
   vi.fn<
     (userId: string, fields: { position: string | null; bio: string | null }) => Promise<void>
   >();
-const updateAuthUser = vi.fn<(fields: { name?: string }) => Promise<void>>();
 
-vi.mock('../../auth-api', () => ({
-  updateAuthUser: (fields: { name?: string }) => updateAuthUser(fields),
-}));
 vi.mock('./profile.repository', () => ({
   profileRepository: {
     findUser: (userId: string) => findUser(userId),
@@ -57,7 +53,7 @@ function userRow(overrides: Partial<UserRow> = {}): UserRow {
     image: null,
     role: 'user',
     createdAt: new Date('2026-01-01'),
-    profile: { position: 'Дизайнер', bio: null, avatarKey: null },
+    profile: { position: 'Дизайнер', bio: null },
     ...overrides,
   };
 }
@@ -76,36 +72,22 @@ describe('getMyProfile', () => {
 });
 
 describe('updateProfile', () => {
-  it('updates only the profile fields when the name is the same', async () => {
-    await updateProfile(
-      session,
-      updateProfileSchema.parse({ name: ' Анна ', position: 'Тимлид', bio: '' }),
-    );
-    expect(updateAuthUser).not.toHaveBeenCalled();
+  it('updates position and bio', async () => {
+    await updateProfile(session, updateProfileSchema.parse({ position: ' Тимлид ', bio: '' }));
     expect(updateFields).toHaveBeenCalledWith('user-1', { position: 'Тимлид', bio: null });
   });
 
-  it('renames through Better Auth', async () => {
-    await updateProfile(
-      session,
-      updateProfileSchema.parse({ name: 'Анна Петрова', position: 'Дизайнер' }),
-    );
-    expect(updateAuthUser).toHaveBeenCalledWith({ name: 'Анна Петрова' });
-    expect(updateFields).not.toHaveBeenCalled();
-  });
-
   it('does nothing without changes', async () => {
-    await updateProfile(session, updateProfileSchema.parse({ name: 'Анна', position: 'Дизайнер' }));
-    expect(updateAuthUser).not.toHaveBeenCalled();
+    await updateProfile(session, updateProfileSchema.parse({ position: 'Дизайнер' }));
     expect(updateFields).not.toHaveBeenCalled();
   });
 });
 
 describe('updateProfileSchema', () => {
-  it('rejects a short name and a long position', () => {
-    const result = updateProfileSchema.safeParse({ name: 'А', position: 'x'.repeat(81) });
+  it('rejects a long position', () => {
+    const result = updateProfileSchema.safeParse({ position: 'x'.repeat(81) });
     expect(result.success).toBe(false);
-    expect(result.error?.issues.map((issue) => issue.path[0])).toEqual(['name', 'position']);
+    expect(result.error?.issues.map((issue) => issue.path[0])).toEqual(['position']);
   });
 });
 
@@ -115,7 +97,7 @@ describe('getProfileCards', () => {
       {
         id: 'user-2',
         name: 'Борис',
-        image: '/api/users/user-2/avatar?v=1',
+        image: '/api/idp-avatar/user-2?v=1',
         profile: { position: 'QA', bio: 'О себе' },
       },
     ]);
@@ -124,7 +106,7 @@ describe('getProfileCards', () => {
     expect(cards.get('user-2')).toEqual({
       userId: 'user-2',
       name: 'Борис',
-      image: '/api/users/user-2/avatar?v=1',
+      image: '/api/idp-avatar/user-2?v=1',
       position: 'QA',
       bio: 'О себе',
     });

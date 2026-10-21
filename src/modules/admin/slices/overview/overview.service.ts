@@ -19,8 +19,6 @@ import type { ResourceOverviewDto } from './overview.dto';
 
 const log = createLogger('admin.overview');
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 export async function getResourceOverview(): Promise<ResourceOverviewDto> {
   const session = await requireAdmin();
   const startedAt = Date.now();
@@ -30,7 +28,6 @@ export async function getResourceOverview(): Promise<ResourceOverviewDto> {
     getAccountMetrics({
       now,
       signupsSince: dailySeriesStart(now, SIGNUPS_PERIOD_DAYS),
-      failedSignInsSince: new Date(startedAt - DAY_MS),
     }),
     countAllWorkspaces(),
     getTotalDocumentStorageUsage(),
@@ -45,7 +42,6 @@ export async function getResourceOverview(): Promise<ResourceOverviewDto> {
     sessions: accounts.sessions,
     signups,
     signupsTotal: signups.reduce((sum, point) => sum + point.count, 0),
-    failedSignIns24h: accounts.failedSignIns,
     storage: { documents, attachments },
     health: { db: health.checks.db.ok, storage: health.checks.storage.ok },
     adminEmail: session.user.email,

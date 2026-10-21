@@ -43,8 +43,6 @@ const userSelect = {
   banned: true,
   banReason: true,
   banExpires: true,
-  emailVerified: true,
-  twoFactorEnabled: true,
   createdAt: true,
 } satisfies Prisma.UserSelect;
 
@@ -80,8 +78,6 @@ export const userRepository = {
         banned: true,
         banExpires: true,
         isAgent: true,
-        twoFactorEnabled: true,
-        emailVerified: true,
       },
     });
   },

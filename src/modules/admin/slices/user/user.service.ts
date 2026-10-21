@@ -1,17 +1,10 @@
 import 'server-only';
 
-import { headers } from 'next/headers';
-
 import { listUserApiTokensForAdmin, revokeApiTokenBySystem } from '@/modules/api-tokens';
-import {
-  listUserSessionsBySystem,
-  markEmailVerifiedBySystem,
-  resetTwoFactorBySystem,
-  revokeUserSessionBySystem,
-} from '@/modules/auth';
+import { listUserSessionsBySystem, revokeUserSessionBySystem } from '@/modules/auth';
 import { describeUserAgent } from '@/modules/auth/client';
 import { getGithubIdentity } from '@/modules/integrations/github';
-import { getProfileCards, prepareAvatarCleanup } from '@/modules/profiles';
+import { getProfileCards } from '@/modules/profiles';
 import {
   countWorkspacesByUsers,
   listSoleOwnedWorkspaces,
@@ -19,10 +12,9 @@ import {
 } from '@/modules/workspaces';
 import { parseGlobalRole, requireAdmin } from '@/shared/access';
 import { auditActorFromSession, recordAuditEvent, type AuditEventKind } from '@/shared/audit';
-import { verifyEmailCallbackPath, type AuthSession } from '@/shared/auth';
+import type { AuthSession } from '@/shared/auth';
 import { NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger, maskEmail } from '@/shared/logger';
-import { enforceRateLimit, getClientIp } from '@/shared/rate-limit';
 
 import { callAdminApi } from '../../admin-api';
 import {
@@ -57,21 +49,11 @@ const log = createLogger('admin.user');
 interface TargetUser extends ManagedUser {
   email: string;
   name: string;
-  emailVerified: boolean;
 }
-
-/** Страница, на которую ведёт ссылка из письма сброса (как в модуле auth). */
-const RESET_PASSWORD_PATH = '/reset-password';
 
 type SimpleAdminUserEvent = Extract<
   AuditEventKind,
-  | 'admin.user_unbanned'
-  | 'admin.user_sessions_revoked'
-  | 'admin.user_session_revoked'
-  | 'admin.user_two_factor_reset'
-  | 'admin.user_email_verified'
-  | 'admin.password_reset_sent'
-  | 'admin.verification_sent'
+  'admin.user_unbanned' | 'admin.user_sessions_revoked' | 'admin.user_session_revoked'
 >;
 
 /** Действие администратора над пользователем — в журнал (видят только администраторы). */
@@ -101,8 +83,6 @@ function toAdminUserDto(
     role: parseGlobalRole(row.role),
     ban: ban.kind === 'active' ? ban : { ...ban, reason: row.banReason || null },
     workspacesCount: context.workspaces.get(row.id) ?? 0,
-    emailVerified: row.emailVerified,
-    twoFactorEnabled: row.twoFactorEnabled,
     createdAt: row.createdAt,
     isCurrentUser: row.id === context.actorId,
   };
@@ -124,7 +104,6 @@ async function loadTarget(actorId: string, userId: string, scope: string): Promi
     id: row.id,
     email: row.email,
     name: row.name,
-    emailVerified: row.emailVerified,
     role: parseGlobalRole(row.role),
   };
   try {
@@ -245,28 +224,6 @@ export async function revokeUserSessions(input: { userId: string }): Promise<voi
   await recordAdminUserEvent('admin.user_sessions_revoked', session, target);
 }
 
-/**
- * Сброс 2FA пользователю, который потерял устройство и резервные коды. Все его сессии
- * завершаются: дальше он входит по паролю и при желании включает 2FA заново.
- */
-export async function resetUserTwoFactor(input: { userId: string }): Promise<void> {
-  const session = await requireAdmin();
-  const actorId = session.user.id;
-  const target = await loadTarget(actorId, input.userId, 'admin.user.resetTwoFactor');
-  const row = await userRepository.findById(target.id);
-  if (!row?.twoFactorEnabled) {
-    log.warn({ actorId, userId: target.id }, '[admin.user.resetTwoFactor] not enabled');
-    throw new ValidationError('У пользователя не включена двухфакторная аутентификация');
-  }
-
-  await resetTwoFactorBySystem(target.id);
-  await callAdminApi((api, headers) =>
-    api.revokeUserSessions({ headers, body: { userId: target.id } }),
-  );
-  log.info({ actorId, userId: target.id }, '[admin.user.resetTwoFactor] reset');
-  await recordAdminUserEvent('admin.user_two_factor_reset', session, target);
-}
-
 export async function deleteUser(input: DeleteUserInput): Promise<void> {
   const session = await requireAdmin();
   const actorId = session.user.id;
@@ -288,10 +245,7 @@ export async function deleteUser(input: DeleteUserInput): Promise<void> {
     () => assertCanDelete(target, soleOwned),
   );
 
-  // Ключ фото — до удаления (строка профиля уйдёт каскадом), объект — после.
-  const cleanupAvatar = await prepareAvatarCleanup(target.id);
   await callAdminApi((api, headers) => api.removeUser({ headers, body: { userId: target.id } }));
-  await cleanupAvatar();
   log.info(
     { actorId, userId: target.id, email: maskEmail(target.email) },
     '[admin.user.delete] deleted',
@@ -392,74 +346,4 @@ export async function revokeUserApiToken(input: RevokeUserTokenInput): Promise<v
     targetUserId: target.id,
     data: { userName: target.name, tokenName: name },
   });
-}
-
-/** Подтверждение email вручную — когда письмо не доходит, а адрес проверен иначе. */
-export async function verifyUserEmail(input: { userId: string }): Promise<void> {
-  const session = await requireAdmin();
-  const actorId = session.user.id;
-  const target = await loadTarget(actorId, input.userId, 'admin.user.verifyEmail');
-  if (target.emailVerified) {
-    log.warn({ actorId, userId: target.id }, '[admin.user.verifyEmail] already verified');
-    throw new ValidationError('Email уже подтверждён');
-  }
-  await markEmailVerifiedBySystem(target.id);
-  log.info(
-    { actorId, userId: target.id, email: maskEmail(target.email) },
-    '[admin.user.verifyEmail] verified',
-  );
-  await recordAdminUserEvent('admin.user_email_verified', session, target);
-}
-
-/** Лимит писем администратора: защита почтового ящика пользователя и SMTP. */
-async function enforceAdminMailLimit(actorId: string): Promise<void> {
-  await enforceRateLimit('admin-mail', { ip: getClientIp(await headers()), userId: actorId });
-}
-
-/**
- * Письмо со ссылкой сброса пароля на email пользователя. Заголовки запроса не передаются:
- * эндпоинт Better Auth не должен видеть сессию администратора.
- */
-export async function sendPasswordResetEmail(input: { userId: string }): Promise<void> {
-  const session = await requireAdmin();
-  const actorId = session.user.id;
-  const target = await loadTarget(actorId, input.userId, 'admin.user.sendPasswordReset');
-  await enforceAdminMailLimit(actorId);
-  await callAdminApi((api) =>
-    api.requestPasswordReset({
-      body: { email: target.email, redirectTo: RESET_PASSWORD_PATH },
-      headers: new Headers(),
-    }),
-  );
-  log.info(
-    { actorId, userId: target.id, email: maskEmail(target.email) },
-    '[admin.user.sendPasswordReset] sent',
-  );
-  await recordAdminUserEvent('admin.password_reset_sent', session, target);
-}
-
-/**
- * Повторное письмо подтверждения email. Без заголовков запроса: с сессией администратора
- * Better Auth отправил бы письмо на его адрес (или отказал бы из-за несовпадения).
- */
-export async function resendVerificationEmail(input: { userId: string }): Promise<void> {
-  const session = await requireAdmin();
-  const actorId = session.user.id;
-  const target = await loadTarget(actorId, input.userId, 'admin.user.resendVerification');
-  if (target.emailVerified) {
-    log.warn({ actorId, userId: target.id }, '[admin.user.resendVerification] already verified');
-    throw new ValidationError('Email уже подтверждён');
-  }
-  await enforceAdminMailLimit(actorId);
-  await callAdminApi((api) =>
-    api.sendVerificationEmail({
-      body: { email: target.email, callbackURL: verifyEmailCallbackPath('/') },
-      headers: new Headers(),
-    }),
-  );
-  log.info(
-    { actorId, userId: target.id, email: maskEmail(target.email) },
-    '[admin.user.resendVerification] sent',
-  );
-  await recordAdminUserEvent('admin.verification_sent', session, target);
 }

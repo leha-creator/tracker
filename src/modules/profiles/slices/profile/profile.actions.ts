@@ -9,7 +9,7 @@ import { formValues, type FormState } from '@/shared/types';
 import { updateProfileSchema } from './profile.schema';
 import { updateProfile } from './profile.service';
 
-/** Имя видно везде (шапка, задачи, комментарии) — перерисовываем всё приложение. */
+/** Должность видна в карточках участников по всему приложению — перерисовываем всё. */
 function revalidateApp() {
   revalidatePath('/', 'layout');
 }
@@ -27,7 +27,7 @@ export async function updateProfileAction(
   } catch (error) {
     return {
       ...toActionError(error, { action: 'updateProfile' }),
-      values: formValues(formData, ['name', 'position', 'bio']),
+      values: formValues(formData, ['position', 'bio']),
     };
   }
 }

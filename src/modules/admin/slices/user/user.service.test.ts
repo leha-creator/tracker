@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AccessModule from '@/shared/access';
 import { recordAuditEvent } from '@/shared/audit';
 import type { AuthSession } from '@/shared/auth';
-import { ForbiddenError, ValidationError } from '@/shared/errors';
+import { ForbiddenError } from '@/shared/errors';
 
 interface UserRow {
   id: string;
@@ -13,14 +13,11 @@ interface UserRow {
   banned: boolean | null;
   banExpires: Date | null;
   isAgent: boolean;
-  twoFactorEnabled?: boolean;
-  emailVerified?: boolean;
 }
 
 const requireAdmin = vi.fn<() => Promise<AuthSession>>();
 const findById = vi.fn<(id: string) => Promise<UserRow | null>>();
 const list = vi.fn();
-const resetTwoFactor = vi.fn<(id: string) => Promise<void>>();
 const countWorkspacesByUsers = vi.fn<(ids: string[]) => Promise<Map<string, number>>>();
 const listSoleOwnedWorkspaces =
   vi.fn<(userId: string) => Promise<{ id: string; name: string; slug: string }[]>>();
@@ -29,22 +26,15 @@ const unbanUserApi = vi.fn();
 const setRoleApi = vi.fn();
 const revokeUserSessionsApi = vi.fn();
 const removeUserApi = vi.fn();
-const cleanupAvatar = vi.fn<() => Promise<void>>();
-const prepareAvatarCleanup = vi.fn<(userId: string) => Promise<() => Promise<void>>>();
 const deleteSession = vi.fn<(userId: string, sessionId: string) => Promise<boolean>>();
-const markEmailVerified = vi.fn<(id: string) => Promise<void>>();
 const revokeApiTokenBySystem =
   vi.fn<(userId: string, tokenId: string) => Promise<{ name: string; revoked: boolean }>>();
-const requestPasswordResetApi = vi.fn();
-const sendVerificationEmailApi = vi.fn();
-const enforceRateLimit = vi.fn<(action: string, subject: unknown) => Promise<void>>();
 
 vi.mock('@/shared/access', async (importOriginal) => ({
   ...(await importOriginal<typeof AccessModule>()),
   requireAdmin: () => requireAdmin(),
 }));
 vi.mock('@/modules/profiles', () => ({
-  prepareAvatarCleanup: (userId: string) => prepareAvatarCleanup(userId),
   getProfileCards: vi.fn(),
 }));
 vi.mock('@/modules/workspaces', () => ({
@@ -59,8 +49,6 @@ vi.mock('@/modules/api-tokens', () => ({
 }));
 vi.mock('@/modules/auth', () => ({
   listUserSessionsBySystem: vi.fn(),
-  markEmailVerifiedBySystem: (id: string) => markEmailVerified(id),
-  resetTwoFactorBySystem: (id: string) => resetTwoFactor(id),
   revokeUserSessionBySystem: (userId: string, sessionId: string) =>
     deleteSession(userId, sessionId),
 }));
@@ -68,10 +56,6 @@ vi.mock('@/modules/auth/client', () => ({
   describeUserAgent: () => ({ label: 'Неизвестное устройство' }),
 }));
 vi.mock('@/modules/integrations/github', () => ({ getGithubIdentity: vi.fn() }));
-vi.mock('@/shared/rate-limit', () => ({
-  enforceRateLimit: (action: string, subject: unknown) => enforceRateLimit(action, subject),
-  getClientIp: () => '203.0.113.1',
-}));
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve(new Headers()) }));
 vi.mock('./user.repository', () => ({
   userRepository: {
@@ -88,8 +72,6 @@ vi.mock('../../admin-api', () => ({
         setRole: setRoleApi,
         revokeUserSessions: revokeUserSessionsApi,
         removeUser: removeUserApi,
-        requestPasswordReset: requestPasswordResetApi,
-        sendVerificationEmail: sendVerificationEmailApi,
       },
       new Headers(),
     ),
@@ -99,15 +81,11 @@ const {
   banUser,
   deleteUser,
   listAdminUsers,
-  resendVerificationEmail,
-  resetUserTwoFactor,
   revokeUserApiToken,
   revokeUserSession,
   revokeUserSessions,
-  sendPasswordResetEmail,
   setUserRole,
   unbanUser,
-  verifyUserEmail,
 } = await import('./user.service');
 const { defaultAdminUserListQuery } = await import('../../models');
 
@@ -142,7 +120,6 @@ beforeEach(() => {
   requireAdmin.mockResolvedValue(adminSession);
   findById.mockResolvedValue(userRow());
   listSoleOwnedWorkspaces.mockResolvedValue([]);
-  enforceRateLimit.mockResolvedValue();
 });
 
 describe('access', () => {
@@ -324,57 +301,16 @@ describe('deleteUser', () => {
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 
-  it('removes the user through the plugin and then the avatar', async () => {
-    prepareAvatarCleanup.mockResolvedValue(cleanupAvatar);
-    removeUserApi.mockImplementation(() => {
-      expect(cleanupAvatar).not.toHaveBeenCalled();
-      return Promise.resolve();
-    });
+  it('removes the user through the plugin', async () => {
     await deleteUser({ userId: 'user-2', confirmEmail: 'user@example.com' });
     expect(listSoleOwnedWorkspaces).toHaveBeenCalledWith('user-2');
     expect(removeUserApi).toHaveBeenCalledWith(
       expect.objectContaining({ body: { userId: 'user-2' } }),
     );
-    expect(prepareAvatarCleanup).toHaveBeenCalledWith('user-2');
-    expect(cleanupAvatar).toHaveBeenCalledTimes(1);
     // Строки пользователя уже нет — событие без ссылки на него.
     const event = vi.mocked(recordAuditEvent).mock.calls.at(-1)?.[0];
     expect(event).toMatchObject({ kind: 'admin.user_deleted', data: { userName: 'Борис' } });
     expect(event).not.toHaveProperty('targetUserId');
-  });
-});
-
-describe('resetUserTwoFactor', () => {
-  beforeEach(() => {
-    requireAdmin.mockResolvedValue(adminSession);
-    resetTwoFactor.mockReset().mockResolvedValue();
-    revokeUserSessionsApi.mockReset().mockResolvedValue({ success: true });
-  });
-
-  it('rejects non-admins', async () => {
-    requireAdmin.mockRejectedValueOnce(new ForbiddenError());
-    await expect(resetUserTwoFactor({ userId: 'user-2' })).rejects.toBeInstanceOf(ForbiddenError);
-    expect(resetTwoFactor).not.toHaveBeenCalled();
-  });
-
-  it('rejects acting on yourself', async () => {
-    findById.mockResolvedValue(userRow({ id: 'admin-1', twoFactorEnabled: true }));
-    await expect(resetUserTwoFactor({ userId: 'admin-1' })).rejects.toBeInstanceOf(ForbiddenError);
-    expect(resetTwoFactor).not.toHaveBeenCalled();
-  });
-
-  it('rejects when 2FA is off', async () => {
-    findById.mockResolvedValue(userRow({ twoFactorEnabled: false }));
-    await expect(resetUserTwoFactor({ userId: 'user-2' })).rejects.toBeInstanceOf(ValidationError);
-  });
-
-  it('resets 2FA and revokes sessions', async () => {
-    findById.mockResolvedValue(userRow({ twoFactorEnabled: true }));
-    await resetUserTwoFactor({ userId: 'user-2' });
-    expect(resetTwoFactor).toHaveBeenCalledWith('user-2');
-    expect(revokeUserSessionsApi).toHaveBeenCalledWith(
-      expect.objectContaining({ body: { userId: 'user-2' } }),
-    );
   });
 });
 
@@ -434,64 +370,5 @@ describe('revokeUserApiToken', () => {
     revokeApiTokenBySystem.mockResolvedValue({ name: 'Ноутбук', revoked: false });
     await revokeUserApiToken({ userId: 'user-2', tokenId });
     expect(vi.mocked(recordAuditEvent)).not.toHaveBeenCalled();
-  });
-});
-
-describe('verifyUserEmail', () => {
-  it('marks the email verified', async () => {
-    await verifyUserEmail({ userId: 'user-2' });
-    expect(markEmailVerified).toHaveBeenCalledWith('user-2');
-    expect(vi.mocked(recordAuditEvent)).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'admin.user_email_verified' }),
-    );
-  });
-
-  it('rejects an already verified email', async () => {
-    findById.mockResolvedValue(userRow({ emailVerified: true }));
-    await expect(verifyUserEmail({ userId: 'user-2' })).rejects.toBeInstanceOf(ValidationError);
-    expect(markEmailVerified).not.toHaveBeenCalled();
-  });
-});
-
-describe('admin mail', () => {
-  it('sends the password reset to the user email without the admin session', async () => {
-    await sendPasswordResetEmail({ userId: 'user-2' });
-    expect(enforceRateLimit).toHaveBeenCalledWith(
-      'admin-mail',
-      expect.objectContaining({ userId: 'admin-1' }),
-    );
-    const call = requestPasswordResetApi.mock.calls[0]?.[0] as {
-      body: { email: string };
-      headers: Headers;
-    };
-    expect(call.body.email).toBe('user@example.com');
-    expect(call.headers.get('cookie')).toBeNull();
-    expect(vi.mocked(recordAuditEvent)).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'admin.password_reset_sent', targetUserId: 'user-2' }),
-    );
-  });
-
-  it('stops at the rate limit before sending', async () => {
-    enforceRateLimit.mockRejectedValue(Object.assign(new Error('limit'), { code: 'RATE_LIMITED' }));
-    await expect(sendPasswordResetEmail({ userId: 'user-2' })).rejects.toMatchObject({
-      code: 'RATE_LIMITED',
-    });
-    expect(requestPasswordResetApi).not.toHaveBeenCalled();
-    expect(vi.mocked(recordAuditEvent)).not.toHaveBeenCalled();
-  });
-
-  it('resends verification only for an unverified email', async () => {
-    await resendVerificationEmail({ userId: 'user-2' });
-    expect(sendVerificationEmailApi).toHaveBeenCalledWith(
-      expect.objectContaining({ body: expect.objectContaining({ email: 'user@example.com' }) }),
-    );
-
-    vi.clearAllMocks();
-    requireAdmin.mockResolvedValue(adminSession);
-    findById.mockResolvedValue(userRow({ emailVerified: true }));
-    await expect(resendVerificationEmail({ userId: 'user-2' })).rejects.toBeInstanceOf(
-      ValidationError,
-    );
-    expect(sendVerificationEmailApi).not.toHaveBeenCalled();
   });
 });

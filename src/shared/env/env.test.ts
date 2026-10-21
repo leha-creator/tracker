@@ -11,6 +11,8 @@ const VALID_ENV = {
   S3_BUCKET: 'tasker-attachments',
   BETTER_AUTH_SECRET: 'a-very-long-local-development-secret-value',
   BETTER_AUTH_URL: 'http://localhost:3000',
+  OIDC_ISSUER: 'https://auth.plwedding.ru/',
+  OIDC_CLIENT_SECRET: 'local-tasker-secret-0123456789abcdef',
 };
 
 describe('parseEnv', () => {
@@ -102,14 +104,6 @@ describe('parseEnv', () => {
 
   it('defaults ADMIN_EMAILS to an empty list', () => {
     expect(parseEnv(VALID_ENV).ADMIN_EMAILS).toEqual([]);
-  });
-
-  it('requires email verification by default', () => {
-    expect(parseEnv(VALID_ENV).AUTH_REQUIRE_EMAIL_VERIFICATION).toBe(true);
-    expect(
-      parseEnv({ ...VALID_ENV, AUTH_REQUIRE_EMAIL_VERIFICATION: 'false' })
-        .AUTH_REQUIRE_EMAIL_VERIFICATION,
-    ).toBe(false);
   });
 
   it('applies SMTP defaults for local Mailpit', () => {
@@ -209,6 +203,30 @@ describe('parseEnv', () => {
         'GITHUB_WEBHOOK_SECRET',
       ]);
       expect((caught as EnvValidationError).message).not.toContain('short');
+    });
+  });
+
+  describe('OIDC', () => {
+    it('normalizes issuer to origin and defaults client id', () => {
+      const env = parseEnv(VALID_ENV);
+      expect(env.OIDC_ISSUER).toBe('https://auth.plwedding.ru');
+      expect(env.OIDC_CLIENT_ID).toBe('tasker');
+    });
+
+    it('requires issuer and secret', () => {
+      const { OIDC_ISSUER: _issuer, ...withoutIssuer } = VALID_ENV;
+      expect(() => parseEnv(withoutIssuer)).toThrow(/OIDC_ISSUER/);
+      const { OIDC_CLIENT_SECRET: _secret, ...withoutSecret } = VALID_ENV;
+      expect(() => parseEnv(withoutSecret)).toThrow(/OIDC_CLIENT_SECRET/);
+    });
+
+    it('rejects issuer with path and short secret without leaking it', () => {
+      expect(() =>
+        parseEnv({ ...VALID_ENV, OIDC_ISSUER: 'https://auth.plwedding.ru/oidc' }),
+      ).toThrow(/OIDC_ISSUER/);
+      const short = { ...VALID_ENV, OIDC_CLIENT_SECRET: 'short-oidc-secret' };
+      expect(() => parseEnv(short)).toThrow(/OIDC_CLIENT_SECRET/);
+      expect(() => parseEnv(short)).not.toThrow(/short-oidc/);
     });
   });
 

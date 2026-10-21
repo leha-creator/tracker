@@ -43,10 +43,6 @@ export function UserDetailHeader({ user }: { user: AdminUserDetailDto['user'] })
                   : 'Заблокирован бессрочно'}
               </Badge>
             )}
-            <Badge variant="outline">
-              {user.emailVerified ? 'Email подтверждён' : 'Email не подтверждён'}
-            </Badge>
-            <Badge variant="outline">{user.twoFactorEnabled ? '2FA включена' : 'Без 2FA'}</Badge>
             {user.github && <Badge variant="outline">GitHub привязан</Badge>}
           </div>
         </div>
@@ -60,8 +56,6 @@ export function UserDetailHeader({ user }: { user: AdminUserDetailDto['user'] })
               email: user.email,
               role: user.role,
               banned,
-              twoFactorEnabled: user.twoFactorEnabled,
-              emailVerified: user.emailVerified,
             }}
           />
         )}

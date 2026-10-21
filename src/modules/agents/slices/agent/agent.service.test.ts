@@ -71,7 +71,7 @@ function agentRow(overrides: Record<string, unknown> = {}) {
     createdAt: new Date('2026-10-01'),
     user: {
       name: 'Claude — backend',
-      image: '/api/users/agent-1/avatar',
+      image: '/agent-avatar.svg',
       workspaceMemberships: [
         { workspaceId: 'ws-1', canManageProjects: false, canManageDocuments: true },
       ],
@@ -135,7 +135,7 @@ describe('createAgent', () => {
       flags: unknown;
     };
     expect(data.email).toBe(`agent-${data.agentId}@agents.tasker.invalid`);
-    expect(data.image).toBe(`/api/users/${data.agentId}/avatar`);
+    expect(data.image).toBe('/agent-avatar.svg');
     expect(data.createdById).toBe('owner-1');
     expect(data.flags).toEqual({ canManageProjects: false, canManageDocuments: true });
     expect(agent).toMatchObject({

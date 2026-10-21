@@ -33,31 +33,17 @@ export async function revokeUserSessionBySystem(
   return deleted > 0;
 }
 
-export async function markEmailVerifiedBySystem(userId: string): Promise<void> {
-  await accountRepository.markEmailVerified(userId);
-  log.debug({ userId }, '[auth.account.markEmailVerified]');
-}
-
-/** Удаляет секрет и резервные коды 2FA, снимает флаг. Сессии завершает вызывающий. */
-export async function resetTwoFactorBySystem(userId: string): Promise<void> {
-  await accountRepository.resetTwoFactor(userId);
-  log.debug({ userId }, '[auth.account.resetTwoFactor]');
-}
-
 /**
- * Метрики учётных записей: пользователи, сессии, регистрации по дням с `signupsSince`,
- * неудачные входы с `failedSignInsSince`.
+ * Метрики учётных записей: пользователи, сессии, регистрации по дням с `signupsSince`.
  */
 export async function getAccountMetrics(input: {
   now: Date;
   signupsSince: Date;
-  failedSignInsSince: Date;
 }): Promise<AccountMetricsDto> {
-  const [users, sessions, signupsByDay, failedSignIns] = await Promise.all([
+  const [users, sessions, signupsByDay] = await Promise.all([
     accountRepository.userCounts(input.now),
     accountRepository.sessionCounts(input.now),
     accountRepository.signupsByDay(input.signupsSince),
-    accountRepository.countFailedSignIns(input.failedSignInsSince),
   ]);
-  return { users, sessions, signupsByDay, failedSignIns };
+  return { users, sessions, signupsByDay };
 }

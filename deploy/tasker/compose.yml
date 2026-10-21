@@ -57,7 +57,9 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
       BETTER_AUTH_URL: https://${DOMAIN}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
-      AUTH_REQUIRE_EMAIL_VERIFICATION: ${AUTH_REQUIRE_EMAIL_VERIFICATION:-true}
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://auth.plwedding.ru}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-tasker}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?OIDC_CLIENT_SECRET is required}
       # Пока SMTP не настроен, приложение работает, но письма приглашений не отправляются.
       SMTP_HOST: ${SMTP_HOST:-127.0.0.1}
       SMTP_PORT: ${SMTP_PORT:-465}

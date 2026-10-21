@@ -1,4 +1,4 @@
-import { Ban, Building2, KeyRound, ShieldAlert, UserPlus, Users } from 'lucide-react';
+import { Ban, Building2, KeyRound, UserPlus, Users } from 'lucide-react';
 import Link from 'next/link';
 import type { ComponentType } from 'react';
 
@@ -14,8 +14,6 @@ interface Tile {
   hint: string;
   icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
   href?: string;
-  /** Тревожное значение — цветом, только если оно не ноль. */
-  alert?: boolean;
 }
 
 const TILE_CLASS =
@@ -28,7 +26,7 @@ export function OverviewTiles({ overview }: { overview: ResourceOverviewDto }) {
       key: 'users',
       label: 'Пользователи',
       value: overview.users.total,
-      hint: `Администраторов: ${overview.users.admins}, с 2FA: ${overview.users.twoFactor}, без подтверждённого email: ${overview.users.unverified}`,
+      hint: `Администраторов: ${overview.users.admins}`,
       icon: Users,
       href: '/admin/users',
     },
@@ -63,41 +61,21 @@ export function OverviewTiles({ overview }: { overview: ResourceOverviewDto }) {
       hint: `Из них вход от имени пользователя: ${overview.sessions.impersonated}`,
       icon: KeyRound,
     },
-    {
-      key: 'failed',
-      label: 'Неудачные входы за 24 ч',
-      value: overview.failedSignIns24h,
-      hint: 'Неверный пароль или код у существующих аккаунтов',
-      icon: ShieldAlert,
-      href: adminActivityHref({ ...EMPTY_ADMIN_AUDIT_QUERY, kind: 'auth.sign_in_failed' }),
-      alert: true,
-    },
   ];
 
   return (
     <ul
-      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6"
+      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
       aria-label="Сводка ресурса"
     >
       {tiles.map((tile) => {
-        const alarming = tile.alert && tile.value > 0;
         const body = (
           <>
             <span className="flex items-start gap-1.5 text-sm leading-5 text-muted-foreground">
-              <tile.icon
-                aria-hidden
-                className={cn('mt-0.5 size-4 shrink-0', alarming && 'text-destructive')}
-              />
+              <tile.icon aria-hidden className="mt-0.5 size-4 shrink-0" />
               <span className="min-w-0">{tile.label}</span>
             </span>
-            <span
-              className={cn(
-                'text-3xl font-semibold tracking-tight tabular-nums',
-                alarming && 'text-destructive',
-              )}
-            >
-              {tile.value}
-            </span>
+            <span className="text-3xl font-semibold tracking-tight tabular-nums">{tile.value}</span>
           </>
         );
         return (

@@ -16,15 +16,11 @@ import {
 import {
   banUser,
   deleteUser,
-  resendVerificationEmail,
-  resetUserTwoFactor,
   revokeUserApiToken,
   revokeUserSession,
   revokeUserSessions,
-  sendPasswordResetEmail,
   setUserRole,
   unbanUser,
-  verifyUserEmail,
 } from './user.service';
 
 /** Действия меняют только данные админки. */
@@ -78,19 +74,6 @@ export async function revokeUserSessionsAction(
   }
 }
 
-export async function resetUserTwoFactorAction(
-  _prev: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  try {
-    await resetUserTwoFactor(userIdSchema.parse(Object.fromEntries(formData)));
-    revalidateAdmin();
-    return { ok: true, data: null };
-  } catch (error) {
-    return { ...toActionError(error, { action: 'resetUserTwoFactor' }), values: {} };
-  }
-}
-
 export async function deleteUserAction(_prev: FormState, formData: FormData): Promise<FormState> {
   try {
     await deleteUser(deleteUserSchema.parse(Object.fromEntries(formData)));
@@ -134,32 +117,5 @@ export async function revokeUserTokenAction(
 ): Promise<FormState> {
   return runSimple('revokeUserToken', formData, (input) =>
     revokeUserApiToken(revokeUserTokenSchema.parse(input)),
-  );
-}
-
-export async function verifyUserEmailAction(
-  _prev: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  return runSimple('verifyUserEmail', formData, (input) =>
-    verifyUserEmail(userIdSchema.parse(input)),
-  );
-}
-
-export async function sendPasswordResetAction(
-  _prev: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  return runSimple('sendPasswordReset', formData, (input) =>
-    sendPasswordResetEmail(userIdSchema.parse(input)),
-  );
-}
-
-export async function resendVerificationEmailAction(
-  _prev: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  return runSimple('resendVerificationEmail', formData, (input) =>
-    resendVerificationEmail(userIdSchema.parse(input)),
   );
 }

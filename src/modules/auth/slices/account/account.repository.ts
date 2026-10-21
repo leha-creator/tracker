@@ -33,33 +33,13 @@ export const accountRepository = {
     return count;
   },
 
-  async markEmailVerified(userId: string): Promise<void> {
-    await prisma.user.update({ where: { id: userId }, data: { emailVerified: true } });
-  },
-
-  /** Сброс 2FA: секрет и резервные коды удаляются, флаг снимается — атомарно. */
-  async resetTwoFactor(userId: string): Promise<void> {
-    await prisma.$transaction([
-      prisma.twoFactor.deleteMany({ where: { userId } }),
-      prisma.user.update({ where: { id: userId }, data: { twoFactorEnabled: false } }),
-    ]);
-  },
-
-  async userCounts(now: Date): Promise<{
-    total: number;
-    admins: number;
-    banned: number;
-    unverified: number;
-    twoFactor: number;
-  }> {
-    const [total, admins, banned, unverified, twoFactor] = await prisma.$transaction([
+  async userCounts(now: Date): Promise<{ total: number; admins: number; banned: number }> {
+    const [total, admins, banned] = await prisma.$transaction([
       prisma.user.count({ where: people }),
       prisma.user.count({ where: { ...people, role: 'admin' } }),
       prisma.user.count({ where: { AND: [people, bannedNow(now)] } }),
-      prisma.user.count({ where: { ...people, emailVerified: false } }),
-      prisma.user.count({ where: { ...people, twoFactorEnabled: true } }),
     ]);
-    return { total, admins, banned, unverified, twoFactor };
+    return { total, admins, banned };
   },
 
   /** Действующие сессии людей; входы «от имени» — отдельно. */
@@ -80,15 +60,5 @@ export const accountRepository = {
       WHERE "createdAt" >= ${since} AND "isAgent" = false
       GROUP BY 1
       ORDER BY 1`;
-  },
-
-  /**
-   * Неудачные входы с момента `since` — из журнала (AuditEvent). Таблицу модуля audit читаем
-   * своим запросом, как notifications читает User: обратной зависимости нет.
-   */
-  countFailedSignIns(since: Date): Promise<number> {
-    return prisma.auditEvent.count({
-      where: { kind: 'auth.sign_in_failed', createdAt: { gte: since } },
-    });
   },
 };

@@ -107,9 +107,12 @@ export async function unlinkGithub(session: AuthSession): Promise<void> {
     await getAuth().api.unlinkAccount({ body: { accountId: row.id }, headers: await headers() });
   } catch (error) {
     log.warn({ userId }, '[github.identity] unlink rejected');
-    throw new ForbiddenError('Нельзя отвязать единственный способ входа: сначала задайте пароль', {
-      cause: error,
-    });
+    throw new ForbiddenError(
+      'Нельзя отвязать единственную привязанную учётную запись: сначала войдите через plwedding ID',
+      {
+        cause: error,
+      },
+    );
   }
   log.info({ userId }, '[github.identity] unlinked');
   await recordAuditEvent({

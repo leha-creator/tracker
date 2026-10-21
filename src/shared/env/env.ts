@@ -63,13 +63,16 @@ const envSchema = z
           .filter(Boolean),
       ),
     /**
-     * Обязательное подтверждение email: без него нельзя войти паролем и принять приглашение.
-     * `false` — для локальных стендов без почты и e2e. В продакшене нужен настроенный SMTP.
+     * Вход — только через IdP plwedding ID (docs/configuration.md). Issuer — origin IdP без пути
+     * (https://auth.plwedding.ru), discovery берётся с него.
      */
-    AUTH_REQUIRE_EMAIL_VERIFICATION: z.stringbool().default(true),
+    OIDC_ISSUER: z.url({ protocol: /^https?$/ }),
+    OIDC_CLIENT_ID: z.string().min(1).default('tasker'),
+    /** Секрет клиента — тот же, что `OIDC_TASKER_CLIENT_SECRET` в env IdP. */
+    OIDC_CLIENT_SECRET: z.string().min(32),
 
     /**
-     * SMTP для писем (приглашения, уведомления, подтверждение email, сброс пароля). Локально — Mailpit из compose.yml. По умолчанию 127.0.0.1,
+     * SMTP для писем (приглашения, уведомления, письма администратора). Локально — Mailpit из compose.yml. По умолчанию 127.0.0.1,
      * а не localhost: nodemailer резолвит имя сам, и на Windows/WSL lookup localhost может зависать.
      */
     SMTP_HOST: z.string().min(1).default('127.0.0.1'),
@@ -114,6 +117,9 @@ const envSchema = z
         ctx.addIssue({ code: 'custom', path: [key], message: 'Задайте все переменные GITHUB_*' });
       }
     }
+    if (new URL(env.OIDC_ISSUER).pathname !== '/') {
+      ctx.addIssue({ code: 'custom', path: ['OIDC_ISSUER'], message: 'Origin IdP без пути' });
+    }
     if (env.GITHUB_APP_ID !== undefined && !/^\d+$/.test(env.GITHUB_APP_ID)) {
       ctx.addIssue({ code: 'custom', path: ['GITHUB_APP_ID'], message: 'Числовой ID приложения' });
     }
@@ -128,6 +134,8 @@ const envSchema = z
     // `\n` в одной строке .env → настоящие переводы строк PEM.
     GITHUB_APP_PRIVATE_KEY: env.GITHUB_APP_PRIVATE_KEY?.replace(/\\n/g, '\n'),
     GITHUB_ENABLED: env.GITHUB_APP_ID !== undefined,
+    // new URL(...).origin — без завершающего `/`: issuer в discovery IdP записан так же.
+    OIDC_ISSUER: new URL(env.OIDC_ISSUER).origin,
   }));
 
 export type Env = z.infer<typeof envSchema>;

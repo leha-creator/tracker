@@ -26,6 +26,8 @@ export default defineConfig({
       S3_BUCKET: 'test-bucket',
       BETTER_AUTH_SECRET: 'test-secret-that-is-at-least-32-characters',
       BETTER_AUTH_URL: 'http://localhost:3000',
+      OIDC_ISSUER: 'http://localhost:3005',
+      OIDC_CLIENT_SECRET: 'test-oidc-secret-that-is-at-least-32-chars',
     },
   },
 });

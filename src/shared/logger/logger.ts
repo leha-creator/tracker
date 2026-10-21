@@ -31,6 +31,22 @@ export const REDACT_PATHS = [
   '*.newPassword',
   'sessionToken',
   '*.sessionToken',
+  // OAuth/OIDC (вход через IdP). Общие имена code и state не скрываем: так называются коды ошибок
+  // и состояния — сам код авторизации и state в логи не передаются.
+  'idToken',
+  '*.idToken',
+  'id_token',
+  '*.id_token',
+  'id_token_hint',
+  '*.id_token_hint',
+  'accessToken',
+  '*.accessToken',
+  'refreshToken',
+  '*.refreshToken',
+  'codeVerifier',
+  '*.codeVerifier',
+  'code_verifier',
+  '*.code_verifier',
   // Учётные данные SMTP (nodemailer: auth.pass).
   'pass',
   '*.pass',

@@ -10,6 +10,7 @@ import { loadGithubAppConfig } from '@/shared/github-app';
 import { createLogger } from '@/shared/logger';
 
 import { getAuth } from './auth';
+import { loadOidcDiscovery } from './oidc-discovery';
 
 const log = createLogger('auth');
 
@@ -78,8 +79,12 @@ async function readSession(
   // connection() — потому что Better Auth сравнивает срок сессии с Date.now(), а это
   // запрещено в статическом пререндере Cache Components.
   await connection();
-  // Конфиг GitHub App из БД — до getAuth(): от него зависит провайдер входа через GitHub.
-  const [requestHeaders] = await Promise.all([headers(), loadGithubAppConfig()]);
+  // Конфиг GitHub App из БД и доступность IdP — до getAuth(): от них зависят провайдеры входа.
+  const [requestHeaders] = await Promise.all([
+    headers(),
+    loadGithubAppConfig(),
+    loadOidcDiscovery(),
+  ]);
   let result: SessionResult;
   try {
     result = await getAuth().api.getSession({

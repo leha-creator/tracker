@@ -18,28 +18,24 @@ datasource db {
 // src/shared/auth/auth.ts.
 
 model User {
-  id               String    @id
-  name             String
-  email            String    @unique
-  emailVerified    Boolean   @default(false)
-  image            String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   /// Глобальная роль: "user" | "admin" (плагин admin Better Auth).
-  role             String    @default("user")
-  banned           Boolean?  @default(false)
-  banReason        String?
-  banExpires       DateTime?
+  role          String    @default("user")
+  banned        Boolean?  @default(false)
+  banReason     String?
+  banExpires    DateTime?
   /// Служебный пользователь-агент пространства (модуль agents): без пароля и почты, войти не может.
   /// Поле Better Auth с input: false — проставляет только сервис агентов.
-  isAgent          Boolean   @default(false)
-  /// Включена ли двухфакторная аутентификация (плагин twoFactor Better Auth). Меняет только плагин
-  /// и сброс 2FA в админке.
-  twoFactorEnabled Boolean   @default(false)
+  isAgent       Boolean   @default(false)
 
-  sessions   Session[]
-  accounts   Account[]
-  twoFactors TwoFactor[]
+  sessions Session[]
+  accounts Account[]
 
   workspaceMemberships WorkspaceMember[]
   sentInvitations      WorkspaceInvitation[]
@@ -128,25 +124,6 @@ model Verification {
   updatedAt  DateTime @updatedAt
 
   @@index([identifier])
-}
-
-/// TOTP-секрет и резервные коды пользователя (плагин twoFactor Better Auth).
-/// secret и backupCodes плагин хранит зашифрованными; наружу и в логи они не попадают.
-model TwoFactor {
-  id                      String    @id
-  secret                  String
-  backupCodes             String
-  userId                  String
-  /// false — 2FA включена, но ещё не подтверждена первым кодом.
-  verified                Boolean   @default(true)
-  /// Встроенная защита плагина от перебора кодов.
-  failedVerificationCount Int       @default(0)
-  lockedUntil             DateTime?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([secret])
-  @@index([userId])
 }
 
 /// Счётчики rate limit Better Auth для HTTP-эндпоинтов /api/auth/* (rateLimit.storage = "database").
@@ -664,8 +641,8 @@ model TaskAttachment {
 }
 
 // ── Профили ────────────────────────────────────────────────────────────────────
-// Дополнение к User (модель Better Auth не расширяем). Имя и User.image меняются через
-// auth.api.updateUser; в User.image — адрес /api/users/<id>/avatar?v=<версия>.
+// Дополнение к User (модель Better Auth не расширяем). Имя и User.image приходят из IdP
+// plwedding ID при входе; в User.image — адрес /api/idp-avatar/<sub>?v=<версия>.
 
 model UserProfile {
   userId    String   @id
@@ -673,8 +650,6 @@ model UserProfile {
   position  String?
   /// Описание «о себе» — простой текст.
   bio       String?
-  /// Ключ фото в хранилище: users/<userId>/avatar/<id>; null — фото нет.
-  avatarKey String?  @unique
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1297,24 +1272,12 @@ model AuditEvent {
   @@index([viaTokenId])
 }
 
-enum SignupMode {
-  /// Регистрироваться может любой.
-  open
-  /// Только с активным приглашением в пространство на этот email.
-  invite_only
-  /// Регистрация закрыта (кроме ADMIN_EMAILS).
-  closed
-}
-
 /// Настройки ресурса: одна строка id = "default" (src/shared/resource-settings).
 model ResourceSettings {
-  id                      String     @id @default("default")
-  signupMode              SignupMode @default(open)
-  /// Разрешённые домены email в нижнем регистре; пусто — любые.
-  allowedEmailDomains     String[]   @default([])
+  id                      String   @id @default("default")
   /// Квота хранилища пространства по умолчанию, МБ; null — DOCUMENTS_WORKSPACE_QUOTA_MB.
   defaultWorkspaceQuotaMb Int?
-  updatedAt               DateTime   @updatedAt
+  updatedAt               DateTime @updatedAt
   updatedById             String?
 
   updatedBy User? @relation("ResourceSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)

@@ -1,5 +1,3 @@
-export const PROFILE_NAME_MIN_LENGTH = 2;
-export const PROFILE_NAME_MAX_LENGTH = 80;
 export const PROFILE_POSITION_MAX_LENGTH = 80;
 export const PROFILE_BIO_MAX_LENGTH = 1000;
 

@@ -1,9 +1,12 @@
+import { ExternalLink } from 'lucide-react';
 import { Suspense } from 'react';
 
 import { SettingsSection, SettingsSections } from '@/components/layout/settings-section';
-import { ProfileAvatarForm } from '@/components/profile/profile-avatar-form';
 import { ProfileForm } from '@/components/profile/profile-form';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { UserAvatar } from '@/components/users/user-avatar';
+import { getIdpAccountUrl } from '@/modules/auth';
 import { getMyProfile } from '@/modules/profiles';
 import { requireUserOrRedirect } from '@/shared/access';
 
@@ -22,20 +25,25 @@ async function ProfileSections() {
   return (
     <SettingsSections>
       <SettingsSection
-        title="Фото"
-        description="Видно участникам ваших пространств. PNG, JPEG или WebP до 2 МБ."
+        title="Имя и фото"
+        description="Берутся из plwedding ID и обновляются при входе. Видны участникам ваших пространств."
       >
-        <ProfileAvatarForm name={profile.name} image={profile.image} />
+        <div className="flex flex-wrap items-center gap-4">
+          <UserAvatar user={profile} size="lg" />
+          <span className="font-medium">{profile.name}</span>
+          <Button asChild variant="outline" className="ml-auto">
+            <a href={getIdpAccountUrl()} target="_blank" rel="noreferrer">
+              Изменить в plwedding ID
+              <ExternalLink />
+            </a>
+          </Button>
+        </div>
       </SettingsSection>
       <SettingsSection
         title="О себе"
-        description="Имя, должность и описание показываются в профиле и в карточке при наведении."
+        description="Должность и описание показываются в профиле и в карточке при наведении."
       >
-        <ProfileForm
-          name={profile.name}
-          position={profile.position ?? ''}
-          bio={profile.bio ?? ''}
-        />
+        <ProfileForm position={profile.position ?? ''} bio={profile.bio ?? ''} />
       </SettingsSection>
     </SettingsSections>
   );

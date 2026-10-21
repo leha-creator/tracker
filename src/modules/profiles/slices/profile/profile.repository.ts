@@ -14,7 +14,7 @@ export const profileRepository = {
         image: true,
         role: true,
         createdAt: true,
-        profile: { select: { position: true, bio: true, avatarKey: true } },
+        profile: { select: { position: true, bio: true } },
       },
     });
   },
@@ -47,29 +47,5 @@ export const profileRepository = {
   async isAgent(userId: string): Promise<boolean> {
     const row = await prisma.user.findUnique({ where: { id: userId }, select: { isAgent: true } });
     return row?.isAgent ?? false;
-  },
-
-  async findAvatarKey(userId: string): Promise<string | null> {
-    const row = await prisma.userProfile.findUnique({
-      where: { userId },
-      select: { avatarKey: true },
-    });
-    return row?.avatarKey ?? null;
-  },
-
-  /** Новый ключ фото (null — убрать); возвращает прежний — его объект удаляет сервис. */
-  setAvatarKey(userId: string, avatarKey: string | null): Promise<string | null> {
-    return prisma.$transaction(async (tx) => {
-      const current = await tx.userProfile.findUnique({
-        where: { userId },
-        select: { avatarKey: true },
-      });
-      await tx.userProfile.upsert({
-        where: { userId },
-        create: { userId, avatarKey },
-        update: { avatarKey },
-      });
-      return current?.avatarKey ?? null;
-    });
   },
 };

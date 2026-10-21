@@ -4,21 +4,10 @@ import {
   normalizeProfileBio,
   normalizeProfileLine,
   PROFILE_BIO_MAX_LENGTH,
-  PROFILE_NAME_MAX_LENGTH,
-  PROFILE_NAME_MIN_LENGTH,
   PROFILE_POSITION_MAX_LENGTH,
 } from '../../models/profile';
 
 export const updateProfileSchema = z.object({
-  name: z
-    .string({ error: 'Введите имя' })
-    .transform(normalizeProfileLine)
-    .pipe(
-      z
-        .string()
-        .min(PROFILE_NAME_MIN_LENGTH, `Имя — минимум ${PROFILE_NAME_MIN_LENGTH} символа`)
-        .max(PROFILE_NAME_MAX_LENGTH, `Имя — не больше ${PROFILE_NAME_MAX_LENGTH} символов`),
-    ),
   position: z
     .string()
     .default('')

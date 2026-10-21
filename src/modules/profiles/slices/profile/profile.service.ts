@@ -5,7 +5,6 @@ import type { AuthSession } from '@/shared/auth';
 import { NotFoundError } from '@/shared/errors';
 import { createLogger } from '@/shared/logger';
 
-import { updateAuthUser } from '../../auth-api';
 import { emptyToNull, isAvatarUrl } from '../../models';
 import type { MyProfileDto, ProfileCardDto } from './profile.dto';
 import { profileRepository } from './profile.repository';
@@ -38,7 +37,7 @@ export async function getMyProfile(session: AuthSession): Promise<MyProfileDto> 
   };
 }
 
-/** Имя — через Better Auth (обновляется сессия), должность и описание — в профиле. */
+/** Должность и описание — в профиле tasker; имя и фото приходят из IdP при входе. */
 export async function updateProfile(
   session: AuthSession,
   input: UpdateProfileInput,
@@ -50,7 +49,6 @@ export async function updateProfile(
   const position = emptyToNull(input.position);
   const bio = emptyToNull(input.bio);
   const changed = [
-    input.name !== current.name && 'name',
     position !== (current.profile?.position ?? null) && 'position',
     bio !== (current.profile?.bio ?? null) && 'bio',
   ].filter((field): field is string => field !== false);
@@ -59,10 +57,7 @@ export async function updateProfile(
     log.debug({ userId }, '[profile.update] nothing changed');
     return;
   }
-  if (changed.includes('name')) await updateAuthUser({ name: input.name });
-  if (changed.includes('position') || changed.includes('bio')) {
-    await profileRepository.updateFields(userId, { position, bio });
-  }
+  await profileRepository.updateFields(userId, { position, bio });
   log.info({ userId, changed }, '[profile] updated');
 }
 

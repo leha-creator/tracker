@@ -1,6 +1,6 @@
 import { FormError } from '@/components/forms/form-field';
 import { SettingsSection } from '@/components/layout/settings-section';
-import { githubSignInErrorMessage } from '@/modules/auth';
+import { githubLinkErrorMessage } from '@/modules/auth';
 import { getMyGithubAccount, isGithubEnabled } from '@/modules/integrations/github';
 import type { AuthSession } from '@/shared/auth';
 
@@ -23,7 +23,7 @@ export async function GithubAccountSection({
 }) {
   if (!(await isGithubEnabled())) return null;
   const account = await getMyGithubAccount(session);
-  const error = errorCode ? githubSignInErrorMessage(errorCode) : null;
+  const error = errorCode ? githubLinkErrorMessage(errorCode) : null;
 
   return (
     <SettingsSection

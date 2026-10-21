@@ -8,20 +8,18 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
   PROFILE_BIO_MAX_LENGTH,
-  PROFILE_NAME_MAX_LENGTH,
   PROFILE_POSITION_MAX_LENGTH,
   updateProfileAction,
 } from '@/modules/profiles/client';
 import type { FormState } from '@/shared/types';
 
 interface ProfileFormProps {
-  name: string;
   position: string;
   bio: string;
 }
 
-/** Имя, должность и описание. */
-export function ProfileForm({ name, position, bio }: ProfileFormProps) {
+/** Должность и описание. */
+export function ProfileForm({ position, bio }: ProfileFormProps) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     updateProfileAction,
     null,
@@ -35,15 +33,6 @@ export function ProfileForm({ name, position, bio }: ProfileFormProps) {
   return (
     <form action={formAction} className="grid gap-4" noValidate>
       <FormError message={fieldErrors ? undefined : failure?.error.message} />
-      <FormField
-        name="name"
-        label="Имя"
-        required
-        autoComplete="name"
-        maxLength={PROFILE_NAME_MAX_LENGTH}
-        defaultValue={failure?.values.name ?? name}
-        errors={fieldErrors?.name}
-      />
       <FormField
         name="position"
         label="Должность"

@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
+import { ExternalLink } from 'lucide-react';
 import { Suspense } from 'react';
 
 import { AuditEventList } from '@/components/audit/audit-event-list';
 import { SettingsSection, SettingsSections } from '@/components/layout/settings-section';
 import { ActiveSessions } from '@/components/profile/security/active-sessions';
-import { ChangePasswordForm } from '@/components/profile/security/change-password-form';
-import { TwoFactorSection } from '@/components/profile/security/two-factor-section';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { listMySecurityEvents, parseAuditCursor } from '@/modules/audit';
-import { getMyTwoFactorState, listMySessions } from '@/modules/auth';
+import { getIdpAccountUrl, listMySessions } from '@/modules/auth';
 import { requireUserOrRedirect } from '@/shared/access';
 
 export const metadata: Metadata = { title: 'Безопасность — Tasker' };
@@ -26,10 +26,9 @@ async function SecuritySections({
 }: {
   searchParams: PageProps<'/profile/security'>['searchParams'];
 }) {
-  const session = await requireUserOrRedirect('/profile/security');
+  await requireUserOrRedirect('/profile/security');
   const { events: cursor } = await searchParams;
-  const [twoFactor, sessions, events] = await Promise.all([
-    getMyTwoFactorState(),
+  const [sessions, events] = await Promise.all([
     listMySessions(),
     listMySecurityEvents(parseAuditCursor(cursor)),
   ]);
@@ -37,30 +36,27 @@ async function SecuritySections({
   return (
     <SettingsSections>
       <SettingsSection
-        title="Пароль"
-        description="После смены пароля другие устройства выйдут из аккаунта, а на почту придёт уведомление."
+        title="Пароль и двухфакторная защита"
+        description="Вход в Tasker — через единую учётную запись plwedding ID. Пароль, 2FA и её сеансы меняются там."
       >
-        {twoFactor.hasPassword ? (
-          <ChangePasswordForm />
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Вы входите через GitHub, пароля у аккаунта нет. Задать его можно через «Забыли пароль?»
-            на странице входа.
-          </p>
-        )}
+        <div>
+          <Button asChild variant="outline">
+            <a href={getIdpAccountUrl()} target="_blank" rel="noreferrer">
+              Пароль, 2FA и сессии в plwedding ID
+              <ExternalLink />
+            </a>
+          </Button>
+        </div>
       </SettingsSection>
       <SettingsSection
-        title="Двухфакторная аутентификация"
-        description="Код из приложения-аутентификатора при входе по паролю. Вход через GitHub защищает сам GitHub."
+        title="Сеансы в Tasker"
+        description="Устройства, на которых открыт Tasker. Выход здесь не завершает сеанс plwedding ID."
       >
-        <TwoFactorSection state={twoFactor} email={session.user.email} />
-      </SettingsSection>
-      <SettingsSection title="Активные сессии" description="Устройства, на которых выполнен вход.">
         <ActiveSessions sessions={sessions} />
       </SettingsSection>
       <SettingsSection
         title="Журнал безопасности"
-        description="Входы, неудачные попытки, смена пароля, 2FA, сессии и токены. Незнакомое устройство или IP — повод сменить пароль."
+        description="Входы в Tasker, сессии и токены. Незнакомое устройство или IP — повод сменить пароль в plwedding ID."
       >
         <AuditEventList
           page={events}

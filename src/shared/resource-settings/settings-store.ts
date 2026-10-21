@@ -4,19 +4,14 @@ import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/db';
 import { createLogger } from '@/shared/logger';
 
-import type { SignupMode } from './signup-policy';
-
 const log = createLogger('resource-settings');
 
 const SETTINGS_ID = 'default';
-/** Настройки читаются часто (каждая регистрация, каждая загрузка файла): кеш процесса. */
+/** Настройки читаются часто (каждая загрузка файла): кеш процесса. */
 const RELOAD_INTERVAL_MS = 30_000;
 
-/** Строка ResourceSettings целиком. Группы («Регистрация», «Хранилище») читают свои поля. */
+/** Строка ResourceSettings целиком. */
 export interface ResourceSettingsRow {
-  signupMode: SignupMode;
-  /** Домены в нижнем регистре; пусто — любые. */
-  allowedEmailDomains: string[];
   /** Квота хранилища пространства по умолчанию, МБ; null — DOCUMENTS_WORKSPACE_QUOTA_MB. */
   defaultWorkspaceQuotaMb: number | null;
   updatedAt: Date | null;
@@ -24,8 +19,6 @@ export interface ResourceSettingsRow {
 }
 
 export const DEFAULT_RESOURCE_SETTINGS: ResourceSettingsRow = {
-  signupMode: 'open',
-  allowedEmailDomains: [],
   defaultWorkspaceQuotaMb: null,
   updatedAt: null,
   updatedById: null,
@@ -40,8 +33,6 @@ export async function readSettingsRow(): Promise<ResourceSettingsRow> {
   const row = await prisma.resourceSettings.findUnique({ where: { id: SETTINGS_ID } });
   if (!row) return DEFAULT_RESOURCE_SETTINGS;
   return {
-    signupMode: row.signupMode,
-    allowedEmailDomains: row.allowedEmailDomains,
     defaultWorkspaceQuotaMb: row.defaultWorkspaceQuotaMb,
     updatedAt: row.updatedAt,
     updatedById: row.updatedById,
@@ -50,7 +41,7 @@ export async function readSettingsRow(): Promise<ResourceSettingsRow> {
 
 /**
  * Настройки ресурса с кешем на 30 секунд. Ошибка БД — прежнее значение (или значения по
- * умолчанию): настройки не должны ломать вход и загрузку файлов.
+ * умолчанию): настройки не должны ломать загрузку файлов.
  */
 export async function loadResourceSettings(): Promise<ResourceSettingsRow> {
   const cached = globalForSettings.resourceSettings;

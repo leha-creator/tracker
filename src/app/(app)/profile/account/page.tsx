@@ -1,12 +1,15 @@
 import type { Metadata } from 'next';
+import { ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
 import { GithubAccountSection } from '@/components/github/github-account-section';
 import { SettingsSection, SettingsSections } from '@/components/layout/settings-section';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WORKSPACE_ROLE_LABELS } from '@/components/workspaces/role-label';
+import { getIdpAccountUrl } from '@/modules/auth';
 import { getMyProfile } from '@/modules/profiles';
 import { listMyWorkspaces } from '@/modules/workspaces';
 import { requireUserOrRedirect } from '@/shared/access';
@@ -35,8 +38,13 @@ async function AccountSections({
 
   return (
     <SettingsSections>
-      <SettingsSection title="Аккаунт" description="Данные для входа и роль в Tasker.">
+      <SettingsSection
+        title="Аккаунт"
+        description="Вход — через plwedding ID: email и пароль меняются там."
+      >
         <dl className="grid gap-3 text-sm sm:grid-cols-[10rem_1fr]">
+          <dt className="text-muted-foreground">Имя</dt>
+          <dd>{profile.name}</dd>
           <dt className="text-muted-foreground">Email</dt>
           <dd className="break-all">{profile.email}</dd>
           <dt className="text-muted-foreground">Зарегистрирован</dt>
@@ -50,6 +58,14 @@ async function AccountSections({
             )}
           </dd>
         </dl>
+        <div>
+          <Button asChild variant="outline">
+            <a href={getIdpAccountUrl()} target="_blank" rel="noreferrer">
+              Учётная запись plwedding ID
+              <ExternalLink />
+            </a>
+          </Button>
+        </div>
       </SettingsSection>
 
       <SettingsSection title="Пространства" description="Где вы участник и с какой ролью.">

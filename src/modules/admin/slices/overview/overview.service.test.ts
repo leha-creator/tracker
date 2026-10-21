@@ -57,10 +57,9 @@ const adminSession: AuthSession = {
 
 function metrics(signupsByDay: { day: string; count: number }[]) {
   return {
-    users: { total: 10, admins: 1, banned: 2, unverified: 3, twoFactor: 4 },
+    users: { total: 10, admins: 1, banned: 2 },
     sessions: { active: 4, impersonated: 0 },
     signupsByDay,
-    failedSignIns: 7,
   };
 }
 
@@ -86,13 +85,7 @@ describe('getResourceOverview', () => {
     expect(overview.signups).toHaveLength(30);
     expect(overview.signups.at(-1)).toEqual({ day: today, count: 2 });
     expect(overview.signupsTotal).toBe(2);
-    expect(overview.failedSignIns24h).toBe(7);
-    const { now, failedSignInsSince } = getAccountMetrics.mock.calls[0]![0] as {
-      now: Date;
-      failedSignInsSince: Date;
-    };
-    expect(now.getTime() - failedSignInsSince.getTime()).toBe(24 * 60 * 60 * 1000);
-    expect(overview.users.twoFactor).toBe(4);
+    expect(overview.users.banned).toBe(2);
     expect(overview.health).toEqual({ db: true, storage: false });
     expect(overview.storage.attachments.usedBytes).toBe(50);
   });

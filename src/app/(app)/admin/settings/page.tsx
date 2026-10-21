@@ -1,6 +1,5 @@
 import { Suspense } from 'react';
 
-import { SignupSettingsForm } from '@/components/admin/settings/signup-settings-form';
 import { StorageSettingsForm } from '@/components/admin/settings/storage-settings-form';
 import { SettingsSections } from '@/components/layout/settings-section';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -30,7 +29,6 @@ async function SettingsContent() {
         </p>
       )}
       <SettingsSections>
-        <SignupSettingsForm policy={settings.signup} />
         <StorageSettingsForm storage={settings.storage} />
       </SettingsSections>
     </div>
