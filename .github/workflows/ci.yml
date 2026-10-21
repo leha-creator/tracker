@@ -183,8 +183,11 @@ jobs:
         env:
           DOMAIN: tracker.example.com
           TASKER_DB_PASSWORD: ci
-          MINIO_ROOT_USER: ci
-          MINIO_ROOT_PASSWORD: ci-secret
+          S3_ENDPOINT: https://storage.yandexcloud.net
+          S3_PUBLIC_ENDPOINT: https://storage.yandexcloud.net
+          S3_REGION: ru-central1
+          S3_ACCESS_KEY_ID: ci
+          S3_SECRET_ACCESS_KEY: ci-secret
           S3_BUCKET: tasker-attachments
           BETTER_AUTH_SECRET: ci-secret-0123456789abcdef0123456789
           TASKER_TAG: ci
@@ -386,6 +389,15 @@ jobs:
           else
             echo "shared database: skip (no old tasker_postgres-data volume)"
           fi
+          # Файлы — в Yandex Object Storage: без ключа (его пишет deploy/rotate-storage-key.sh)
+          # приложение не поднимется.
+          ssh target "grep -q '^S3_ACCESS_KEY_ID=..*' ${APP_DIR}/.env" || {
+            echo "::error::S3_ACCESS_KEY_ID is not set in ${APP_DIR}/.env: run deploy/rotate-storage-key.sh first (docs/production.md, «Переезд файлов в Object Storage»)"; exit 1;
+          }
+          ssh target "grep -q '^S3_ENDPOINT=https://' ${APP_DIR}/.env" || {
+            echo "::error::S3_ENDPOINT in ${APP_DIR}/.env is not an https Object Storage endpoint (see deploy/tasker/.env.example)"; exit 1;
+          }
+          echo "object storage: ok"
           echo "::endgroup::"
 
       - name: Upload stack files
@@ -460,7 +472,7 @@ jobs:
           exit 1
 
       # Каждый релиз оставляет на сервере пару образов (~1 ГБ); без очистки диск заполняется,
-      # и MinIO отвечает 507 на загрузку файлов. Откат скачивает тег из GHCR заново.
+      # и останавливаются общий Postgres и остальные сервисы. Откат скачивает тег из GHCR заново.
       - name: Prune old images
         env:
           TAG: ${{ steps.tag.outputs.tag }}
@@ -475,13 +487,13 @@ jobs:
           ssh target "df -h /"
           echo "::endgroup::"
           if [ "${usage:-0}" -ge 85 ]; then
-            echo "::warning::root disk on ${HOST} is ${usage}% full: file uploads fail with 507 when it runs out"
+            echo "::warning::root disk on ${HOST} is ${usage}% full: shared Postgres and other services stop when it runs out"
           fi
 
       - name: Diagnostics on failure
         if: failure()
         run: |
-          ssh target "cd ${APP_DIR} && ${COMPOSE} ps -a && ${COMPOSE} logs --no-color --tail=100 migrate app minio-init" || true
+          ssh target "cd ${APP_DIR} && ${COMPOSE} ps -a && ${COMPOSE} logs --no-color --tail=100 migrate app" || true
           ssh target "cd ${EDGE_DIR} && docker compose logs --no-color --tail=50 caddy" || true
 
       - name: Summary

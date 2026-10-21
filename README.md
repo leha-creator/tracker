@@ -47,7 +47,7 @@ curl http://localhost:3000/api/health
 - **Справка** `/help`: сценарии работы участника, владельца пространства и агентов со скриншотами; скриншоты переснимает скрипт `pnpm help:screenshots`
 - **Tailwind CSS v4 + shadcn/ui**: готовые компоненты в `src/components/ui`
 - **PostgreSQL + Prisma 7**: driver adapter `@prisma/adapter-pg`, логирование SQL-запросов
-- **S3-хранилище**: MinIO локально, `@aws-sdk/client-s3` и presigned POST/GET, приватный бакет
+- **S3-хранилище**: MinIO локально, Yandex Object Storage в продакшене, `@aws-sdk/client-s3` и presigned POST/GET, приватный бакет
 - **Структурированные логи**: pino, уровень через `LOG_LEVEL`, секреты скрываются автоматически
 - **Единый формат ошибок**: `{ code, message, fieldErrors? }` для Server Actions и API
 - **Контроль качества**: ESLint с правилами архитектурных границ, Prettier, Vitest, pre-commit хук

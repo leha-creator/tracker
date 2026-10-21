@@ -1,13 +1,11 @@
 #!/bin/sh
-# Резервные копии прод-стека Tasker на сервере.
+# Копия базы Tasker перед миграциями.
 #
 #   backup.sh db      # pg_dump -Fc общей базы → /opt/tasker/backups/db, хранится BACKUP_KEEP_DB (7)
-#   backup.sh files   # tar тома MinIO → /opt/tasker/backups/files, хранится BACKUP_KEEP_FILES (2)
 #
-# `db` запускает workflow деплоя перед миграциями (ежедневный дамп общей базы делает infra:
-# /opt/backups/dumps/tasker), `files` — таймер под пользователем deploy (ставит
-# deploy/bootstrap-app-server.sh). Копии лежат на том же диске: защищают от ошибок
-# и неудачных миграций, но не от потери сервера.
+# Запускает workflow деплоя перед миграциями. Ежедневный дамп общей базы делает infra
+# (/opt/backups/dumps/tasker), файлы лежат в Yandex Object Storage. Копия лежит на том же
+# диске: защищает от неудачных миграций, но не от потери сервера.
 #
 # База — общий Postgres из leha-creator/infra: хост postgres:5432 в сети db, роль и база tasker,
 # пароль — TASKER_DB_PASSWORD из /opt/tasker/.env. Клиент — временный контейнер в сети db,
@@ -20,12 +18,10 @@ set -eu
 KIND="${1:-}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/tasker/backups}"
 KEEP_DB="${BACKUP_KEEP_DB:-7}"
-KEEP_FILES="${BACKUP_KEEP_FILES:-2}"
 APP_ENV="${APP_ENV:-/opt/tasker/.env}"
 DB_NETWORK="${DB_NETWORK:-db}"
 # Тот же тег, что у общего Postgres в infra: pg_dump не старше сервера.
 PG_IMAGE="${PG_IMAGE:-postgres:18.6-alpine}"
-MINIO_VOLUME="${MINIO_VOLUME:-tasker_minio-data}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 
 log() {
@@ -83,32 +79,10 @@ backup_db() {
   prune 'tasker-*.dump' "$KEEP_DB" "$dir"
 }
 
-backup_files() {
-  dir="$BACKUP_DIR/files"
-  mkdir -p "$dir"
-  if ! docker volume inspect "$MINIO_VOLUME" > /dev/null 2>&1; then
-    log "files skip: volume $MINIO_VOLUME does not exist"
-    return 0
-  fi
-  name="files-$STAMP.tar.gz"
-  log "files start file=$dir/$name"
-  # Образ клиента Postgres уже есть на сервере — отдельный образ для tar не тянем.
-  if ! docker run --rm -v "$MINIO_VOLUME":/data:ro -v "$dir":/backup "$PG_IMAGE" \
-    sh -c "tar czf /backup/$name.tmp -C /data . && chown $(id -u):$(id -g) /backup/$name.tmp"; then
-    rm -f "$dir/$name.tmp"
-    log "files fail"
-    return 1
-  fi
-  mv "$dir/$name.tmp" "$dir/$name"
-  log "files done size=$(wc -c < "$dir/$name") file=$dir/$name"
-  prune 'files-*.tar.gz' "$KEEP_FILES" "$dir"
-}
-
 case "$KIND" in
   db) backup_db ;;
-  files) backup_files ;;
   *)
-    echo "usage: $0 db|files" >&2
+    echo "usage: $0 db" >&2
     exit 2
     ;;
 esac

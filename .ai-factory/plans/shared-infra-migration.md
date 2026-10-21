@@ -156,7 +156,8 @@ Rationale: План закрывает два оставшихся пункта 
   Проверка: локально на `compose.yml` (MinIO) → тестовый бакет из задачи 6: `sync`, `check` (0 расхождений), `--reverse` в пустой локальный бакет. Shellcheck.
   Логирование: `[files-sync] <режим> start|done|fail (<причина>)`, ключи и env-файл не выводятся.
 
-- [ ] **Task 9: прод на Object Storage, удаление MinIO**
+- [x] **Task 9: прод на Object Storage, удаление MinIO**
+  **Итог:** compose без `minio`/`minio-init` и сети `tasker`, `app` в сетях `db` и `edge` (выход в интернет), `S3_*` обязательные; `tracker.caddy` без `@bucket` (caddy validate ok); bootstrap удаляет `tasker-backup-db/files.timer` и `tasker-backup@.service`, подсказывает про ключ; `backup.sh` — только `db`; CI Preflight проверяет `S3_ACCESS_KEY_ID` и `S3_ENDPOINT=https://`. shellcheck, actionlint, `compose config` — зелёные.
   - `deploy/tasker/compose.yml`:
     - `app`: `S3_ENDPOINT`, `S3_PUBLIC_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET` — из `.env` с `:?` (обязательные), `S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}`; убрать `depends_on: minio-init` и сеть `tasker` (остаются `db` и `edge`);
     - удалить `minio`, `minio-init`, том `minio-data`, сеть `tasker` (если больше никем не используется), алиас `tasker-minio`. Том `tasker_minio-data` на сервере не удаляется (compose без `-v` его не трогает);
@@ -170,7 +171,8 @@ Rationale: План закрывает два оставшихся пункта 
   Логирование: `::error::` с причиной в CI, `[bootstrap] ... ok|skip|disabled`, `[backup]` без изменений для `db`.
   Зависит от: задач 6–8; на сервере — от создания бакета infra.
 
-- [ ] **Task 10: документация этапа 2**
+- [x] **Task 10: документация этапа 2**
+  **Итог:** production.md (схема, контракты, «Файлы — Yandex Object Storage», ротация ключа, резервные копии, runbook «Переезд файлов в Object Storage», новый сервер, безопасность), configuration.md, agents.md (строка 507 → 400 EntityTooLarge), AGENTS.md, DESCRIPTION.md, README.
   - `docs/production.md`: схема (браузер ⇄ `storage.yandexcloud.net`, без `tasker-minio`); «Прод-стек» без `minio`/`minio-init`; раздел «Вложения через тот же домен» заменить на «Файлы — Yandex Object Storage» (бакет, CORS, presigned POST/GET напрямую, ключ и ротация — `rotate-storage-key.sh`); «Что CI ждёт от infra»: алиас `tasker-minio` убрать, добавить бакет, сервисный аккаунт и CORS-origin (смена домена — через infra); «Резервные копии»: файлы не бэкапятся tasker'ом, решение — за infra (ссылка на `storage-handoff.md`, «Что остаётся на tasker»); новый раздел «Переезд файлов в Object Storage» — runbook окна 2 и откат (`files-sync.sh --reverse` + `git revert`); «Место на диске» — без MinIO; «Новый сервер» — ключ скриптом.
   - `docs/configuration.md`, «Хранилище для вложений и документов»: прод — Yandex (значения), локально — MinIO, CORS бакета задаёт infra.
   - `AGENTS.md`: `deploy/` — `rotate-storage-key.sh`, `files-sync.sh`; стек «Хранилище файлов: S3 API — локально MinIO, в проде Yandex Object Storage»; `.ai-factory/DESCRIPTION.md` — то же.
@@ -185,7 +187,7 @@ Rationale: План закрывает два оставшихся пункта 
   4. `workflow_dispatch` с `tag=<sha Commit 4>`: защиты проходят, `minio`/`minio-init` удалены (`--remove-orphans`), `app` healthy, `caddy validate`/`reload` зелёные, smoke 200.
   5. Проверки в браузере на `https://tracker.plwedding.ru`: загрузка вложения с прогрессом, скачивание, превью картинки, PDF во `<iframe>`, удаление вложения (объект исчез из бакета), документ-файл и квота пространства, фото профиля, MCP-загрузка через presigned POST (`curl`). `/api/health` — storage ok.
   6. Удалить старый ключ, если это ротация (команда из вывода скрипта). `systemctl disable --now tasker-backup-files.timer`.
-  Откат до удаления тома: `files-sync.sh sync --reverse` (новые файлы — обратно в MinIO), `git revert` Commit 4 + пуш.
+  Откат до удаления тома: `git revert` Commit 4 + пуш (MinIO возвращается на старом томе), затем `files-sync.sh sync --reverse` — новые файлы обратно в MinIO (до revert MinIO уже нет).
   Логирование: результаты шагов, число объектов и расхождений, время простоя — в отчёт `/aif-implement`. Ключи не выводятся.
   Зависит от: задач 6–10.
 

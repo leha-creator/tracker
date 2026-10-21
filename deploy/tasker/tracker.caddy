@@ -12,14 +12,8 @@ __DOMAIN__ {
 	# (и Cookie, Authorization, Set-Cookie) — в сниппете access_log из infra/edge/Caddyfile.
 	import access_log
 
-	# Бакет вложений (path-style, имя = S3_BUCKET из /opt/tasker/.env). Браузер загружает
-	# (presigned POST на /tasker-attachments) и скачивает (presigned GET) файлы напрямую.
-	# Host и путь не переписываются — иначе не сойдётся подпись. Остальной API MinIO снаружи
-	# недоступен.
-	@bucket path /tasker-attachments /tasker-attachments/*
-	handle @bucket {
-		reverse_proxy tasker-minio:9000
-	}
+	# Файлы — в Yandex Object Storage: браузер загружает и скачивает их по presigned-ссылкам
+	# прямо с storage.yandexcloud.net, через этот сайт они не проходят.
 
 	# Поток событий реалтайма (SSE): без сжатия (encode буферизует поток) и со сбросом каждого
 	# кадра клиенту сразу.
