@@ -223,3 +223,29 @@ describe('forAgent', () => {
     expect(text.title).toBe('Вас назначили ответственным (для агента Claude)');
   });
 });
+
+describe('meeting_summary_ready', () => {
+  const payload = {
+    ...task,
+    taskKey: 'TSK-42',
+    documentId: 'doc-1',
+    documentTitle: 'Встреча 21 октября — TSK-42',
+  };
+
+  it('links to the note and names the task', () => {
+    const notification = {
+      type: 'meeting_summary_ready' as const,
+      payload,
+      commentId: null,
+      invitationId: null,
+    };
+    expect(parseNotificationPayload('meeting_summary_ready', payload)).toEqual(payload);
+    expect(parseNotificationPayload('meeting_summary_ready', task)).toBeNull();
+    expect(buildNotificationHref(notification)).toBe('/w/team/docs/doc-1');
+    expect(formatNotificationText(notification)).toEqual({
+      title: 'Конспект встречи сохранён',
+      subject: `TSK-42 ${task.taskTitle}`,
+      excerpt: 'Встреча 21 октября — TSK-42',
+    });
+  });
+});

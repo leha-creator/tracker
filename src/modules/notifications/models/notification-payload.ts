@@ -47,6 +47,13 @@ const pullRequestRef = {
   pullRequestUrl: z.string(),
 };
 
+/** Конспект встречи meet, сохранённый заметкой в документах задачи. */
+const meetingSummaryRef = {
+  ...taskRef,
+  documentId: z.string().min(1),
+  documentTitle: z.string(),
+};
+
 /**
  * Снимок данных события по типу: notifications не читает таблицы задач и пространств, поэтому
  * всё нужное для текста и ссылки сохраняется вместе с уведомлением.
@@ -65,6 +72,7 @@ export const NOTIFICATION_PAYLOAD_SCHEMAS = {
   task_status_changed: z.object(statusChangeRef),
   task_due_soon: z.object(dueDateRef),
   task_overdue: z.object(dueDateRef),
+  meeting_summary_ready: z.object(meetingSummaryRef),
 } satisfies Record<NotificationType, z.ZodType>;
 
 export type NotificationPayloadMap = {
@@ -114,6 +122,8 @@ export function buildNotificationHref(notification: TypedNotification): string {
     case 'task_due_soon':
     case 'task_overdue':
       return `/w/${notification.payload.workspaceSlug}/tasks/${notification.payload.taskNumber}`;
+    case 'meeting_summary_ready':
+      return `/w/${notification.payload.workspaceSlug}/docs/${notification.payload.documentId}`;
     case 'mention':
     case 'task_comment': {
       const base = `/w/${notification.payload.workspaceSlug}/tasks/${notification.payload.taskNumber}`;
@@ -202,6 +212,12 @@ function baseNotificationText(notification: TypedNotification): NotificationText
         title: 'Срок задачи прошёл',
         subject: taskSubject(notification.payload),
         excerpt: `Срок был ${formatDueDate(notification.payload.dueDate)}`,
+      };
+    case 'meeting_summary_ready':
+      return {
+        title: 'Конспект встречи сохранён',
+        subject: taskSubject(notification.payload),
+        excerpt: notification.payload.documentTitle || null,
       };
   }
 }

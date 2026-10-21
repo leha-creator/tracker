@@ -28,6 +28,7 @@ const TYPE_PRIORITY: Record<NotificationType, number> = {
   task_status_changed: 7,
   task_overdue: 8,
   task_due_soon: 9,
+  meeting_summary_ready: 10,
 };
 
 /**

@@ -14,6 +14,8 @@ const GITHUB_KEYS = [
   'GITHUB_WEBHOOK_SECRET',
 ] as const;
 
+const MEET_KEYS = ['MEET_URL', 'MEET_CONTEXT_SECRET', 'MEET_WEBHOOK_SECRET'] as const;
+
 function isValidTimeZone(timeZone: string): boolean {
   try {
     new Intl.DateTimeFormat('en-US', { timeZone });
@@ -95,6 +97,15 @@ const envSchema = z
     GITHUB_WEBHOOK_SECRET: optionalNonEmpty,
 
     /**
+     * Связка с meet (docs/meet.md). Необязательно: все три заданы или ни одной — тогда созвонов по
+     * задачам нет. MEET_URL — origin meet; секреты — общие с meet (TASKER_CONTEXT_SECRET и
+     * TASKER_WEBHOOK_SECRET в его env).
+     */
+    MEET_URL: optionalNonEmpty.pipe(z.url({ protocol: /^https?$/ }).optional()),
+    MEET_CONTEXT_SECRET: optionalNonEmpty.pipe(z.string().min(32).optional()),
+    MEET_WEBHOOK_SECRET: optionalNonEmpty.pipe(z.string().min(32).optional()),
+
+    /**
      * Секрет планировщика: `Authorization: Bearer …` у POST /api/cron/reminders и
      * /api/cron/cleanup. Не задан — эндпоинты отвечают 404: напоминания не рассылаются, журнал
      * действий не чистится.
@@ -117,6 +128,15 @@ const envSchema = z
         ctx.addIssue({ code: 'custom', path: [key], message: 'Задайте все переменные GITHUB_*' });
       }
     }
+    const missingMeet = MEET_KEYS.filter((key) => env[key] === undefined);
+    if (missingMeet.length > 0 && missingMeet.length < MEET_KEYS.length) {
+      for (const key of missingMeet) {
+        ctx.addIssue({ code: 'custom', path: [key], message: 'Задайте все переменные MEET_*' });
+      }
+    }
+    if (env.MEET_URL !== undefined && new URL(env.MEET_URL).pathname !== '/') {
+      ctx.addIssue({ code: 'custom', path: ['MEET_URL'], message: 'Origin meet без пути' });
+    }
     if (new URL(env.OIDC_ISSUER).pathname !== '/') {
       ctx.addIssue({ code: 'custom', path: ['OIDC_ISSUER'], message: 'Origin IdP без пути' });
     }
@@ -134,6 +154,8 @@ const envSchema = z
     // `\n` в одной строке .env → настоящие переводы строк PEM.
     GITHUB_APP_PRIVATE_KEY: env.GITHUB_APP_PRIVATE_KEY?.replace(/\\n/g, '\n'),
     GITHUB_ENABLED: env.GITHUB_APP_ID !== undefined,
+    MEET_ENABLED: env.MEET_URL !== undefined,
+    MEET_URL: env.MEET_URL === undefined ? undefined : new URL(env.MEET_URL).origin,
     // new URL(...).origin — без завершающего `/`: issuer в discovery IdP записан так же.
     OIDC_ISSUER: new URL(env.OIDC_ISSUER).origin,
   }));

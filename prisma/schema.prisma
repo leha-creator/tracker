@@ -74,6 +74,8 @@ model User {
   auditEventsAsImpersonator AuditEvent[]       @relation("AuditEventImpersonator")
   auditEventsAsTarget       AuditEvent[]       @relation("AuditEventTarget")
   updatedResourceSettings   ResourceSettings[] @relation("ResourceSettingsUpdater")
+
+  hostedTaskMeetings TaskMeeting[] @relation("TaskMeetingHost")
 }
 
 model Session {
@@ -366,6 +368,8 @@ model Task {
   githubPullRequests TaskPullRequest[]
   githubBranches     TaskGithubBranch[]
   githubCommits      TaskGithubCommit[]
+  /// Созвоны meet по задаче (модуль integrations/meet).
+  meetings           TaskMeeting[]
 
   @@unique([workspaceId, number])
   @@unique([id, workspaceId])
@@ -676,6 +680,8 @@ enum NotificationType {
   /// Напоминания о сроке: завтра — ответственному, прошёл — ответственному и наблюдателям.
   task_due_soon
   task_overdue
+  /// meet: конспект встречи по задаче сохранён в документах (модуль integrations/meet).
+  meeting_summary_ready
 }
 
 model Notification {
@@ -800,6 +806,8 @@ model Document {
   updatedBy       User?                   @relation("DocumentUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
   tags            DocumentTagAssignment[]
   taskLinks       TaskDocumentLink[]
+  /// Конспект встречи meet, если заметка создана из него.
+  meetingRecap    TaskMeetingRecap?       @relation("TaskMeetingRecapNote")
 
   @@unique([id, workspaceId])
   @@index([workspaceId, folderId, titleKey])
@@ -1281,4 +1289,62 @@ model ResourceSettings {
   updatedById             String?
 
   updatedBy User? @relation("ResourceSettingsUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+}
+
+// ── meet ───────────────────────────────────────────────────────────────────────
+
+/// Встреча meet, начатая из задачи (модуль integrations/meet, docs/meet.md). Создаётся вебхуком
+/// meeting.created по контексту, который подписал tasker.
+model TaskMeeting {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  workspaceId   String
+  taskId        String    @db.Uuid
+  /// Meeting.id в meet.
+  meetMeetingId String    @unique
+  /// Код встречи (abc-defg-hij) и её адрес.
+  code          String
+  url           String
+  /// Пользователь tasker, начавший созвон (по sub организатора); null — удалён.
+  hostUserId    String?
+  /// jti контекста задачи: повтор с тем же jti — та же встреча.
+  contextJti    String    @unique @db.Uuid
+  startedAt     DateTime
+  endedAt       DateTime?
+  createdAt     DateTime  @default(now())
+
+  task     Task               @relation(fields: [taskId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  hostUser User?              @relation("TaskMeetingHost", fields: [hostUserId], references: [id], onDelete: SetNull)
+  recaps   TaskMeetingRecap[]
+
+  @@index([workspaceId, taskId, startedAt])
+  @@index([hostUserId])
+}
+
+/// Конспект встречи (recap.ready). Заметка — в документах задачи; поручения хранятся здесь, чтобы
+/// превращать их в подзадачи.
+model TaskMeetingRecap {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  meetingId   String   @db.Uuid
+  /// Recap.id в meet.
+  meetRecapId String   @unique
+  /// Заметка с конспектом; null — заметку удалили.
+  documentId  String?  @unique @db.Uuid
+  /// Поручения: [{ owner, task, due, subtaskId }] (subtaskId — созданная подзадача или null).
+  actionItems Json
+  completedAt DateTime
+  createdAt   DateTime @default(now())
+
+  meeting  TaskMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  document Document?   @relation("TaskMeetingRecapNote", fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([meetingId, completedAt])
+}
+
+/// Принятые доставки вебхуков meet (X-Meet-Delivery): повтор не обрабатывается. Старше 7 дней удаляются.
+model MeetWebhookDelivery {
+  id         String   @id @db.Uuid
+  event      String
+  receivedAt DateTime @default(now())
+
+  @@index([receivedAt])
 }

@@ -10,6 +10,7 @@ export const NOTIFICATION_TYPES = [
   'task_status_changed',
   'task_due_soon',
   'task_overdue',
+  'meeting_summary_ready',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -90,6 +91,13 @@ export const NOTIFICATION_TYPE_INFO: Record<NotificationType, NotificationTypeIn
     description: 'Прошёл срок задачи, где вы ответственный или за которой следите',
     channels: ['inApp', 'email'],
     defaults: { inApp: true, email: true },
+  },
+  meeting_summary_ready: {
+    label: 'Конспекты встреч',
+    description:
+      'Конспект созвона по задаче, где вы ответственный, наблюдатель или организатор, сохранён в документах',
+    channels: ['inApp', 'email'],
+    defaults: { inApp: true, email: false },
   },
 };
 

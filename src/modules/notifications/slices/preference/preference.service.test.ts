@@ -65,6 +65,7 @@ describe('getMyNotificationPreferences', () => {
       ['task_status_changed', { inApp: true, email: false }],
       ['task_due_soon', { inApp: true, email: true }],
       ['task_overdue', { inApp: true, email: true }],
+      ['meeting_summary_ready', { inApp: true, email: false }],
     ]);
   });
 });

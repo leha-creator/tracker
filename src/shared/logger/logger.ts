@@ -50,6 +50,11 @@ export const REDACT_PATHS = [
   // Учётные данные SMTP (nodemailer: auth.pass).
   'pass',
   '*.pass',
+  // Связка с meet: подписанный контекст задачи и подпись вебхука.
+  'ctx',
+  '*.ctx',
+  'signature',
+  '*.signature',
 ];
 
 export interface RootLoggerOptions {

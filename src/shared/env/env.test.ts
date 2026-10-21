@@ -206,6 +206,47 @@ describe('parseEnv', () => {
     });
   });
 
+  describe('meet', () => {
+    const MEET_ENV = {
+      MEET_URL: 'https://meet.plwedding.ru/',
+      MEET_CONTEXT_SECRET: 'c'.repeat(32),
+      MEET_WEBHOOK_SECRET: 'w'.repeat(32),
+    };
+
+    it('is disabled when nothing is set', () => {
+      const env = parseEnv({ ...VALID_ENV, MEET_URL: '' });
+      expect(env.MEET_ENABLED).toBe(false);
+      expect(env.MEET_URL).toBeUndefined();
+    });
+
+    it('is enabled when everything is set and normalizes the origin', () => {
+      const env = parseEnv({ ...VALID_ENV, ...MEET_ENV });
+      expect(env.MEET_ENABLED).toBe(true);
+      expect(env.MEET_URL).toBe('https://meet.plwedding.ru');
+    });
+
+    it('rejects partial configuration, short secrets and a path', () => {
+      const keysOf = (source: Record<string, string>) => {
+        try {
+          parseEnv({ ...VALID_ENV, ...source });
+        } catch (error) {
+          return (error as EnvValidationError).invalidKeys;
+        }
+        return [];
+      };
+      expect(keysOf({ MEET_URL: MEET_ENV.MEET_URL })).toEqual([
+        'MEET_CONTEXT_SECRET',
+        'MEET_WEBHOOK_SECRET',
+      ]);
+      expect(keysOf({ ...MEET_ENV, MEET_WEBHOOK_SECRET: 'short' })).toEqual([
+        'MEET_WEBHOOK_SECRET',
+      ]);
+      expect(keysOf({ ...MEET_ENV, MEET_URL: 'https://meet.plwedding.ru/app' })).toEqual([
+        'MEET_URL',
+      ]);
+    });
+  });
+
   describe('OIDC', () => {
     it('normalizes issuer to origin and defaults client id', () => {
       const env = parseEnv(VALID_ENV);
