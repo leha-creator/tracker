@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { ViaAgentBadge } from '@/components/agents/via-agent-badge';
 import { TaskDocumentsSection } from '@/components/documents/task-documents/task-documents-section';
 import { TaskGithubSection } from '@/components/github/task-github-section';
+import { TaskMeetingSection } from '@/components/meet/task-meeting-section';
 import { LiveRefresh } from '@/components/realtime/use-live-refresh';
 import { Skeleton } from '@/components/ui/skeleton';
 import { listProjects, listWorkspaceStatuses } from '@/modules/projects';
@@ -15,6 +16,7 @@ import {
   listTaskWatchers,
   type MentionCandidate,
 } from '@/modules/tasks';
+import { isMeetEnabled } from '@/modules/integrations/meet';
 import { listMembers } from '@/modules/workspaces';
 import type { AuthSession } from '@/shared/auth';
 import { NotFoundError } from '@/shared/errors';
@@ -148,6 +150,7 @@ export async function TaskDetailsView({
             archived={archived}
             descendantCount={task.descendantCount}
             actionFields={actionFields}
+            meetEnabled={isMeetEnabled()}
           />
         </TaskToolbar>
 
@@ -302,6 +305,17 @@ export async function TaskDetailsView({
               session={session}
               workspace={{ id: workspace.id }}
               task={{ id: task.id, key: task.key, title: task.title }}
+            />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <TaskMeetingSection
+              session={session}
+              workspace={workspace}
+              taskId={task.id}
+              archived={archived}
+              members={members.map(({ userId, name }) => ({ userId, name }))}
+              taskHref={taskHref}
             />
           </Suspense>
 

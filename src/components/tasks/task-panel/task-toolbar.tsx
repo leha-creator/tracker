@@ -1,11 +1,12 @@
 'use client';
 
-import { Archive, Link2, Maximize2, MoreHorizontal, PanelRightClose, X } from 'lucide-react';
+import { Archive, Link2, Maximize2, MoreHorizontal, PanelRightClose, Video, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 
 import { ConfirmActionDialog } from '@/components/forms/confirm-action-dialog';
+import { useStartMeeting } from '@/components/meet/use-start-meeting';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -66,7 +67,9 @@ interface TaskViewActionsProps {
   /** Сколько подзадач всех уровней уйдёт в архив вместе с задачей. */
   descendantCount: number;
   /** Скрытые поля действий: id пространства и задачи. */
-  actionFields: Record<string, string>;
+  actionFields: { workspaceId: string; taskId: string };
+  /** Настроен meet: в меню есть «Начать созвон». */
+  meetEnabled: boolean;
 }
 
 /** Текст подтверждения архивирования задачи с подзадачами. */
@@ -86,10 +89,12 @@ export function TaskViewActions({
   archived,
   descendantCount,
   actionFields,
+  meetEnabled,
 }: TaskViewActionsProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const onOpenChange = useCallback((open: boolean) => setConfirmOpen(open), []);
   const { pending, run } = useRunTaskAction();
+  const meeting = useStartMeeting(actionFields);
 
   async function copyLink() {
     try {
@@ -143,6 +148,12 @@ export function TaskViewActions({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-48">
+            {meetEnabled && (
+              <DropdownMenuItem onSelect={meeting.start} disabled={meeting.pending}>
+                <Video />
+                Начать созвон
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={archive}>
               <Archive />
               {descendantCount > 0 ? 'В архив…' : 'В архив'}
