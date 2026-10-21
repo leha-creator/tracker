@@ -179,7 +179,8 @@ Rationale: План закрывает два оставшихся пункта 
   Логирование: не требуется.
   Зависит от: задачи 9.
 
-- [ ] **Task 11: окно 2 — переезд файлов** (на сервере, только с подтверждения владельца)
+- [x] **Task 11: окно 2 — переезд файлов** (на сервере, только с подтверждения владельца)
+  **Выполнено 2026-10-21:** пуш `49e22e7` (деплой зелёный, `files-sync.sh` на сервере) → `rotate-storage-key.sh` (ключ `aje3ke9mi2pv0d4smvsh`, копия `.env.bak-20261021`) → `S3_*` в `.env` → предварительный sync/check (53 файла, 4,5 МБ, 0 расхождений) → пуш `51efae9`, на старте джоба деплоя `stop app` + финальный sync/check (53, 0 расхождений) → CI run 39546344657 зелёный. Простой 04:57:42–04:58:01 UTC (~20 с). `minio`/`minio-init` удалены, тома `tasker_minio-data` и сеть `tasker_tasker` остались. Проверка ключом прода из контейнера: `/api/health` storage ok, ListObjects 53, GetObject Range, CORS preflight 200 для прода и 403 для чужого origin, presigned POST 204, HeadObject, DeleteObjects, анонимный GET 403. **Осталось:** проверки через UI под учёткой (вложение, PDF, документ, фото, MCP) — владелец; под root выключить `tasker-backup@db`/`tasker-backup@files` таймеры (повторный bootstrap).
   Перед окном: бакет создан infra, Commit 3 выкачен (на сервере есть `files-sync.sh`), Commit 4 запушен, `deploy` остановился на защите `S3_ACCESS_KEY_ID` (ожидаемо).
   1. `sh deploy/rotate-storage-key.sh` с рабочей машины → ключ в `/opt/tasker/.env`. Дописать в `.env` остальные `S3_*` из `.env.example` (без ключей).
   2. Предварительная копия без простоя: `sh /opt/tasker/files-sync.sh sync`, затем `check`.
