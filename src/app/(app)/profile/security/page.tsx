@@ -7,7 +7,7 @@ import { SettingsSection, SettingsSections } from '@/components/layout/settings-
 import { ActiveSessions } from '@/components/profile/security/active-sessions';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { listMySecurityEvents, parseAuditCursor } from '@/modules/audit';
+import { listMySecurityEvents, parseFeedCursor } from '@/modules/audit';
 import { getIdpAccountUrl, listMySessions } from '@/modules/auth';
 import { requireUserOrRedirect } from '@/shared/access';
 
@@ -30,7 +30,7 @@ async function SecuritySections({
   const { events: cursor } = await searchParams;
   const [sessions, events] = await Promise.all([
     listMySessions(),
-    listMySecurityEvents(parseAuditCursor(cursor)),
+    listMySecurityEvents(parseFeedCursor(cursor)),
   ]);
 
   return (

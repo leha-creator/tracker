@@ -9,6 +9,19 @@ const requireAdmin = vi.fn<() => Promise<AuthSession>>();
 const requireUser = vi.fn<() => Promise<AuthSession>>();
 const requireWorkspaceAccess =
   vi.fn<(session: AuthSession, workspaceId: string) => Promise<unknown>>();
+const findIdpSubject = vi.fn<(userId: string) => Promise<string | null>>();
+const listIdpUserEvents = vi.fn<(sub: string, cursor: string | null) => Promise<unknown>>();
+const listIdpAdminUserEvents =
+  vi.fn<(sub: string, actor: string, cursor: string | null) => Promise<unknown>>();
+
+vi.mock('@/shared/idp', () => ({
+  findIdpSubject: (userId: string) => findIdpSubject(userId),
+  findUsersByIdpSubjects: () =>
+    Promise.resolve(new Map([['sub-u1', { id: 'u1', name: 'Анна', image: null }]])),
+  listIdpUserEvents: (sub: string, cursor: string | null) => listIdpUserEvents(sub, cursor),
+  listIdpAdminUserEvents: (sub: string, actor: string, cursor: string | null) =>
+    listIdpAdminUserEvents(sub, actor, cursor),
+}));
 
 vi.mock('@/shared/access', () => ({
   requireAdmin: () => requireAdmin(),
@@ -34,6 +47,28 @@ const {
 const { EMPTY_ADMIN_AUDIT_QUERY } = await import('../../models');
 
 const session = { user: { id: 'u1', name: 'Анна' }, session: { id: 's1' } } as AuthSession;
+
+/** Типы, которые пишет IdP: в слитых лентах локально не читаются. */
+const APP_KINDS_ONLY = {
+  kind: { notIn: expect.arrayContaining(['auth.sign_in', 'admin.user_banned']) },
+};
+
+function idpEvent(overrides: Record<string, unknown> = {}) {
+  return {
+    id: '0199f0d2-7c3a-7b1e-9a4f-000000000001',
+    kind: 'auth.oidc_authorized',
+    category: 'security',
+    createdAt: new Date('2026-10-19T11:00:00.000Z'),
+    actor: { id: 'sub-u1', name: 'Анна (IdP)' },
+    targetUserId: null,
+    impersonatorId: null,
+    text: 'Вход в Tasker',
+    details: 'скрыто',
+    ip: '198.51.100.7',
+    device: 'Firefox, Linux',
+    ...overrides,
+  };
+}
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
@@ -62,6 +97,9 @@ beforeEach(() => {
   requireAdmin.mockReset().mockResolvedValue(session);
   requireUser.mockReset().mockResolvedValue(session);
   requireWorkspaceAccess.mockReset().mockResolvedValue({});
+  findIdpSubject.mockReset().mockResolvedValue(null);
+  listIdpUserEvents.mockReset().mockResolvedValue({ events: [], nextCursor: null });
+  listIdpAdminUserEvents.mockReset().mockResolvedValue({ events: [], nextCursor: null });
 });
 
 describe('listMemberWorkspaceActivity', () => {
@@ -97,8 +135,10 @@ describe('listMySecurityEvents', () => {
     list.mockResolvedValueOnce([row()]);
     const page = await listMySecurityEvents();
     expect(list.mock.calls[0]?.[0]).toEqual({
-      category: 'security',
-      OR: [{ actorId: 'u1' }, { targetUserId: 'u1' }],
+      AND: [
+        APP_KINDS_ONLY,
+        { category: 'security', OR: [{ actorId: 'u1' }, { targetUserId: 'u1' }] },
+      ],
     });
     expect(page.items[0]).toMatchObject({
       text: 'Вход по паролю',
@@ -111,7 +151,32 @@ describe('listMySecurityEvents', () => {
     list.mockResolvedValueOnce(Array.from({ length: 31 }, () => row()));
     const page = await listMySecurityEvents();
     expect(page.items).toHaveLength(30);
-    expect(page.nextCursor).toMatch(/^2026-10-19T10:00:00.000Z_/);
+    expect(page.nextCursor).toMatch(/^2026-10-19T10:00:00.000Z_.+~-$/);
+  });
+
+  it('merges account events from IdP with the user own sub', async () => {
+    findIdpSubject.mockResolvedValue('sub-u1');
+    list.mockResolvedValueOnce([row({ kind: 'token.issued', data: { tokenName: 'ci' } })]);
+    listIdpUserEvents.mockResolvedValueOnce({ events: [idpEvent()], nextCursor: null });
+    const page = await listMySecurityEvents();
+    expect(listIdpUserEvents).toHaveBeenCalledWith('sub-u1', null);
+    expect(page.items.map((item) => item.text)).toEqual(['Вход в Tasker', expect.any(String)]);
+    expect(page.items[0]).toMatchObject({
+      actor: { id: 'u1', name: 'Анна' },
+      details: null,
+      ip: '198.51.100.7',
+      device: 'Firefox, Linux',
+    });
+    expect(page.nextCursor).toBeNull();
+  });
+
+  it('shows local events and a notice when IdP is unavailable', async () => {
+    findIdpSubject.mockResolvedValue('sub-u1');
+    list.mockResolvedValueOnce([row({ kind: 'token.issued', data: { tokenName: 'ci' } })]);
+    listIdpUserEvents.mockRejectedValueOnce(new Error('timeout'));
+    const page = await listMySecurityEvents();
+    expect(page.items).toHaveLength(1);
+    expect(page.identityUnavailable).toBe(true);
   });
 });
 
@@ -127,10 +192,40 @@ describe('listAdminAuditEvents', () => {
     await listAdminAuditEvents({ ...EMPTY_ADMIN_AUDIT_QUERY, userId: 'u2', category: 'admin' });
     expect(list.mock.calls[0]?.[0]).toEqual({
       AND: [
-        { OR: [{ actorId: 'u2' }, { targetUserId: 'u2' }, { impersonatorId: 'u2' }] },
-        { category: 'admin' },
+        APP_KINDS_ONLY,
+        {
+          AND: [
+            { OR: [{ actorId: 'u2' }, { targetUserId: 'u2' }, { impersonatorId: 'u2' }] },
+            { category: 'admin' },
+          ],
+        },
       ],
     });
+  });
+
+  it('adds the user account events from IdP, filtered and with details', async () => {
+    findIdpSubject.mockImplementation((userId) => Promise.resolve(`sub-${userId}`));
+    listIdpAdminUserEvents.mockResolvedValueOnce({
+      events: [
+        idpEvent({ kind: 'admin.user_banned', category: 'admin', text: 'Заблокировал' }),
+        idpEvent({ id: '0199f0d2-7c3a-7b1e-9a4f-000000000002', category: 'security' }),
+      ],
+      nextCursor: null,
+    });
+    const page = await listAdminAuditEvents({
+      ...EMPTY_ADMIN_AUDIT_QUERY,
+      userId: 'u2',
+      category: 'admin',
+    });
+    expect(listIdpAdminUserEvents).toHaveBeenCalledWith('sub-u2', 'sub-u1', null);
+    expect(page.items.map((item) => item.text)).toEqual(['Заблокировал']);
+    expect(page.items[0]?.details).toBe('скрыто');
+  });
+
+  it('reads only local events without a user filter', async () => {
+    await listAdminAuditEvents(EMPTY_ADMIN_AUDIT_QUERY);
+    expect(findIdpSubject).not.toHaveBeenCalled();
+    expect(listIdpAdminUserEvents).not.toHaveBeenCalled();
   });
 
   it('names a deleted author by the snapshot and an unknown one as system', async () => {

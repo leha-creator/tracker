@@ -75,9 +75,9 @@ tasker/
 │   │   ├── agents/           # Агенты пространства: служебный User (isAgent) + WorkspaceAgent, членство в обход плагина, ответственный, права, отключение/включение; зависит от api-tokens
 │   │   ├── api-tokens/       # Токены доступа (личные и агентов): области (scopes), выпуск, отзыв, authenticateApiToken → AuthSession (роль user, via); срез activity — журнал действий MCP; зависит только от shared
 │   │   ├── agent-mcp/        # MCP-сервер: инструменты задач (чтение, создание, статус, родитель, комментарии, вложения через presigned POST и curl) и документов (поиск, чтение, заметки с версией, загрузка, папки, теги, связи), области токена (TOOL_SCOPES), журнал, правила GitHub, промпты start_task/finish_task; зависит от api-tokens, tasks, projects, workspaces, documents, integrations/github
-│   │   ├── audit/            # Журнал действий: чтение (лента участника, журнал безопасности, журнал админки с фильтрами), тексты событий, очистка по сроку; запись — в shared/audit
+│   │   ├── audit/            # Журнал действий: чтение (лента участника, журнал безопасности, журнал админки с фильтрами), слияние с событиями учётной записи из IdP (mergeAuditFeed, курсор <локальный>~<IdP>), тексты событий, очистка по сроку; запись — в shared/audit
 │   │   ├── help/             # Справка: каталог статей и разделов (models), чтение content/help/<slug>.md с 'use cache', заголовки, картинки и ссылки статьи; тест целостности ссылок и картинок
-│   │   └── admin/            # Администрирование ресурса: модели (правила, запросы списков, имперсонация, ряд по дням), срезы user (карточка, сессии, токены, письма; изменения — плагин admin через callAdminApi и порт auth), impersonation, workspace, settings, overview; зависит от workspaces, profiles, api-tokens, audit, auth, documents, tasks, integrations/github
+│   │   └── admin/            # Администрирование ресурса: модели (правила, запросы списков, имперсонация, ряд по дням), срезы user (карточка, сеансы Tasker, токены; бан, роль, сессии, 2FA, email и письма — Admin API IdP через callIdpAdmin, затем плагин admin через callAdminApi), impersonation, workspace, settings, overview; зависит от workspaces, profiles, api-tokens, audit, auth, documents, tasks, integrations/github
 │   ├── components/
 │   │   ├── layout/           # Каркас: PageContainer (ширина страниц), WorkspaceSections и TabLink (навигация),
 │   │   │                     # nav-items.ts (чистые функции активного раздела), ThemeProvider (next-themes), NotFoundMessage, SettingsSection (секция настроек без карточки: заголовок слева, поля справа, разделитель), SidePanel (модальная панель справа) и create-panel-href (адреса панелей создания), PageHeader (h1) и SectionHeading (h2)
@@ -129,7 +129,8 @@ tasker/
 │   │   ├── mail/             # sendMail() (nodemailer), sendMailInBackground() (after()), escapeHtml()
 │   │   ├── realtime/         # pg LISTEN/NOTIFY: схема события, publish, hub (одно подключение на процесс), SSE-поток с лимитами
 │   │   ├── rate-limit/       # enforceRateLimit(action, { ip, email?, userId? }) — лимиты Server Actions (ActionRateLimit), getClientIp(), правила RATE_LIMITS, purgeExpiredRateLimits
-│   │   ├── audit/            # Каталог событий журнала (категория, видимость, владелец identity/app), recordAuditEvent() — никогда не бросает
+│   │   ├── audit/            # Каталог событий журнала (категория, видимость, владелец identity/app: identity пишет IdP), recordAuditEvent() — никогда не бросает
+│   │   ├── idp/              # Клиент API IdP plwedding ID: idpRequest (Basic с секретом клиента), журнал (listIdpUserEvents, listIdpAdminUserEvents), Admin API (runIdpAdminAction, getIdpAccountState), sub ⇄ userId (Account провайдера plwedding)
 │   │   ├── resource-settings/ # Настройки ресурса: группа «Хранилище» (квота по умолчанию), кеш процесса; регистрацию решает IdP
 │   │   └── health/           # checkHealth() — агрегирует проверки
 │   └── test/                 # Вспомогательное для Vitest
@@ -179,6 +180,7 @@ tasker/
 | `src/app/api/cron/cleanup/route.ts` | Эндпоинт очистки журнала и лимитов для планировщика |
 | `src/shared/audit/index.ts` | `recordAuditEvent` (никогда не бросает), `auditActorFromSession`, `auditRequestContext`; каталог событий (`AUDIT_EVENTS`: категория, схема снимка; `AUDIT_EVENT_OWNERS`: `identity` / `app`) — `client.ts` |
 | `src/modules/audit/index.ts` | Чтение журнала: `listMemberWorkspaceActivity`, `listMySecurityEvents`, `listAdminAuditEvents`, `parseAdminAuditParams`, `parseAuditCursor`, системная `purgeExpiredAuditEvents` (только для `/api/cron/cleanup`); `client.ts` — подписи типов, `describeAuditEvent` |
+| `src/shared/idp/index.ts` | Клиент API IdP: журнал безопасности и Admin API от имени клиента tasker, `IdpApiError`, `findIdpSubject` / `findUsersByIdpSubjects` |
 | `src/shared/resource-settings/index.ts` | Настройки ресурса, группа «Хранилище» (`getStorageSettings`, `saveStorageSettings`, `loadResourceSettings`); кеш процесса 30 с |
 | `src/modules/admin/index.ts` | Администрирование: `listAdminUsers`, `getAdminUserDetail`, `listAdminWorkspaces`, `getAdminWorkspaceDetail`, `getAdminResourceSettings`, `getResourceOverview`, `getMyImpersonation`, `parseAdminUserListParams`, `parseAdminWorkspaceListParams`; actions пользователей (блокировка, роль, сессии, удаление), имперсонации, пространств, настроек хранилища и тестового письма (`client.ts` — для клиентских компонентов) |
 | `src/modules/integrations/github/index.ts` | GitHub: `isGithubEnabled`, `handleGithubWebhook`, `verifyGithubWebhookSignature`, `completeInstallation`, `getGithubSettings`, `listTaskPullRequests`, `listTaskBranchesAndCommits`, `getPullRequestBadges`, `getProjectAutomation`, `getMyGithubAccount`, `getGithubAppSetup`, `completeGithubAppManifest`, `getWorkspaceGithubSummary` (сводка для любого участника), `findTaskReferences` (`client.ts` — actions установки, привязки, автоматизации, типы DTO, `suggestBranchName`) |

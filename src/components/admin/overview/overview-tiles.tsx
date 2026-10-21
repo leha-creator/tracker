@@ -2,10 +2,8 @@ import { Ban, Building2, KeyRound, UserPlus, Users } from 'lucide-react';
 import Link from 'next/link';
 import type { ComponentType } from 'react';
 
-import { adminActivityHref } from '@/components/admin/activity/admin-activity-href';
 import { cn } from '@/lib/utils';
 import { SIGNUPS_PERIOD_DAYS, type ResourceOverviewDto } from '@/modules/admin/client';
-import { EMPTY_ADMIN_AUDIT_QUERY } from '@/modules/audit/client';
 
 interface Tile {
   key: string;
@@ -44,7 +42,8 @@ export function OverviewTiles({ overview }: { overview: ResourceOverviewDto }) {
       value: overview.signupsTotal,
       hint: 'Новые аккаунты людей (без агентов)',
       icon: UserPlus,
-      href: adminActivityHref({ ...EMPTY_ADMIN_AUDIT_QUERY, kind: 'auth.signed_up' }),
+      // Список пользователей по умолчанию — новые сверху; регистрации пишет журнал IdP.
+      href: '/admin/users',
     },
     {
       key: 'workspaces',

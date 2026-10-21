@@ -27,7 +27,7 @@ describe('parseAdminAuditParams', () => {
       workspaceId: 'w1',
       from: '2026-10-01',
       to: '2026-10-19',
-      cursor: null,
+      cursor: { local: null, remote: null },
     });
     expect(hasActiveAuditFilters(query)).toBe(true);
   });
@@ -48,7 +48,7 @@ describe('parseAdminAuditParams', () => {
       workspaceId: null,
       from: null,
       to: null,
-      cursor: null,
+      cursor: { local: null, remote: null },
     });
     expect(hasActiveAuditFilters(query)).toBe(false);
   });

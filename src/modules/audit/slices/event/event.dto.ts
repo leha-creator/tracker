@@ -26,4 +26,6 @@ export interface AuditEventPageDto {
   items: AuditEventDto[];
   /** Курсор следующей страницы; null — событий больше нет. */
   nextCursor: string | null;
+  /** IdP не ответил: лента показана без событий учётной записи. */
+  identityUnavailable?: boolean;
 }

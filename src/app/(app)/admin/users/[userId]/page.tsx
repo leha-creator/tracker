@@ -10,7 +10,7 @@ import { AuditEventList } from '@/components/audit/audit-event-list';
 import { SectionHeading } from '@/components/layout/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getAdminUserDetail } from '@/modules/admin';
-import { EMPTY_ADMIN_AUDIT_QUERY, listAdminAuditEvents, parseAuditCursor } from '@/modules/audit';
+import { EMPTY_ADMIN_AUDIT_QUERY, listAdminAuditEvents, parseFeedCursor } from '@/modules/audit';
 import { requireAdminOrNotFound } from '@/shared/access';
 import { NotFoundError } from '@/shared/errors';
 
@@ -50,8 +50,8 @@ async function UserCard({ params, searchParams }: Props) {
       </Section>
 
       <Section
-        title="Активные сессии"
-        description="Завершённая сессия может оставаться активной до 5 минут — столько живёт кеш сессии в браузере."
+        title="Сеансы в Tasker"
+        description="Устройства, где открыт Tasker. Завершённая сессия может оставаться активной до 5 минут — столько живёт кеш сессии в браузере. «Завершить все сессии» в меню действий завершает и сеансы plwedding ID."
       >
         <UserSessionsList
           userId={user.id}
@@ -70,7 +70,7 @@ async function UserCard({ params, searchParams }: Props) {
 
       <Section
         title="Журнал"
-        description="События, где пользователь — автор или субъект: входы, безопасность, действия в пространствах и действия администраторов над ним."
+        description="События, где пользователь — автор или субъект: входы и безопасность учётной записи (из plwedding ID), действия в пространствах и действия администраторов над ним."
       >
         <Suspense fallback={<Skeleton className="h-40 rounded-xl" />}>
           <UserAudit userId={user.id} searchParams={searchParams} />
@@ -91,7 +91,7 @@ async function UserAudit({
   const page = await listAdminAuditEvents({
     ...EMPTY_ADMIN_AUDIT_QUERY,
     userId,
-    cursor: parseAuditCursor(events),
+    cursor: parseFeedCursor(events),
   });
   return (
     <div className="grid gap-3">

@@ -200,9 +200,9 @@ export function auditKindsOfCategory(category: AuditCategory): AuditEventKind[] 
 
 /**
  * Владелец типа события. `identity` — события учётной записи (вход, пароль, 2FA, действия
- * администратора над учётной записью): переедут в IdP вместе со входом, а tasker будет сливать
- * их со своими в ленты. `app` — пространства, содержимое, токены, агенты, имперсонация,
- * пространства в админке, настройки. Record требует владельца у каждого типа.
+ * администратора над учётной записью): их пишет IdP, история перенесена туда же; tasker их больше
+ * не пишет и берёт из API журнала IdP. `app` — сеансы Tasker, пространства, содержимое, токены,
+ * агенты, имперсонация, пространства в админке, настройки. Record требует владельца у каждого типа.
  */
 export type AuditOwner = 'identity' | 'app';
 
@@ -218,7 +218,7 @@ export const AUDIT_EVENT_OWNERS: Record<AuditEventKind, AuditOwner> = {
   'auth.two_factor_enabled': 'identity',
   'auth.two_factor_disabled': 'identity',
   'auth.backup_codes_regenerated': 'identity',
-  'auth.sessions_revoked': 'identity',
+  'auth.sessions_revoked': 'app',
   // Привязка GitHub-аккаунта нужна для PR и остаётся в tasker.
   'auth.github_linked': 'app',
   'auth.github_unlinked': 'app',
@@ -253,7 +253,7 @@ export const AUDIT_EVENT_OWNERS: Record<AuditEventKind, AuditOwner> = {
   // Глобальная роль admin и удаление пользователя остаются в tasker.
   'admin.user_role_changed': 'app',
   'admin.user_sessions_revoked': 'identity',
-  'admin.user_session_revoked': 'identity',
+  'admin.user_session_revoked': 'app',
   'admin.user_two_factor_reset': 'identity',
   'admin.user_deleted': 'app',
   'admin.user_email_verified': 'identity',

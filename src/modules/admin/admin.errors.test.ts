@@ -1,7 +1,9 @@
 import { APIError } from 'better-auth/api';
 import { describe, expect, it } from 'vitest';
 
-import { mapAdminError } from './admin.errors';
+import { IdpApiError, type IdpErrorCode } from '@/shared/idp';
+
+import { IDP_ADMIN_UNAVAILABLE_MESSAGE, mapAdminError, mapIdpAdminError } from './admin.errors';
 
 function apiError(code: string) {
   return new APIError('BAD_REQUEST', { code, message: `better-auth: ${code}` });
@@ -24,5 +26,45 @@ describe('mapAdminError', () => {
     expect(mapAdminError(unknown)).toBe(unknown);
     const plain = new Error('boom');
     expect(mapAdminError(plain)).toBe(plain);
+  });
+});
+
+describe('mapIdpAdminError', () => {
+  function idpError(code: IdpErrorCode, status: number, retryAfterSeconds: number | null = null) {
+    return new IdpApiError({ status, code, message: `IdP: ${code}`, retryAfterSeconds });
+  }
+
+  it.each([
+    ['VALIDATION_ERROR', 400, 'VALIDATION_ERROR'],
+    ['FORBIDDEN', 403, 'FORBIDDEN'],
+    ['NOT_FOUND', 404, 'NOT_FOUND'],
+  ] as const)('%s → %s with the IdP message', (code, status, expected) => {
+    expect(mapIdpAdminError(idpError(code, status))).toMatchObject({
+      code: expected,
+      message: `IdP: ${code}`,
+    });
+  });
+
+  it('keeps Retry-After of the IdP limit', () => {
+    expect(mapIdpAdminError(idpError('RATE_LIMITED', 429, 120))).toMatchObject({
+      code: 'RATE_LIMITED',
+      retryAfterSeconds: 120,
+    });
+  });
+
+  it.each([
+    ['UNAVAILABLE', 0],
+    ['INTERNAL_ERROR', 502],
+    ['UNAUTHORIZED', 401],
+  ] as const)('%s → 503 with a retry hint', (code, status) => {
+    expect(mapIdpAdminError(idpError(code, status))).toMatchObject({
+      httpStatus: 503,
+      message: IDP_ADMIN_UNAVAILABLE_MESSAGE,
+    });
+  });
+
+  it('passes other errors through', () => {
+    const error = new Error('x');
+    expect(mapIdpAdminError(error)).toBe(error);
   });
 });

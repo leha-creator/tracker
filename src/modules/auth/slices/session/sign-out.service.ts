@@ -2,7 +2,6 @@ import 'server-only';
 
 import { headers } from 'next/headers';
 
-import { auditActorFromSession, auditRequestContext, recordAuditEvent } from '@/shared/audit';
 import { getAuth, getSession } from '@/shared/auth';
 import { getEnv } from '@/shared/env';
 import { createLogger } from '@/shared/logger';
@@ -14,6 +13,7 @@ const log = createLogger('auth.session');
 /**
  * Выход: удаляет сессию tasker и возвращает адрес, куда перейти. Если пользователь входил через
  * IdP, это end_session_endpoint с id_token_hint (выход и из IdP, затем возврат на /login).
+ * В журнал выход пишет IdP.
  */
 export async function signOut(): Promise<string> {
   const requestHeaders = await headers();
@@ -31,14 +31,6 @@ export async function signOut(): Promise<string> {
   log.info({ viaIdp: target !== LOCAL_SIGN_OUT_PATH }, '[session.signOut] signed out');
   if (impersonating && result.url) {
     log.debug('[session.signOut] IdP logout skipped under impersonation');
-  }
-  if (session) {
-    await recordAuditEvent({
-      kind: 'auth.sign_out',
-      actor: auditActorFromSession(session),
-      data: {},
-      request: auditRequestContext(requestHeaders),
-    });
   }
   return target;
 }

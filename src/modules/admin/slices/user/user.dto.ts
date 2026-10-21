@@ -53,6 +53,8 @@ export interface AdminUserDetailDto {
     updatedAt: Date;
     /** Привязанный GitHub-аккаунт (id GitHub) или null. */
     github: { githubId: string } | null;
+    /** Учётная запись в IdP; null — нет связи с IdP или IdP не ответил. */
+    identity: { emailVerified: boolean; twoFactorEnabled: boolean; hasPassword: boolean } | null;
   };
   memberships: UserMembershipDto[];
   sessions: AdminUserSessionDto[];

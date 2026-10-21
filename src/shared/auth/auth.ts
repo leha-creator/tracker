@@ -16,7 +16,6 @@ import { getGithubAppConfig, type GithubAppConfig } from '@/shared/github-app';
 import { createLogger } from '@/shared/logger';
 
 import { allowSessionCreation } from './agent-session-guard';
-import { signInMethodFromRequest, signUpMethodFromRequest } from './auth-audit';
 import { buildAuthRateLimitRules, isSignInProviderAllowed } from './auth-options';
 import {
   buildOidcProviderConfig,
@@ -213,14 +212,10 @@ function createAuth(github: GithubAppConfig | null, oidc: OidcSettings | null) {
             log.info('[auth.hooks] new user promoted to admin via ADMIN_EMAILS');
             return Promise.resolve({ data: { ...user, role: 'admin' } });
           },
-          after: async (user, context) => {
+          // Регистрацию и вход в журнал пишет IdP (auth.oidc_authorized), tasker — нет.
+          after: (user) => {
             log.info({ userId: user.id }, '[auth.hooks] user created');
-            await recordAuditEvent({
-              kind: 'auth.signed_up',
-              actor: { actorId: user.id, actorName: user.name },
-              data: { method: signUpMethodFromRequest(context) },
-              request: context?.headers ? auditRequestContext(context.headers) : null,
-            });
+            return Promise.resolve();
           },
         },
       },
@@ -230,20 +225,6 @@ function createAuth(github: GithubAppConfig | null, oidc: OidcSettings | null) {
           before: async (session) => {
             const allowed = await allowSessionCreation(session, findIsAgent);
             return allowed ? undefined : false;
-          },
-          // Вход создаёт сессию — пишем здесь. Хук выполняется после коммита.
-          // Сессию имперсонации пишет сервис администратора.
-          after: async (session, context) => {
-            if (session.impersonatedBy) return;
-            await recordAuditEvent({
-              kind: 'auth.sign_in',
-              actor: { actorId: session.userId },
-              data: { method: signInMethodFromRequest(context) },
-              request: {
-                ip: session.ipAddress ?? null,
-                userAgent: session.userAgent?.slice(0, 300) ?? null,
-              },
-            });
           },
         },
       },

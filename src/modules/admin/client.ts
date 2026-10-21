@@ -44,11 +44,15 @@ export type {
 export {
   banUserAction,
   deleteUserAction,
+  resendVerificationEmailAction,
+  resetUserTwoFactorAction,
   revokeUserSessionAction,
   revokeUserSessionsAction,
   revokeUserTokenAction,
+  sendPasswordResetAction,
   setUserRoleAction,
   unbanUserAction,
+  verifyUserEmailAction,
 } from './slices/user/user.actions';
 export {
   startImpersonationAction,

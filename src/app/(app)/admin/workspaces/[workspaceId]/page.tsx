@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { UserAvatar } from '@/components/users/user-avatar';
 import { WORKSPACE_ROLE_LABELS } from '@/components/workspaces/role-label';
 import { getAdminWorkspaceDetail } from '@/modules/admin';
-import { EMPTY_ADMIN_AUDIT_QUERY, listAdminAuditEvents, parseAuditCursor } from '@/modules/audit';
+import { EMPTY_ADMIN_AUDIT_QUERY, listAdminAuditEvents, parseFeedCursor } from '@/modules/audit';
 import { formatBytes } from '@/modules/documents/client';
 import { requireAdminOrNotFound } from '@/shared/access';
 import { NotFoundError } from '@/shared/errors';
@@ -156,7 +156,7 @@ async function WorkspaceAudit({
   const page = await listAdminAuditEvents({
     ...EMPTY_ADMIN_AUDIT_QUERY,
     workspaceId,
-    cursor: parseAuditCursor(events),
+    cursor: parseFeedCursor(events),
   });
   return (
     <div className="grid gap-3">

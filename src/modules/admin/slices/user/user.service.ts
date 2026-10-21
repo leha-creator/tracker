@@ -11,12 +11,16 @@ import {
   listUserMemberships,
 } from '@/modules/workspaces';
 import { parseGlobalRole, requireAdmin } from '@/shared/access';
-import { auditActorFromSession, recordAuditEvent, type AuditEventKind } from '@/shared/audit';
-import type { AuthSession } from '@/shared/auth';
+import { auditActorFromSession, recordAuditEvent } from '@/shared/audit';
 import { NotFoundError, ValidationError } from '@/shared/errors';
 import { createLogger, maskEmail } from '@/shared/logger';
 
-import { callAdminApi } from '../../admin-api';
+import {
+  callAdminApi,
+  callIdpAdmin,
+  loadIdpAccountState,
+  resolveIdpSubjects,
+} from '../../admin-api';
 import {
   ADMIN_USERS_PAGE_SIZE,
   assertCanBan,
@@ -51,24 +55,9 @@ interface TargetUser extends ManagedUser {
   name: string;
 }
 
-type SimpleAdminUserEvent = Extract<
-  AuditEventKind,
-  'admin.user_unbanned' | 'admin.user_sessions_revoked' | 'admin.user_session_revoked'
->;
-
-/** Действие администратора над пользователем — в журнал (видят только администраторы). */
-function recordAdminUserEvent(
-  kind: SimpleAdminUserEvent,
-  session: AuthSession,
-  target: TargetUser,
-): Promise<void> {
-  return recordAuditEvent({
-    kind,
-    actor: auditActorFromSession(session),
-    targetUserId: target.id,
-    data: { userName: target.name },
-  });
-}
+// Операции над учётной записью идут в Admin API IdP (он же пишет события admin.* в свой журнал),
+// а затем — в плагин admin локально: локальный бан и отзыв сессий гасят сессии Tasker, пока нет
+// back-channel logout. Сеансы Tasker по одному и токены — только локально, их журнал — у tasker.
 
 function toAdminUserDto(
   row: AdminUserRow,
@@ -161,25 +150,15 @@ export async function banUser(input: BanUserInput): Promise<void> {
   const target = await loadTarget(actorId, input.userId, 'admin.user.ban');
   checkRule('admin.user.ban', { actorId, userId: target.id }, () => assertCanBan(target));
 
+  const subjects = await resolveIdpSubjects(actorId, target.id);
+  const banReason = input.reason || undefined;
+  const banExpiresIn = banDurationToSeconds(input.duration);
+  // Причина уходит в журнал IdP (его видят только администраторы), в логи — нет.
+  await callIdpAdmin(subjects, { kind: 'ban', banReason, banExpiresIn });
   await callAdminApi((api, headers) =>
-    api.banUser({
-      headers,
-      body: {
-        userId: target.id,
-        banReason: input.reason || undefined,
-        banExpiresIn: banDurationToSeconds(input.duration),
-      },
-    }),
+    api.banUser({ headers, body: { userId: target.id, banReason, banExpiresIn } }),
   );
-  // Причину не логируем: свободный текст администратора.
   log.info({ actorId, userId: target.id, duration: input.duration }, '[admin.user.ban] banned');
-  // В журнале причина есть: его видят только администраторы.
-  await recordAuditEvent({
-    kind: 'admin.user_banned',
-    actor: auditActorFromSession(session),
-    targetUserId: target.id,
-    data: { userName: target.name, duration: input.duration, reason: input.reason || null },
-  });
 }
 
 export async function unbanUser(input: { userId: string }): Promise<void> {
@@ -187,9 +166,10 @@ export async function unbanUser(input: { userId: string }): Promise<void> {
   const actorId = session.user.id;
   const target = await loadTarget(actorId, input.userId, 'admin.user.unban');
 
+  const subjects = await resolveIdpSubjects(actorId, target.id);
+  await callIdpAdmin(subjects, { kind: 'unban' });
   await callAdminApi((api, headers) => api.unbanUser({ headers, body: { userId: target.id } }));
   log.info({ actorId, userId: target.id }, '[admin.user.unban] unbanned');
-  await recordAdminUserEvent('admin.user_unbanned', session, target);
 }
 
 export async function setUserRole(input: SetUserRoleInput): Promise<void> {
@@ -200,16 +180,13 @@ export async function setUserRole(input: SetUserRoleInput): Promise<void> {
     assertRoleChange(target, input.role),
   );
 
+  // Роль admin в IdP нужна для Admin API и журнала IdP, поэтому роль меняется в обоих местах.
+  const subjects = await resolveIdpSubjects(actorId, target.id);
+  await callIdpAdmin(subjects, { kind: 'role', role: input.role });
   await callAdminApi((api, headers) =>
     api.setRole({ headers, body: { userId: target.id, role: input.role } }),
   );
   log.info({ actorId, userId: target.id, role: input.role }, '[admin.user.setRole] changed');
-  await recordAuditEvent({
-    kind: 'admin.user_role_changed',
-    actor: auditActorFromSession(session),
-    targetUserId: target.id,
-    data: { userName: target.name, role: input.role },
-  });
 }
 
 export async function revokeUserSessions(input: { userId: string }): Promise<void> {
@@ -217,11 +194,65 @@ export async function revokeUserSessions(input: { userId: string }): Promise<voi
   const actorId = session.user.id;
   const target = await loadTarget(actorId, input.userId, 'admin.user.revokeSessions');
 
-  await callAdminApi((api, headers) =>
-    api.revokeUserSessions({ headers, body: { userId: target.id } }),
-  );
+  // Сначала IdP: иначе пользователь войдёт в Tasker снова через живую сессию plwedding ID.
+  const subjects = await resolveIdpSubjects(actorId, target.id);
+  await callIdpAdmin(subjects, { kind: 'revokeSessions' });
+  await revokeLocalSessions(target.id);
   log.info({ actorId, userId: target.id }, '[admin.user.revokeSessions] revoked');
-  await recordAdminUserEvent('admin.user_sessions_revoked', session, target);
+}
+
+function revokeLocalSessions(userId: string): Promise<unknown> {
+  return callAdminApi((api, headers) => api.revokeUserSessions({ headers, body: { userId } }));
+}
+
+/**
+ * Сбрасывает 2FA в IdP (для потерявшего телефон и резервные коды): IdP удаляет секрет и коды и
+ * завершает свои сессии; сеансы Tasker завершаются здесь.
+ */
+export async function resetUserTwoFactor(input: { userId: string }): Promise<void> {
+  const session = await requireAdmin();
+  const actorId = session.user.id;
+  const target = await loadTarget(actorId, input.userId, 'admin.user.resetTwoFactor');
+  const subjects = await resolveIdpSubjects(actorId, target.id);
+  await callIdpAdmin(subjects, { kind: 'resetTwoFactor' });
+  await revokeLocalSessions(target.id);
+  log.info({ actorId, userId: target.id }, '[admin.user.resetTwoFactor] reset');
+}
+
+/** Подтверждает email в IdP вручную (письмо не доходит, адрес проверен иначе). */
+export async function verifyUserEmail(input: { userId: string }): Promise<void> {
+  const session = await requireAdmin();
+  const actorId = session.user.id;
+  const target = await loadTarget(actorId, input.userId, 'admin.user.verifyEmail');
+  await callIdpAdmin(await resolveIdpSubjects(actorId, target.id), { kind: 'verifyEmail' });
+  log.info(
+    { actorId, userId: target.id, email: maskEmail(target.email) },
+    '[admin.user.verifyEmail] verified',
+  );
+}
+
+/** Письмо сброса пароля от IdP: текущий пароль действует, пока не задан новый. */
+export async function sendPasswordResetEmail(input: { userId: string }): Promise<void> {
+  const session = await requireAdmin();
+  const actorId = session.user.id;
+  const target = await loadTarget(actorId, input.userId, 'admin.user.sendPasswordReset');
+  await callIdpAdmin(await resolveIdpSubjects(actorId, target.id), { kind: 'sendPasswordReset' });
+  log.info(
+    { actorId, userId: target.id, email: maskEmail(target.email) },
+    '[admin.user.sendPasswordReset] sent',
+  );
+}
+
+/** Письмо подтверждения email от IdP. */
+export async function resendVerificationEmail(input: { userId: string }): Promise<void> {
+  const session = await requireAdmin();
+  const actorId = session.user.id;
+  const target = await loadTarget(actorId, input.userId, 'admin.user.resendVerification');
+  await callIdpAdmin(await resolveIdpSubjects(actorId, target.id), { kind: 'sendVerification' });
+  log.info(
+    { actorId, userId: target.id, email: maskEmail(target.email) },
+    '[admin.user.resendVerification] sent',
+  );
 }
 
 export async function deleteUser(input: DeleteUserInput): Promise<void> {
@@ -271,14 +302,17 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
     throw new NotFoundError('Пользователь не найден');
   }
   const now = new Date();
-  const [cards, github, memberships, sessionRows, tokens, workspaces] = await Promise.all([
-    getProfileCards([row.id]),
-    getGithubIdentity(row.id),
-    listUserMemberships(row.id),
-    listUserSessionsBySystem(row.id, now),
-    listUserApiTokensForAdmin(row.id),
-    countWorkspacesByUsers([row.id]),
-  ]);
+  const [cards, github, memberships, sessionRows, tokens, workspaces, identity] = await Promise.all(
+    [
+      getProfileCards([row.id]),
+      getGithubIdentity(row.id),
+      listUserMemberships(row.id),
+      listUserSessionsBySystem(row.id, now),
+      listUserApiTokensForAdmin(row.id),
+      countWorkspacesByUsers([row.id]),
+      loadIdpAccountState(actorId, row.id),
+    ],
+  );
   const card = cards.get(row.id);
   log.debug(
     { actorId, userId, sessions: sessionRows.length, tokens: tokens.length },
@@ -291,6 +325,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
       bio: card?.bio ?? null,
       updatedAt: row.updatedAt,
       github,
+      identity,
     },
     memberships,
     sessions: sessionRows.map((item): AdminUserSessionDto => ({
@@ -326,7 +361,12 @@ export async function revokeUserSession(input: RevokeUserSessionInput): Promise<
     { actorId, userId: target.id, sessionId: input.sessionId },
     '[admin.user.revokeSession] revoked',
   );
-  await recordAdminUserEvent('admin.user_session_revoked', session, target);
+  await recordAuditEvent({
+    kind: 'admin.user_session_revoked',
+    actor: auditActorFromSession(session),
+    targetUserId: target.id,
+    data: { userName: target.name },
+  });
 }
 
 /** Отзывает токен доступа пользователя. Токен другого пользователя — NOT_FOUND. */

@@ -182,6 +182,7 @@ tasker/
 │       ├── mail/                     # SMTP (nodemailer): sendMail(), sendMailInBackground(), escapeHtml()
 │       ├── rate-limit/               # Лимиты попыток Server Actions (ActionRateLimit), getClientIp()
 │       ├── audit/                    # Каталог событий журнала (категория, видимость, владелец), recordAuditEvent()
+│       ├── idp/                      # Клиент API IdP plwedding ID: журнал безопасности, Admin API, sub ⇄ userId
 │       ├── resource-settings/        # Настройки ресурса: «Хранилище», кеш процесса
 │       ├── logger/                   # pino, LOG_LEVEL
 │       ├── env/                      # Zod-валидация переменных окружения (ленивая)
@@ -209,9 +210,9 @@ tasker/
 - ✅ `agents` зависит от `api-tokens` (отзыв токенов отключённого агента), но не наоборот. `api-tokens`, `notifications`, `workspaces` и `profiles` читают `WorkspaceAgent` и `User.isAgent` своими репозиториями — задокументированное чтение чужой таблицы, чтобы не создавать цикл (`agents` → `api-tokens`, `notifications` ни от кого не зависит)
 - ✅ `documents` зависит от `tasks` (краткие данные и поиск задач для связей), но `tasks` не зависит от `documents`: раздел «Документы» в задаче собирает компонент слоя UI (`components/documents/task-documents`)
 - ✅ `search` зависит от `tasks`, `documents` и `workspaces` (их функции поиска и списки), от него не зависит никто
-- ✅ `admin` зависит от `workspaces`, `profiles`, `api-tokens`, `audit`, `auth`, `documents`, `tasks` и `integrations/github` (системные функции без сессии — только после `requireAdmin()`), но не наоборот. Проверки администратора (`requireAdmin`) читают сессию в обход cookie-кеша (`getFreshSession`)
+- ✅ `admin` зависит от `workspaces`, `profiles`, `api-tokens`, `audit`, `auth`, `documents`, `tasks` и `integrations/github` (системные функции без сессии — только после `requireAdmin()`), но не наоборот. Действия над учётной записью идут в Admin API IdP через `shared/idp`. Проверки администратора (`requireAdmin`) читают сессию в обход cookie-кеша (`getFreshSession`)
 - ✅ Операции над чужой учётной записью и метрики учётных записей — только через `callAdminApi` и системные функции `auth` (`slices/account`). `admin` не читает `User` и `Session` для метрик напрямую
-- ✅ Журнал пишет `recordAuditEvent` из `shared/audit` (его зовут модули и хуки Better Auth); модуль `audit` только читает. `audit` зависит лишь от `auth/client` (подпись устройства)
+- ✅ Журнал пишет `recordAuditEvent` из `shared/audit` (его зовут модули и хуки Better Auth); модуль `audit` только читает. `audit` зависит лишь от `auth/client` (подпись устройства) и `shared/idp` (события учётной записи из IdP)
 - ✅ Настройки ресурса — `shared/resource-settings` (нужны `documents`), одна группа «Хранилище»; регистрацию решает IdP
 - ❌ Компоненты и страницы не импортируют `prisma` и репозитории
 - ❌ Actions не вызывают репозитории в обход сервиса

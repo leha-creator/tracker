@@ -30,11 +30,12 @@ describe('audit catalog', () => {
     expect(auditVisibilityOf('workspace.member_removed')).toBe('workspace');
   });
 
-  it('names an owner for every kind: account events belong to identity (future IdP)', () => {
+  it('names an owner for every kind: account events belong to identity (IdP), Tasker sessions to app', () => {
     expect(Object.keys(AUDIT_EVENT_OWNERS).sort()).toEqual([...AUDIT_EVENT_KINDS].sort());
     for (const kind of AUDIT_EVENT_KINDS) {
       expect(['identity', 'app']).toContain(auditOwnerOf(kind));
-      if (kind.startsWith('auth.') && !kind.startsWith('auth.github_')) {
+      const taskerSession = kind === 'auth.sessions_revoked';
+      if (kind.startsWith('auth.') && !kind.startsWith('auth.github_') && !taskerSession) {
         expect(auditOwnerOf(kind)).toBe('identity');
       }
       if (/^(workspace|project|task|document|agent|token)\./.test(kind)) {
@@ -43,6 +44,8 @@ describe('audit catalog', () => {
     }
     expect(auditOwnerOf('admin.user_banned')).toBe('identity');
     expect(auditOwnerOf('admin.impersonation_started')).toBe('app');
+    expect(auditOwnerOf('auth.sessions_revoked')).toBe('app');
+    expect(auditOwnerOf('admin.user_session_revoked')).toBe('app');
   });
 
   it('truncates long snapshot strings instead of rejecting', () => {

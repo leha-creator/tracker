@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AccessModule from '@/shared/access';
 import { recordAuditEvent } from '@/shared/audit';
 import type { AuthSession } from '@/shared/auth';
-import { ForbiddenError } from '@/shared/errors';
+import { ForbiddenError, ValidationError } from '@/shared/errors';
 
 interface UserRow {
   id: string;
@@ -27,6 +27,8 @@ const setRoleApi = vi.fn();
 const revokeUserSessionsApi = vi.fn();
 const removeUserApi = vi.fn();
 const deleteSession = vi.fn<(userId: string, sessionId: string) => Promise<boolean>>();
+const resolveIdpSubjects = vi.fn<(actorId: string, userId: string) => Promise<unknown>>();
+const callIdpAdmin = vi.fn<(subjects: unknown, action: unknown) => Promise<void>>();
 const revokeApiTokenBySystem =
   vi.fn<(userId: string, tokenId: string) => Promise<{ name: string; revoked: boolean }>>();
 
@@ -75,18 +77,27 @@ vi.mock('../../admin-api', () => ({
       },
       new Headers(),
     ),
+  resolveIdpSubjects: (actorId: string, userId: string) => resolveIdpSubjects(actorId, userId),
+  callIdpAdmin: (subjects: unknown, action: unknown) => callIdpAdmin(subjects, action),
+  loadIdpAccountState: () => Promise.resolve(null),
 }));
 
 const {
   banUser,
   deleteUser,
   listAdminUsers,
+  resendVerificationEmail,
+  resetUserTwoFactor,
   revokeUserApiToken,
   revokeUserSession,
   revokeUserSessions,
+  sendPasswordResetEmail,
   setUserRole,
   unbanUser,
+  verifyUserEmail,
 } = await import('./user.service');
+
+const SUBJECTS = { actor: 'sub-admin', target: 'sub-user' };
 const { defaultAdminUserListQuery } = await import('../../models');
 
 const adminSession: AuthSession = {
@@ -120,6 +131,8 @@ beforeEach(() => {
   requireAdmin.mockResolvedValue(adminSession);
   findById.mockResolvedValue(userRow());
   listSoleOwnedWorkspaces.mockResolvedValue([]);
+  resolveIdpSubjects.mockResolvedValue(SUBJECTS);
+  callIdpAdmin.mockResolvedValue();
 });
 
 describe('access', () => {
@@ -211,21 +224,28 @@ describe('listAdminUsers', () => {
 });
 
 describe('banUser', () => {
-  it('passes reason and duration in seconds to the plugin', async () => {
+  it('bans in IdP, then locally; the event is recorded by IdP', async () => {
     await banUser({ userId: 'user-2', reason: 'спам', duration: '7d' });
+    expect(resolveIdpSubjects).toHaveBeenCalledWith('admin-1', 'user-2');
+    expect(callIdpAdmin).toHaveBeenCalledWith(SUBJECTS, {
+      kind: 'ban',
+      banReason: 'спам',
+      banExpiresIn: 604_800,
+    });
     expect(banUserApi).toHaveBeenCalledWith(
       expect.objectContaining({
         body: { userId: 'user-2', banReason: 'спам', banExpiresIn: 604_800 },
       }),
     );
-    expect(vi.mocked(recordAuditEvent)).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: 'admin.user_banned',
-        actor: expect.objectContaining({ actorId: 'admin-1' }) as unknown,
-        targetUserId: 'user-2',
-        data: { userName: 'Борис', duration: '7d', reason: 'спам' },
-      }),
-    );
+    expect(vi.mocked(recordAuditEvent)).not.toHaveBeenCalled();
+  });
+
+  it('does not ban locally when IdP refuses', async () => {
+    callIdpAdmin.mockRejectedValueOnce(new ForbiddenError('Недостаточно прав'));
+    await expect(banUser({ userId: 'user-2', reason: '', duration: '1d' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(banUserApi).not.toHaveBeenCalled();
   });
 
   it('sends no reason or expiry for an empty reason and forever ban', async () => {
@@ -243,12 +263,14 @@ describe('banUser', () => {
       code: 'VALIDATION_ERROR',
     });
     expect(banUserApi).not.toHaveBeenCalled();
+    expect(callIdpAdmin).not.toHaveBeenCalled();
   });
 });
 
 describe('setUserRole', () => {
-  it('changes the role through the plugin', async () => {
+  it('changes the role in IdP and locally', async () => {
     await setUserRole({ userId: 'user-2', role: 'admin' });
+    expect(callIdpAdmin).toHaveBeenCalledWith(SUBJECTS, { kind: 'role', role: 'admin' });
     expect(setRoleApi).toHaveBeenCalledWith(
       expect.objectContaining({ body: { userId: 'user-2', role: 'admin' } }),
     );
@@ -263,15 +285,53 @@ describe('setUserRole', () => {
 });
 
 describe('unbanUser and revokeUserSessions', () => {
-  it('call the plugin for the target user', async () => {
+  it('call IdP and the plugin for the target user', async () => {
     await unbanUser({ userId: 'user-2' });
     await revokeUserSessions({ userId: 'user-2' });
+    expect(callIdpAdmin).toHaveBeenCalledWith(SUBJECTS, { kind: 'unban' });
+    expect(callIdpAdmin).toHaveBeenCalledWith(SUBJECTS, { kind: 'revokeSessions' });
     expect(unbanUserApi).toHaveBeenCalledWith(
       expect.objectContaining({ body: { userId: 'user-2' } }),
     );
     expect(revokeUserSessionsApi).toHaveBeenCalledWith(
       expect.objectContaining({ body: { userId: 'user-2' } }),
     );
+  });
+
+  it('stop when the user is not linked to IdP', async () => {
+    resolveIdpSubjects.mockRejectedValueOnce(new ValidationError('не связан'));
+    await expect(revokeUserSessions({ userId: 'user-2' })).rejects.toBeInstanceOf(ValidationError);
+    expect(revokeUserSessionsApi).not.toHaveBeenCalled();
+  });
+});
+
+describe('IdP-only account actions', () => {
+  it('reset 2FA in IdP and end Tasker sessions', async () => {
+    await resetUserTwoFactor({ userId: 'user-2' });
+    expect(callIdpAdmin).toHaveBeenCalledWith(SUBJECTS, { kind: 'resetTwoFactor' });
+    expect(revokeUserSessionsApi).toHaveBeenCalledWith(
+      expect.objectContaining({ body: { userId: 'user-2' } }),
+    );
+  });
+
+  it('verify email and send mails through IdP only', async () => {
+    await verifyUserEmail({ userId: 'user-2' });
+    await sendPasswordResetEmail({ userId: 'user-2' });
+    await resendVerificationEmail({ userId: 'user-2' });
+    expect(callIdpAdmin.mock.calls.map(([, action]) => action)).toEqual([
+      { kind: 'verifyEmail' },
+      { kind: 'sendPasswordReset' },
+      { kind: 'sendVerification' },
+    ]);
+    expect(revokeUserSessionsApi).not.toHaveBeenCalled();
+  });
+
+  it('forbid acting on yourself', async () => {
+    findById.mockResolvedValue(userRow({ id: 'admin-1' }));
+    await expect(verifyUserEmail({ userId: 'admin-1' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(callIdpAdmin).not.toHaveBeenCalled();
   });
 });
 

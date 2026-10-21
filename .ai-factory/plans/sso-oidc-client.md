@@ -161,22 +161,35 @@ Rationale: план покрывает все четыре подпункта э
   - Тест целостности ссылок и картинок справки должен пройти.
   - Статус: тексты и скрипт обновлены (register.png и two-factor-qr.png удалены); пересъёмка login, security, profile — после запуска локального IdP с чистой базой (`pnpm help:screenshots --only=getting-started`, `account-security`, `profile-and-notifications`).
 
-### Фаза 3 — журнал и операции админки через IdP (ЗАБЛОКИРОВАНО)
+### Фаза 3 — журнал и операции админки через IdP
 
-Блокеры: этапы IdP «Журнал безопасности» (API чтения событий `owner = identity`), «Admin API» и способ межсервисной аутентификации (не выбран).
+Контракт IdP (`D:\work\auth\docs\oidc-clients.md` «API журнала безопасности», `docs\admin-api.md`, `docs\user-migration.md` «Что сделать в tasker»):
+- аутентификация — `Authorization: Basic base64(client_id:client_secret)` (секрет клиента `tasker`); администратор — `actor` (его `sub`), IdP сам проверяет роль `admin` в IdP;
+- журнал: `GET /api/audit/users/<sub>/events?cursor=` (свой) и `GET /api/audit/admin/users/<sub>/events?actor=&cursor=` (для админки); до 50 событий, новые сверху, готовые `text`/`details`, `nextCursor` = `<ISO>_<id>`; глобальной ленты нет;
+- Admin API: `/api/admin/users/<sub>` (состояние), `ban`, `unban`, `role`, `two-factor/reset`, `email/verify`, `emails/password-reset`, `emails/verification`, `sessions/revoke`; ошибки `{ error: { code, message } }`; события `admin.*` пишет IdP;
+- история `owner = identity` перенесена в IdP с теми же `id`; `auth.sign_in`/`auth.signed_up` способом `oidc` IdP заменил своим `auth.oidc_authorized`.
 
-- [ ] **Задача 12. Порт источника событий identity и слияние лент**
-  - `src/modules/audit`: интерфейс `IdentityAuditSource` (`listUserEvents(userSub, cursor, limit)`, `listAllEvents(filters, cursor, limit)`).
-  - Чистая `mergeAuditPages(local, remote, limit)` по курсору `createdAt + id`, с отдельным курсором каждой стороны.
-  - Подключить в `listMySecurityEvents`, `listAdminAuditEvents` и ленту карточки пользователя.
-  - Реализация `null` (пусто) — можно сделать до разблокировки; HTTP-реализация — после контракта API IdP. Сопоставление пользователя: `Account.accountId` провайдера `plwedding` = `sub`.
-  - tasker перестаёт писать `auth.sign_in` / `auth.signed_up` локально, если их пишет IdP. Решить по контракту.
-  - Логи: `warn` — IdP недоступен, лента показана без событий identity (с пометкой в UI); `debug` — размеры страниц.
-  - Тест: `mergeAuditPages`.
+Решения (2026-10-21, с пользователем):
+- `sub` пользователя — `Account.accountId` провайдера `plwedding`; нет связи — операции IdP недоступны (понятная ошибка), лента — только локальная.
+- Роль меняется в IdP и локально. Бан, разбан и «Завершить все сессии» — в IdP и локально (локальный бан — отказ в сессии tasker, пока нет back-channel logout). Возвращаются сброс 2FA, подтверждение email и письма — только через IdP.
+- Сессии в карточке — один список: сеансы в Tasker. Одна сессия завершается локально; «Завершить все» — и в IdP.
+- Локальные ленты показывают только типы `owner = app`; события `identity` — только из IdP. Сеансы Tasker (`auth.sessions_revoked`, `admin.user_session_revoked`) становятся `app`. tasker перестаёт писать `auth.sign_in`, `auth.signed_up`, `auth.sign_out` и события `admin.*`, которые пишет IdP (`user_banned`, `user_unbanned`, `user_role_changed`, `user_sessions_revoked` и новые действия).
+- Общий журнал `/admin/activity` без фильтра по пользователю — только локальные события (у IdP нет общей ленты); с фильтром по пользователю и в карточке — слияние.
 
-- [ ] **Задача 13. Операции над учётной записью через Admin API IdP**
-  - `callAdminApi` для бана и отзыва сессий + порт `account` переходят на HTTP к Admin API IdP. Локальный бан остаётся как отказ в сессии tasker.
-  - Логи: `info` — операция и результат; `error` — сбой IdP с кодом.
+- [x] **Задача 12. Клиент IdP и слияние лент журнала**
+  - `src/shared/idp/`: `idpRequest` (Basic, таймаут 5 с, `no-store`, разбор ошибки в `IdpApiError`), сопоставление `sub` ⇄ `userId`, чтение журнала (`listIdpUserEvents`, `listIdpAdminUserEvents`, схема ответа Zod).
+  - `src/modules/audit/models`: курсор ленты из двух частей (`parseFeedCursor`, `encodeFeedCursor`) и чистая `mergeAuditFeed` (дубли по `id`, остановка, когда буфер одной стороны кончился раньше неё).
+  - `listMySecurityEvents` и `listAdminAuditEvents` (с `userId`): локальные `owner = app` + события IdP; IdP недоступен — `identityUnavailable` в ответе и `Callout` в ленте.
+  - Каталог: владелец сеансов Tasker — `app`; хуки и сервисы не пишут события, которые пишет IdP.
+  - Логи: `warn` — IdP недоступен (статус, код), `debug` — размеры страниц.
+  - Тесты: курсор, `mergeAuditFeed`, разбор ответа IdP, ошибки клиента.
+
+- [x] **Задача 13. Операции над учётной записью через Admin API IdP**
+  - `src/modules/admin/admin-api.ts` → `callIdpAdmin(actor, target, …)` поверх `shared/idp`; ошибки IdP → доменные (`VALIDATION_ERROR` → `ValidationError`, `FORBIDDEN` → `ForbiddenError`, `NOT_FOUND` → `NotFoundError`, `RATE_LIMITED` → `RateLimitError`).
+  - Бан, разбан, роль, завершение всех сессий — IdP, затем плагин `admin` локально. Сброс 2FA, подтверждение email, письма сброса и подтверждения — только IdP; пункты меню по состоянию из `GET /api/admin/users/<sub>`.
+  - Карточка: бейджи «Email подтверждён»/«2FA» из IdP; IdP недоступен — без них и без IdP-пунктов.
+  - Логи: `info` — операция выполнена; `warn` — отказ IdP с кодом; `error` — сбой связи.
+  - Тесты: сервис пользователя (IdP + локально, нет `sub`), разбор ошибок.
 
 ### Фаза 4 — back-channel logout (ЗАБЛОКИРОВАНО)
 

@@ -9,6 +9,7 @@ import {
 import Link from 'next/link';
 
 import { ViaAgentBadge } from '@/components/agents/via-agent-badge';
+import { Callout } from '@/components/feedback/callout';
 import { EmptyState } from '@/components/feedback/empty-state';
 import { ToneBadge } from '@/components/feedback/tone-badge';
 import { UserAvatar } from '@/components/users/user-avatar';
@@ -47,11 +48,22 @@ export function AuditEventList({
   showWorkspace = false,
   emptyText,
 }: AuditEventListProps) {
+  const identityNotice = page.identityUnavailable && (
+    <Callout tone="warning">
+      plwedding ID не ответил: события учётной записи (входы, пароль, 2FA) сейчас не показаны.
+    </Callout>
+  );
   if (page.items.length === 0) {
-    return <EmptyState variant="compact" title={emptyText} />;
+    return (
+      <div className="grid gap-3">
+        {identityNotice}
+        <EmptyState variant="compact" title={emptyText} />
+      </div>
+    );
   }
   return (
     <div className="grid gap-3">
+      {identityNotice}
       <ol className="grid divide-y rounded-xl border">
         {page.items.map((event) => (
           <AuditEventItem

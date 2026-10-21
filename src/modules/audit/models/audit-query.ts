@@ -5,7 +5,7 @@ import {
   type AuditEventKind,
 } from '@/shared/audit/client';
 
-import { parseAuditCursor, type AuditCursor } from './audit-cursor';
+import { FEED_START, parseFeedCursor, type FeedCursor } from './audit-feed';
 
 /** Событий на странице: лента участника, свой журнал, журнал администратора. */
 export const MEMBER_ACTIVITY_PAGE_SIZE = 20;
@@ -34,7 +34,8 @@ export interface AdminAuditQuery {
   from: string | null;
   /** Дата конца периода `YYYY-MM-DD` (включительно, UTC). */
   to: string | null;
-  cursor: AuditCursor | null;
+  /** Курсор ленты: локальная часть и часть IdP (при фильтре по пользователю). */
+  cursor: FeedCursor;
 }
 
 export const EMPTY_ADMIN_AUDIT_QUERY: AdminAuditQuery = {
@@ -44,7 +45,7 @@ export const EMPTY_ADMIN_AUDIT_QUERY: AdminAuditQuery = {
   workspaceId: null,
   from: null,
   to: null,
-  cursor: null,
+  cursor: FEED_START,
 };
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -74,7 +75,7 @@ export function parseAdminAuditParams(params: SearchParams): AdminAuditQuery {
     workspaceId: id(first(params.workspace)),
     from: date(first(params.from)),
     to: date(first(params.to)),
-    cursor: parseAuditCursor(first(params.cursor)),
+    cursor: parseFeedCursor(first(params.cursor)),
   };
 }
 

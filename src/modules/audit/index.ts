@@ -3,7 +3,7 @@
 // Запись событий — не здесь, а в src/shared/audit (её вызывают и shared/auth, и модули).
 export * from './client';
 
-export { parseAdminAuditParams, parseAuditCursor } from './models';
+export { parseAdminAuditParams, parseAuditCursor, parseFeedCursor } from './models';
 export {
   listAdminAuditEvents,
   listMemberWorkspaceActivity,

@@ -1,6 +1,13 @@
 import { isAPIError } from 'better-auth/api';
 
-import { ForbiddenError, NotFoundError, ValidationError } from '@/shared/errors';
+import {
+  AppError,
+  ForbiddenError,
+  NotFoundError,
+  RateLimitError,
+  ValidationError,
+} from '@/shared/errors';
+import { IdpApiError } from '@/shared/idp';
 
 /**
  * Переводит ошибки плагина admin в доменные. Это второй рубеж: сервис проверяет права и правила
@@ -30,5 +37,36 @@ export function mapAdminError(error: unknown): unknown {
         return new ForbiddenError('Недостаточно прав', options);
       }
       return error;
+  }
+}
+
+/** Текст, когда IdP не ответил или ответил сбоем: операцию можно повторить позже. */
+export const IDP_ADMIN_UNAVAILABLE_MESSAGE =
+  'plwedding ID сейчас недоступен — повторите действие через минуту';
+
+/**
+ * Переводит ошибки Admin API IdP в доменные. Сообщения IdP написаны для администратора
+ * (docs/admin-api.md) и показываются как есть. Сбой связи, 5xx и отказ в аутентификации клиента
+ * — 503 с общим текстом: администратор их не исправит, причина — в логах.
+ */
+export function mapIdpAdminError(error: unknown): unknown {
+  if (!(error instanceof IdpApiError)) return error;
+  const options = { cause: error };
+  switch (error.code) {
+    case 'VALIDATION_ERROR':
+      return new ValidationError(error.message, options);
+    case 'FORBIDDEN':
+      return new ForbiddenError(error.message, options);
+    case 'NOT_FOUND':
+      return new NotFoundError(error.message, options);
+    case 'RATE_LIMITED':
+      return new RateLimitError(error.retryAfterSeconds ?? 60, options);
+    default:
+      return new AppError(IDP_ADMIN_UNAVAILABLE_MESSAGE, {
+        code: 'INTERNAL_ERROR',
+        httpStatus: 503,
+        expose: true,
+        cause: error,
+      });
   }
 }
