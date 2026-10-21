@@ -44,7 +44,7 @@ pnpm infra:up
 
 Mailpit — SMTP-ловушка: наружу письма не уходят, все они видны в веб-интерфейсе.
 
-Остановка: `pnpm infra:down`. Данные сохраняются в Docker volumes `postgres-data` и `minio-data`.
+Остановка: `pnpm infra:down`. Данные сохраняются в Docker volumes `postgres18-data` и `minio-data` (переход с PG 17 — [Разработка](development.md#postgresql-18)).
 
 ## Миграции БД
 

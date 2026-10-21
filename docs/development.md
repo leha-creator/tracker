@@ -59,6 +59,22 @@ import { prisma, type TransactionClient } from '@/shared/db';
 - Новая модель: правка `schema.prisma` → `pnpm db:migrate --name <change>` → миграция появляется в `prisma/migrations/`. Затем `pnpm db:generate`: Prisma 7 после миграции не генерирует клиент сам, и без этого `tsc` не увидит новые модели.
 - `migrate dev` интерактивный. Если миграция требует подтверждения (например, новый уникальный индекс на существующей таблице) или её нужно дописать вручную, создайте каталог `prisma/migrations/<timestamp>_<name>/` и сгенерируйте SQL: `pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script -o <каталог>/migration.sql`. После правки примените миграцию через `pnpm db:deploy`.
 - То, чего нет в схеме Prisma, дописывается в SQL миграции вручную с комментарием. Пример — `add_tasks`: `COLLATE "C"` для `TaskPlacement.position` и триггер снятия ответственного. Drift такие правки не дают: `migrate diff --from-config-datasource --to-schema …` после применения возвращает пустую миграцию.
+- Расширения в миграциях — только `CREATE EXTENSION IF NOT EXISTS`. В проде роль `tasker` не суперпользователь и не владелец расширений: их заранее ставит общий Postgres из infra (`pg_trgm`). Новое расширение сначала добавляют в infra (`postgres/config/sql/app.sql`).
+
+### PostgreSQL 18
+
+Локально, в CI и в проде — PostgreSQL 18 (`postgres:18.6-alpine`, тот же тег, что у общего Postgres в infra). Том локальной базы — `tasker_postgres18-data`: с версии 18 образ хранит данные в `/var/lib/postgresql/18/docker`, а том PG 17 (`tasker_postgres-data`) с ним несовместим.
+
+Перенос локальных данных с PG 17 (старый контейнер ещё работает на старом томе):
+
+```bash
+docker exec tasker-postgres-1 sh -c 'pg_dump -U tasker -d tasker -Fc' > dev-pg17.dump
+docker compose up -d --wait postgres          # пересоздаёт контейнер на PG 18 с новым томом
+docker exec -i tasker-postgres-1 pg_restore -U tasker -d tasker --no-owner --exit-on-error < dev-pg17.dump
+pnpm exec prisma migrate status               # «Database schema is up to date!»
+```
+
+Если локальные данные не нужны, хватит `pnpm infra:up` и `pnpm db:deploy`. Старый том после проверки удаляется: `docker volume rm tasker_postgres-data`.
 
 ## Зависимости
 

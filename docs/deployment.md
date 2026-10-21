@@ -93,7 +93,7 @@ pnpm app:down   # останавливает контейнерный стек (
 | Джоб | Что делает |
 |------|------------|
 | `check` | `pnpm install --frozen-lockfile` → `pnpm check` → `pnpm build` без `.env`. Кешируются pnpm-store и `.next/cache` |
-| `migrations` | Postgres 17 в `services` → `pnpm db:deploy` → `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code`. Код 2 значит, что схема разошлась с миграциями (забыли `pnpm db:migrate`) |
+| `migrations` | Postgres 18 (`postgres:18.6-alpine`) в `services` → `pnpm db:deploy` → `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code`. Код 2 значит, что схема разошлась с миграциями (забыли `pnpm db:migrate`) |
 | `docker` | После `check`: сборка `runner` и `migrate` через buildx (кеш слоёв `type=gha`), `docker compose config` прод-стека `deploy/tasker/compose.yml` с фиктивными значениями, `docker compose -f compose.yml -f compose.app.yml up -d --wait app`, `scripts/smoke-health.sh`. При падении выводятся логи `migrate`, `app` и `minio-init`, в конце всегда выполняется `down -v` |
 | `publish` | Только `main`: пуш образов в GHCR (`ghcr.io/leha-creator/tracker`, `tracker-migrate`) с тегами `sha-<7>` и `main` |
 | `deploy` | После `publish` или ручной откат: деплой на сервер по SSH, environment `production` — см. [Продакшен](production.md#cd) |

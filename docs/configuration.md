@@ -97,7 +97,7 @@ env.S3_BUCKET; // типизировано
 
 | Сервис | Образ | Назначение |
 |--------|-------|------------|
-| `postgres` | `postgres:17-alpine` | Основная БД |
+| `postgres` | `postgres:18.6-alpine` | Основная БД (том `postgres18-data`) |
 | `minio` | `pgsty/minio:RELEASE.2026-08-04T00-00-00Z` | S3-совместимое хранилище |
 | `minio-init` | `pgsty/mc` (закреплён по digest) | Создаёт приватный бакет и завершается |
 | `mailpit` | `axllent/mailpit:v1.31.5` | SMTP-ловушка для писем, UI на порту 8025 |
